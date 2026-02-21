@@ -46,9 +46,7 @@ class ErrorBoundary extends React.Component {
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <HOATracker />
-    </ErrorBoundary>
-  </React.StrictMode>,
+  <ErrorBoundary>
+    <HOATracker />
+  </ErrorBoundary>,
 )

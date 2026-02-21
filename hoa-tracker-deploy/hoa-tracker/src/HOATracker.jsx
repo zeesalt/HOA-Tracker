@@ -1183,17 +1183,11 @@ export default function HOATracker() {
     setNewEntry(false);
   }, []);
 
-  // Derived
+  // Derived (plain computations, no useMemo to avoid re-render loops)
   const isTreasurer = currentUser?.role === ROLES.TREASURER;
-  const myEntries = useMemo(() =>
-    entries.filter(e => isTreasurer || e.userId === currentUser?.id)
-      .sort((a, b) => b.date.localeCompare(a.date)),
-    [entries, currentUser, isTreasurer]
-  );
-  const pendingCount = useMemo(() =>
-    entries.filter(e => e.status === STATUSES.SUBMITTED).length,
-    [entries]
-  );
+  const myEntries = (entries.filter(e => isTreasurer || e.userId === currentUser?.id))
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const pendingCount = entries.filter(e => e.status === STATUSES.SUBMITTED).length;
 
   // Entry CRUD
   const saveEntry = useCallback(async (formData) => {
@@ -1251,8 +1245,8 @@ export default function HOATracker() {
     setViewEntry({ ...viewEntry, status: STATUSES.REJECTED, reviewerNotes: notes });
   }, [viewEntry, entries, persistEntries]);
 
-  // ── Dashboard Stats (must be before early returns to satisfy Rules of Hooks) ──
-  const dashStats = useMemo(() => {
+  // ── Dashboard Stats (plain computation) ──
+  const dashStats = (() => {
     if (!currentUser) return { total: 0, approved: 0, pending: 0, totalReimb: 0, monthReimb: 0, totalHours: 0 };
     const relevant = isTreasurer ? entries : entries.filter(e => e.userId === currentUser.id);
     const approved = relevant.filter(e => e.status === STATUSES.APPROVED);
@@ -1270,7 +1264,7 @@ export default function HOATracker() {
       monthReimb += h * r + calcMaterialsTotal(e.materials);
     });
     return { total: relevant.length, approved: approved.length, pending: relevant.filter(e => e.status === STATUSES.SUBMITTED).length, totalReimb, monthReimb, totalHours };
-  }, [entries, currentUser, isTreasurer, settings]);
+  })();
 
   // ── Loading Screen ──────────────────────────────────────────────────────
   if (loading) {
