@@ -120,6 +120,13 @@ const Icon = ({ name, size = 18, filled = false }) => {
         <rect x="15" y="8" width="2" height="9" rx=".5" fill="#fff" />
       </svg>
     ),
+    insightsFilled: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 6v6l4 2" stroke="#fff" strokeWidth="2" strokeLinecap="round" fill="none" />
+        <circle cx="12" cy="12" r="2" fill="#fff" />
+      </svg>
+    ),
   };
   if (filledIcons[name]) return filledIcons[name];
 
@@ -128,6 +135,7 @@ const Icon = ({ name, size = 18, filled = false }) => {
     clipboard: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9h6m-6 4h4",
     shieldCheck: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z",
     barChart: "M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z",
+    insights: "M21 12a9 9 0 11-18 0 9 9 0 0118 0zM12 6v6l4 2",
     plus: "M12 4v16m8-8H4",
     check: "M5 13l4 4L19 7",
     x: "M6 18L18 6M6 6l12 12",
@@ -638,7 +646,56 @@ const ReportsPage = ({ entries, users, settings, currentUser, mob }) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// RATE INPUT (saves on blur)
+// PAGE TRANSITION LOADER
+// ═══════════════════════════════════════════════════════════════════════════
+const LOADING_MESSAGES = {
+  dashboard: [
+    { emoji: "🏠", text: "Sweeping the front porch..." },
+    { emoji: "📊", text: "Crunching the numbers..." },
+    { emoji: "🔑", text: "Unlocking the front door..." },
+    { emoji: "☕", text: "Brewing your dashboard..." },
+  ],
+  entries: [
+    { emoji: "📋", text: "Dusting off the clipboard..." },
+    { emoji: "🔍", text: "Hunting down your entries..." },
+    { emoji: "📦", text: "Unpacking the work logs..." },
+    { emoji: "🗂️", text: "Organizing the filing cabinet..." },
+  ],
+  review: [
+    { emoji: "🧐", text: "Putting on reading glasses..." },
+    { emoji: "⚖️", text: "Calibrating the scales..." },
+    { emoji: "🔬", text: "Inspecting the fine print..." },
+    { emoji: "📝", text: "Sharpening the red pen..." },
+  ],
+  reports: [
+    { emoji: "📈", text: "Polishing the spreadsheets..." },
+    { emoji: "🧮", text: "Consulting the abacus..." },
+    { emoji: "🖨️", text: "Warming up the printer..." },
+    { emoji: "📊", text: "Making charts look fancy..." },
+  ],
+  settings: [
+    { emoji: "⚙️", text: "Turning the gears..." },
+    { emoji: "🔧", text: "Grabbing the wrench..." },
+    { emoji: "🎛️", text: "Adjusting the dials..." },
+  ],
+  insights: [
+    { emoji: "🏘️", text: "Surveying the neighborhood..." },
+    { emoji: "🧾", text: "Tallying up the receipts..." },
+    { emoji: "🔎", text: "Inspecting every penny..." },
+    { emoji: "📊", text: "Crunching community numbers..." },
+    { emoji: "💡", text: "Gathering HOA wisdom..." },
+  ],
+};
+const PageLoader = ({ page }) => {
+  const msgs = LOADING_MESSAGES[page] || LOADING_MESSAGES.dashboard;
+  const msg = msgs[Math.floor(Math.random() * msgs.length)];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 20px", textAlign: "center" }}>
+      <div style={{ fontSize: 48, marginBottom: 16, animation: "bounce 600ms ease-in-out infinite" }}>{msg.emoji}</div>
+      <div style={{ fontSize: 14, color: BRAND.textMuted, fontFamily: BRAND.sans, animation: "fadeIn 300ms ease-out" }}>{msg.text}</div>
+    </div>
+  );
+};
 // ═══════════════════════════════════════════════════════════════════════════
 const RateInput = ({ initialValue, placeholder, onSave }) => {
   const [val, setVal] = useState(initialValue || "");
@@ -648,6 +705,170 @@ const RateInput = ({ initialValue, placeholder, onSave }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // SETTINGS PAGE
 // ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// COMMUNITY INSIGHTS (visible to all members)
+// ═══════════════════════════════════════════════════════════════════════════
+const CATEGORY_COLORS = {
+  "Landscaping": "#2E7D32", "Plumbing": "#1565C0", "Electrical": "#F9A825",
+  "General Maintenance": "#6D4C41", "Snow Removal": "#0097A7", "Cleaning": "#7B1FA2",
+  "Vendor Coordination": "#E65100", "Administrative Work": "#455A64", "Emergency Repairs": "#C62828",
+};
+const CATEGORY_EMOJIS = {
+  "Landscaping": "🌿", "Plumbing": "🔧", "Electrical": "⚡",
+  "General Maintenance": "🔨", "Snow Removal": "❄️", "Cleaning": "🧹",
+  "Vendor Coordination": "📞", "Administrative Work": "📝", "Emergency Repairs": "🚨",
+};
+const INSIGHTS_LOADING = [
+  { emoji: "🏘️", text: "Surveying the neighborhood..." },
+  { emoji: "🧾", text: "Tallying up the receipts..." },
+  { emoji: "🔎", text: "Inspecting every nook and cranny..." },
+  { emoji: "📊", text: "Crunching community numbers..." },
+  { emoji: "🏗️", text: "Building your insights..." },
+  { emoji: "🧮", text: "Doing the HOA math..." },
+  { emoji: "🗃️", text: "Raiding the filing cabinet..." },
+];
+
+const CommunityInsights = ({ fetchStats, settings, mob }) => {
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadMsg] = useState(() => INSIGHTS_LOADING[Math.floor(Math.random() * INSIGHTS_LOADING.length)]);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      // Minimum display time for the fun loader
+      const [data] = await Promise.all([
+        fetchStats(),
+        new Promise(r => setTimeout(r, 600 + Math.random() * 500)),
+      ]);
+      if (!cancelled && data) setStats(data);
+      if (!cancelled) setLoading(false);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (loading) return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px", textAlign: "center" }}>
+      <div style={{ fontSize: 44, marginBottom: 14, animation: "bounce 600ms ease-in-out infinite" }}>{loadMsg.emoji}</div>
+      <div style={{ fontSize: 14, color: BRAND.textMuted, fontFamily: BRAND.sans }}>{loadMsg.text}</div>
+    </div>
+  );
+
+  if (!stats || !stats.by_month?.length) return (
+    <div style={{ textAlign: "center", padding: 40, color: BRAND.textLight }}>No community spending data yet. Once entries are approved, insights will appear here.</div>
+  );
+
+  const fmt = (n) => "$" + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const totals = stats.totals || {};
+  const grandTotal = (Number(totals.total_labor) || 0) + (Number(totals.total_materials) || 0);
+
+  // Get available years
+  const years = [...new Set((stats.by_month || []).map(m => m.month.slice(0, 4)))].sort().reverse();
+  const yearMonths = (stats.by_month || []).filter(m => m.month.startsWith(selectedYear));
+  const yearCategories = {};
+  (stats.by_month_category || []).filter(m => m.month.startsWith(selectedYear)).forEach(mc => {
+    if (!yearCategories[mc.category]) yearCategories[mc.category] = { labor: 0, materials: 0, count: 0 };
+    yearCategories[mc.category].labor += Number(mc.labor_total) || 0;
+    yearCategories[mc.category].materials += Number(mc.materials_total) || 0;
+    yearCategories[mc.category].count += Number(mc.entry_count) || 0;
+  });
+  const catList = Object.entries(yearCategories).sort((a, b) => (b[1].labor + b[1].materials) - (a[1].labor + a[1].materials));
+  const yearTotal = catList.reduce((s, [, v]) => s + v.labor + v.materials, 0);
+  const maxCat = catList.length ? catList[0][1].labor + catList[0][1].materials : 1;
+
+  // Month names
+  const monthName = (m) => {
+    const [y, mo] = m.split("-");
+    return new Date(Number(y), Number(mo) - 1).toLocaleDateString("en-US", { month: "short" });
+  };
+  const monthMaxTotal = Math.max(...yearMonths.map(m => (Number(m.labor_total) || 0) + (Number(m.materials_total) || 0)), 1);
+
+  return (
+    <div>
+      {/* All-time totals */}
+      <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "repeat(4, 1fr)", gap: mob ? 8 : 16, marginBottom: 24 }}>
+        <StatCard label="Total Spent" value={fmt(grandTotal)} icon="dollar" accentColor={BRAND.brick} />
+        <StatCard label="Labor" value={fmt(totals.total_labor)} icon="users" accentColor="#1565C0" />
+        <StatCard label="Materials" value={fmt(totals.total_materials)} icon="file" accentColor="#6A1B9A" />
+        <StatCard label="Work Entries" value={totals.total_entries || 0} icon="check" accentColor="#2E7D32" />
+      </div>
+
+      {/* Year picker */}
+      {years.length > 1 && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+          {years.map(y => (
+            <button key={y} onClick={() => setSelectedYear(y)} style={{ padding: "6px 16px", borderRadius: 20, border: "1px solid " + (selectedYear === y ? BRAND.navy : BRAND.border), background: selectedYear === y ? BRAND.navy : BRAND.white, color: selectedYear === y ? "#fff" : BRAND.textMuted, fontWeight: selectedYear === y ? 700 : 500, fontSize: 13, fontFamily: BRAND.sans, cursor: "pointer" }}>{y}</button>
+          ))}
+        </div>
+      )}
+
+      {/* Monthly breakdown with horizontal bars */}
+      <div style={{ background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 12, padding: mob ? 16 : 24, marginBottom: 20 }}>
+        <h3 style={{ fontFamily: BRAND.serif, fontSize: 18, fontWeight: 600, color: BRAND.navy, margin: "0 0 20px" }}>Monthly Spending — {selectedYear}</h3>
+        {yearMonths.length === 0 ? <div style={{ color: BRAND.textLight, padding: 16, textAlign: "center" }}>No data for {selectedYear}</div> : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {yearMonths.map(m => {
+              const total = (Number(m.labor_total) || 0) + (Number(m.materials_total) || 0);
+              const pct = (total / monthMaxTotal) * 100;
+              return (
+                <div key={m.month}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: BRAND.navy }}>{monthName(m.month)} {m.month.slice(0, 4)}</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: BRAND.brick }}>{fmt(total)}</span>
+                  </div>
+                  <div style={{ height: 20, background: BRAND.bgSoft, borderRadius: 10, overflow: "hidden" }}>
+                    <div style={{ height: "100%", borderRadius: 10, width: pct + "%", minWidth: pct > 0 ? 8 : 0, background: "linear-gradient(90deg, #1565C0, #0097A7)", transition: "width 600ms ease-out" }} />
+                  </div>
+                  <div style={{ fontSize: 11, color: BRAND.textLight, marginTop: 2 }}>{m.entry_count} entries · {m.member_count} member{m.member_count > 1 ? "s" : ""}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Category breakdown with colored bars */}
+      <div style={{ background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 12, padding: mob ? 16 : 24 }}>
+        <h3 style={{ fontFamily: BRAND.serif, fontSize: 18, fontWeight: 600, color: BRAND.navy, margin: "0 0 20px" }}>Where the Money Goes — {selectedYear}</h3>
+        {catList.length === 0 ? <div style={{ color: BRAND.textLight, padding: 16, textAlign: "center" }}>No data for {selectedYear}</div> : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {catList.map(([cat, data]) => {
+              const total = data.labor + data.materials;
+              const pct = (total / maxCat) * 100;
+              const sharePct = yearTotal ? ((total / yearTotal) * 100).toFixed(0) : 0;
+              const color = CATEGORY_COLORS[cat] || BRAND.navy;
+              const emoji = CATEGORY_EMOJIS[cat] || "🔧";
+              return (
+                <div key={cat}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 20 }}>{emoji}</span>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: BRAND.charcoal }}>{cat}</span>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <span style={{ fontSize: 15, fontWeight: 700, color }}>{fmt(total)}</span>
+                      <span style={{ fontSize: 11, color: BRAND.textLight, marginLeft: 6 }}>{sharePct}%</span>
+                    </div>
+                  </div>
+                  <div style={{ height: 14, background: color + "15", borderRadius: 7, overflow: "hidden" }}>
+                    <div style={{ height: "100%", borderRadius: 7, width: pct + "%", minWidth: pct > 0 ? 6 : 0, background: color, transition: "width 600ms ease-out", opacity: 0.85 }} />
+                  </div>
+                  <div style={{ display: "flex", gap: 12, fontSize: 11, color: BRAND.textLight, marginTop: 3 }}>
+                    <span>Labor: {fmt(data.labor)}</span><span>Materials: {fmt(data.materials)}</span><span>{data.count} entries</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const SettingsPage = ({ settings, users, currentUser, onSaveSettings, onAddUser, onRemoveUser, onUpdateRate }) => {
   const [form, setForm] = useState({ ...settings });
   const [saved, setSaved] = useState(false);
@@ -736,7 +957,7 @@ export default function App() {
     login, logout: sbLogout, register,
     saveEntry, deleteEntry, approveEntry, rejectEntry, markPaid,
     saveSettings, addUser, removeUser, updateUserRate,
-    setAuthError,
+    setAuthError, fetchCommunityStats,
   } = useSupabase();
 
   const [page, setPage] = useState("dashboard");
@@ -748,6 +969,7 @@ export default function App() {
   const [loginError, setLoginError] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
+  const [pageLoading, setPageLoading] = useState(null); // null = not loading, string = target page
   const [authMode, setAuthMode] = useState("login"); // "login" or "register"
   const [regName, setRegName] = useState("");
   const [regEmail, setRegEmail] = useState("");
@@ -793,7 +1015,13 @@ export default function App() {
     setRegSuccess(true);
   };
   const handleLogout = async () => { await sbLogout(); setLoginEmail(""); setLoginPassword(""); setLoginError(""); setPage("dashboard"); setViewEntry(null); setEditEntry(null); setNewEntry(false); };
-  const nav = (p) => { setPage(p); setViewEntry(null); setEditEntry(null); setNewEntry(false); setDrawerOpen(false); };
+  const nav = (p) => {
+    if (p === page && !viewEntry && !editEntry && !newEntry) return; // already there
+    setViewEntry(null); setEditEntry(null); setNewEntry(false); setDrawerOpen(false);
+    setPageLoading(p);
+    const delay = 400 + Math.floor(Math.random() * 400); // 400-800ms
+    setTimeout(() => { setPageLoading(null); setPage(p); }, delay);
+  };
 
   // Entry operations (now async)
   const doSave = async (formData, existingId, silent) => {
@@ -888,8 +1116,10 @@ export default function App() {
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: "home" },
     { id: "entries", label: isTreasurer ? "All Entries" : "My Entries", icon: "file" },
+    ...(!isTreasurer ? [{ id: "insights", label: "Community Insights", icon: "insights" }] : []),
     ...(isTreasurer ? [{ id: "review", label: "Review Queue", icon: "inbox", badge: pendingCount }] : []),
     ...(isTreasurer ? [{ id: "reports", label: "Reports", icon: "chart" }] : []),
+    ...(isTreasurer ? [{ id: "insights", label: "Community Insights", icon: "insights" }] : []),
     ...(isTreasurer ? [{ id: "settings", label: "Settings", icon: "settings" }] : []),
   ];
   const bottomTabs = isTreasurer ? [
@@ -900,12 +1130,14 @@ export default function App() {
   ] : [
     { id: "dashboard", label: "Home", icon: "home", iconFilled: "homeFilled", color: "#2E7D32", tint: "#2E7D3218" },
     { id: "entries", label: "Entries", icon: "clipboard", iconFilled: "clipboardFilled", color: "#1565C0", tint: "#1565C018" },
+    { id: "insights", label: "Insights", icon: "insights", iconFilled: "insightsFilled", color: "#6A1B9A", tint: "#6A1B9A18" },
   ];
 
   // ══════════════════════════════════════════════════════════════════════════
   // PAGE CONTENT
   // ══════════════════════════════════════════════════════════════════════════
   const renderPage = () => {
+    if (pageLoading) return <PageLoader page={pageLoading} />;
     if (newEntry || editEntry) return (
       <div className="fade-in"><h2 style={{ ...S.h2, marginBottom: 24 }}>{editEntry ? "Edit Entry" : "New Work Entry"}</h2>
         <div style={S.card}><EntryForm entry={editEntry} settings={settings} users={users} currentUser={currentUser} onSave={doSave} onSubmit={doSubmit} onCancel={() => { setNewEntry(false); setEditEntry(null); }} onDelete={doDelete} mob={mob} /></div></div>
@@ -997,6 +1229,13 @@ export default function App() {
     }
     if (page === "reports") { if (!isTreasurer) { nav("dashboard"); return null; } return <ReportsPage entries={entries} users={users} settings={settings} currentUser={currentUser} mob={mob} />; }
     if (page === "settings") { if (!isTreasurer) { nav("dashboard"); return null; } return <SettingsPage settings={settings} users={users} currentUser={currentUser} onSaveSettings={saveSettings} onAddUser={addUser} onRemoveUser={removeUser} onUpdateRate={updateUserRate} />; }
+    if (page === "insights") return (
+      <div className="fade-in">
+        <h2 style={{ ...S.h2, marginBottom: 8 }}>Community Insights</h2>
+        <p style={{ margin: "0 0 24px", fontSize: 14, color: BRAND.textMuted }}>See how your HOA dollars are being put to work.</p>
+        <CommunityInsights fetchStats={fetchCommunityStats} settings={settings} mob={mob} />
+      </div>
+    );
     return null;
   };
 

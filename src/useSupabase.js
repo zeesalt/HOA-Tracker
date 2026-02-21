@@ -256,6 +256,13 @@ export function useSupabase() {
 
   // ── REFRESH ────────────────────────────────────────────────────────────
   const refresh = useCallback(() => {
+
+  // ── COMMUNITY STATS (aggregates visible to all members) ───────────────
+  async function fetchCommunityStats() {
+    const { data, error } = await supabase.rpc("get_community_stats");
+    if (error) { console.error("Community stats error:", error); return null; }
+    return data;
+  }
     if (session?.user?.id) loadAll(session.user.id);
   }, [session?.user?.id]);
 
@@ -269,6 +276,6 @@ export function useSupabase() {
     // Settings & Users
     saveSettings, addUser, removeUser, updateUserRate,
     // Misc
-    refresh, setAuthError,
+    refresh, setAuthError, fetchCommunityStats,
   };
 }
