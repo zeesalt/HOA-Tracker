@@ -72,6 +72,12 @@ function calcHours(start, end) {
   if (diff < 0) diff += 24 * 60;
   return Math.round((diff / 60) * 100) / 100;
 }
+// 30-min increment billing: round up to nearest 0.5hr, each 0.5hr = 50% of rate
+function calcLabor(hours, rate) {
+  if (!hours || !rate) return 0;
+  const blocks = Math.ceil(hours * 2); // number of 30-min blocks (rounds up)
+  return blocks * (rate / 2);
+}
 function calcMaterialsTotal(materials) {
   return (materials || []).reduce((sum, m) => sum + (Number(m.quantity) || 0) * (Number(m.unitCost) || 0), 0);
 }
@@ -318,7 +324,7 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const hours = calcHours(form.startTime, form.endTime);
   const rate = getUserRate(users, settings, form.userId);
-  const laborTotal = hours * rate;
+  const laborTotal = calcLabor(hours, rate);
   const matTotal = calcMaterialsTotal(form.materials);
   const grandTotal = laborTotal + matTotal;
 
@@ -379,6 +385,7 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
           <div><div style={{ fontSize: 12, color: BRAND.textLight }}>Materials</div><div style={{ fontSize: 18, fontWeight: 700, color: BRAND.navy }}>{fmt(matTotal)}</div></div>
           <div><div style={{ fontSize: 12, color: BRAND.textLight }}>Total</div><div style={{ fontSize: 22, fontWeight: 800, color: BRAND.brick }}>{fmt(grandTotal)}</div></div>
         </div>
+        <div style={{ fontSize: 11, color: BRAND.textLight, marginTop: 10 }}>Billed in 30-min increments, rounded up.</div>
       </div>
 
       <div style={{ display: "flex", flexDirection: mob ? "column-reverse" : "row", gap: 10, justifyContent: "space-between" }}>
@@ -407,7 +414,7 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
   const user = users.find(u => u.id === entry.userId);
   const hours = calcHours(entry.startTime, entry.endTime);
   const rate = getUserRate(users, settings, entry.userId);
-  const laborTotal = hours * rate;
+  const laborTotal = calcLabor(hours, rate);
   const matTotal = calcMaterialsTotal(entry.materials);
   const grandTotal = laborTotal + matTotal;
   const canEdit = (entry.userId === currentUser.id || isTreasurer) && [STATUSES.DRAFT, STATUSES.REJECTED].includes(entry.status);
@@ -479,7 +486,7 @@ const EntryCard = ({entry, users, settings, onClick}) => {
   const u = users.find(u => u.id === entry.userId);
   const hrs = calcHours(entry.startTime, entry.endTime);
   const rate = getUserRate(users, settings, entry.userId);
-  const total = hrs * rate + calcMaterialsTotal(entry.materials);
+  const total = calcLabor(hrs, rate) + calcMaterialsTotal(entry.materials);
   return (
     <div style={{ ...S.card, cursor: "pointer", padding: "14px 16px" }} onClick={onClick}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
@@ -515,13 +522,13 @@ const ReportsPage = ({ entries, users, settings, currentUser, mob }) => {
 
   const totals = useMemo(() => {
     let totalHours = 0, totalLabor = 0, totalMat = 0;
-    filtered.forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); totalHours += h; totalLabor += h * r; totalMat += calcMaterialsTotal(e.materials); });
+    filtered.forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); totalHours += h; totalLabor += calcLabor(h, r); totalMat += calcMaterialsTotal(e.materials); });
     return { totalHours, totalLabor, totalMat, grand: totalLabor + totalMat };
   }, [filtered, settings]);
 
   const exportCSV = () => {
     const header = "Date,Member,Category,Description,Hours,Rate,Labor,Materials,Total";
-    const rows = filtered.map(e => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const l = h * r; const m = calcMaterialsTotal(e.materials); return e.date + ',"' + (u?.name || "") + '","' + e.category + '","' + e.description.replace(/"/g, '""') + '",' + h.toFixed(2) + ',' + r.toFixed(2) + ',' + l.toFixed(2) + ',' + m.toFixed(2) + ',' + (l + m).toFixed(2); });
+    const rows = filtered.map(e => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const l = calcLabor(h, r); const m = calcMaterialsTotal(e.materials); return e.date + ',"' + (u?.name || "") + '","' + e.category + '","' + e.description.replace(/"/g, '""') + '",' + h.toFixed(2) + ',' + r.toFixed(2) + ',' + l.toFixed(2) + ',' + m.toFixed(2) + ',' + (l + m).toFixed(2); });
     const csv = [header, ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = settings.hoaName.replace(/\s+/g, "_") + "_Report.csv"; a.click();
@@ -557,7 +564,7 @@ const ReportsPage = ({ entries, users, settings, currentUser, mob }) => {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                   <thead><tr><th style={S.th}>Date</th>{isTreasurer && <th style={S.th}>Member</th>}<th style={S.th}>Category</th><th style={S.th}>Description</th><th style={{ ...S.th, textAlign: "right" }}>Hours</th><th style={{ ...S.th, textAlign: "right" }}>Total</th></tr></thead>
                   <tbody>{filtered.map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); return (
-                    <tr key={e.id} style={{ background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white }}><td style={S.td}>{formatDate(e.date)}</td>{isTreasurer && <td style={S.td}>{u?.name}</td>}<td style={S.td}><CategoryBadge category={e.category} /></td><td style={{ ...S.td, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</td><td style={{ ...S.td, textAlign: "right" }}>{h.toFixed(2)}</td><td style={{ ...S.td, textAlign: "right", fontWeight: 700 }}>{fmt(h * r + calcMaterialsTotal(e.materials))}</td></tr>
+                    <tr key={e.id} style={{ background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white }}><td style={S.td}>{formatDate(e.date)}</td>{isTreasurer && <td style={S.td}>{u?.name}</td>}<td style={S.td}><CategoryBadge category={e.category} /></td><td style={{ ...S.td, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</td><td style={{ ...S.td, textAlign: "right" }}>{h.toFixed(2)}</td><td style={{ ...S.td, textAlign: "right", fontWeight: 700 }}>{fmt(calcLabor(h, r) + calcMaterialsTotal(e.materials))}</td></tr>
                   ); })}</tbody>
                 </table>
               </div>
@@ -758,7 +765,7 @@ export default function App() {
     const approved = relevant.filter(e => e.status === STATUSES.APPROVED || e.status === STATUSES.PAID);
     const thisMonth = approved.filter(e => e.date.startsWith(new Date().toISOString().slice(0, 7)));
     let monthReimb = 0;
-    thisMonth.forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getRate(e.userId); monthReimb += h * r + calcMaterialsTotal(e.materials); });
+    thisMonth.forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getRate(e.userId); monthReimb += calcLabor(h, r) + calcMaterialsTotal(e.materials); });
     return { total: relevant.length, approved: approved.length, pending: relevant.filter(e => e.status === STATUSES.SUBMITTED).length, monthReimb, paid: relevant.filter(e => e.status === STATUSES.PAID).length };
   })();
 
@@ -872,7 +879,7 @@ export default function App() {
               <div style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 8, overflow: "hidden" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                   <thead><tr><th style={S.th}>Date</th>{isTreasurer && <th style={S.th}>Member</th>}<th style={S.th}>Category</th><th style={S.th}>Description</th><th style={{ ...S.th, textAlign: "right" }}>Total</th><th style={S.th}>Status</th></tr></thead>
-                  <tbody>{recent.map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = h * r + calcMaterialsTotal(e.materials); return (
+                  <tbody>{recent.map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); return (
                     <tr key={e.id} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms" }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
                       <td style={S.td}>{formatDate(e.date)}</td>{isTreasurer && <td style={S.td}>{u?.name}</td>}<td style={S.td}><CategoryBadge category={e.category} /></td><td style={{ ...S.td, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</td><td style={{ ...S.td, textAlign: "right", fontWeight: 600 }}>{fmt(total)}</td><td style={S.td}><StatusBadge status={e.status} /></td>
                     </tr>); })}</tbody>
@@ -895,7 +902,7 @@ export default function App() {
           <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
               <thead><tr><th style={S.th}>Date</th>{isTreasurer && <th style={S.th}>Member</th>}<th style={S.th}>Category</th><th style={S.th}>Description</th><th style={{ ...S.th, textAlign: "right" }}>Hours</th><th style={{ ...S.th, textAlign: "right" }}>Total</th><th style={S.th}>Status</th></tr></thead>
-              <tbody>{myEntries.map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = h * r + calcMaterialsTotal(e.materials); return (
+              <tbody>{myEntries.map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); return (
                 <tr key={e.id} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms" }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
                   <td style={S.td}>{formatDate(e.date)}</td>{isTreasurer && <td style={S.td}>{u?.name}</td>}<td style={S.td}><CategoryBadge category={e.category} /></td><td style={{ ...S.td, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</td><td style={{ ...S.td, textAlign: "right" }}>{fmtHours(h)}</td><td style={{ ...S.td, textAlign: "right", fontWeight: 600 }}>{fmt(total)}</td><td style={S.td}><StatusBadge status={e.status} /></td>
                 </tr>); })}</tbody>
@@ -912,7 +919,7 @@ export default function App() {
           <p style={{ margin: "0 0 24px", fontSize: 14, color: BRAND.textMuted }}>{pending.length} entries pending your review</p>
           {pending.length === 0 ? <div style={{ ...S.card, textAlign: "center", padding: 60, color: BRAND.textLight }}>All caught up! No entries to review.</div> : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {pending.map(e => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = h * r + calcMaterialsTotal(e.materials); return (
+              {pending.map(e => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); return (
                 <div key={e.id} style={{ ...S.card, cursor: "pointer", padding: "20px 24px", transition: "box-shadow 150ms", borderLeft: "4px solid " + BRAND.brick }} onClick={() => setViewEntry(e)} onMouseEnter={ev => ev.currentTarget.style.boxShadow = "0 4px 16px rgba(31,42,56,0.08)"} onMouseLeave={ev => ev.currentTarget.style.boxShadow = "0 1px 3px rgba(31,42,56,0.04)"}>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <div><div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}><span style={{ fontWeight: 700, fontSize: 16, color: BRAND.navy }}>{u?.name}</span><CategoryBadge category={e.category} /></div><div style={{ fontSize: 14, color: BRAND.charcoal, marginBottom: 4 }}>{e.description}</div><div style={{ fontSize: 13, color: BRAND.textLight }}>{formatDate(e.date)} · {fmtHours(h)}</div></div>
