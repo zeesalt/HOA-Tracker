@@ -893,13 +893,13 @@ export default function App() {
     ...(isTreasurer ? [{ id: "settings", label: "Settings", icon: "settings" }] : []),
   ];
   const bottomTabs = isTreasurer ? [
-    { id: "dashboard", label: "Home", icon: "home", iconFilled: "homeFilled" },
-    { id: "entries", label: "Entries", icon: "clipboard", iconFilled: "clipboardFilled" },
-    { id: "review", label: "Review", icon: "shieldCheck", iconFilled: "shieldCheckFilled", badge: pendingCount },
-    { id: "reports", label: "Reports", icon: "barChart", iconFilled: "barChartFilled" },
+    { id: "dashboard", label: "Home", icon: "home", iconFilled: "homeFilled", color: "#2E7D32", tint: "#2E7D3218" },
+    { id: "entries", label: "Entries", icon: "clipboard", iconFilled: "clipboardFilled", color: "#1565C0", tint: "#1565C018" },
+    { id: "review", label: "Review", icon: "shieldCheck", iconFilled: "shieldCheckFilled", color: BRAND.brick, tint: BRAND.brick + "18", badge: pendingCount },
+    { id: "reports", label: "Reports", icon: "barChart", iconFilled: "barChartFilled", color: "#6A1B9A", tint: "#6A1B9A18" },
   ] : [
-    { id: "dashboard", label: "Home", icon: "home", iconFilled: "homeFilled" },
-    { id: "entries", label: "Entries", icon: "clipboard", iconFilled: "clipboardFilled" },
+    { id: "dashboard", label: "Home", icon: "home", iconFilled: "homeFilled", color: "#2E7D32", tint: "#2E7D3218" },
+    { id: "entries", label: "Entries", icon: "clipboard", iconFilled: "clipboardFilled", color: "#1565C0", tint: "#1565C018" },
   ];
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -1008,7 +1008,7 @@ export default function App() {
 
   if (mob) {
     return (
-      <div style={{ minHeight: "100vh", fontFamily: BRAND.sans, background: BRAND.bgSoft, color: BRAND.charcoal, paddingBottom: 72 }}>
+      <div style={{ minHeight: "100vh", fontFamily: BRAND.sans, background: BRAND.bgSoft, color: BRAND.charcoal, paddingBottom: 88 }}>
         {/* Mobile top bar */}
         <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: BRAND.navy, position: "sticky", top: 0, zIndex: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -1046,21 +1046,21 @@ export default function App() {
         <div style={{ padding: "16px 16px" }}>{renderPage()}</div>
         {/* FAB */}
         {!newEntry && !editEntry && !viewEntry && (page === "dashboard" || page === "entries") && (
-          <button style={{ position: "fixed", bottom: 84, right: 20, width: 56, height: 56, borderRadius: 28, background: BRAND.brick, color: "#fff", border: "none", boxShadow: "0 4px 16px rgba(142,59,46,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 15 }} onClick={() => setNewEntry(true)}>
+          <button style={{ position: "fixed", bottom: 96, right: 20, width: 56, height: 56, borderRadius: 28, background: BRAND.brick, color: "#fff", border: "none", boxShadow: "0 4px 16px rgba(142,59,46,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 15 }} onClick={() => setNewEntry(true)}>
             <Icon name="plus" size={24} />
           </button>
         )}
         {/* Bottom tab bar */}
-        <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: BRAND.white, borderTop: "1px solid " + BRAND.border, display: "flex", zIndex: 20, paddingBottom: "env(safe-area-inset-bottom)", boxShadow: "0 -2px 12px rgba(0,0,0,0.06)" }}>
+        <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: BRAND.white, borderTop: "1px solid " + BRAND.border, display: "flex", zIndex: 20, paddingBottom: "env(safe-area-inset-bottom)", boxShadow: "0 -2px 16px rgba(0,0,0,0.08)" }}>
           {bottomTabs.map(t => {
             const active = isActive(t.id);
             return (
-            <button key={t.id} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "10px 4px 8px", background: "none", border: "none", cursor: "pointer", color: active ? BRAND.brick : BRAND.textLight, fontFamily: BRAND.sans, fontSize: 11, fontWeight: active ? 700 : 500, position: "relative", letterSpacing: active ? "0.01em" : "0" }} onClick={() => nav(t.id)}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 48, height: 32, borderRadius: 16, background: active ? BRAND.brick + "14" : "transparent", transition: "background 200ms" }}>
-                <Icon name={active ? t.iconFilled : t.icon} size={26} />
+            <button key={t.id} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "14px 4px 12px", background: "none", border: "none", cursor: "pointer", color: active ? t.color : BRAND.textLight, fontFamily: BRAND.sans, fontSize: 11, fontWeight: active ? 700 : 500, position: "relative", transition: "color 200ms" }} onClick={() => nav(t.id)}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 56, height: 36, borderRadius: 18, background: active ? t.tint : "transparent", transition: "background 250ms" }}>
+                <Icon name={active ? t.iconFilled : t.icon} size={28} />
               </div>
-              <span>{t.label}</span>
-              {t.badge > 0 && <span style={{ position: "absolute", top: 4, right: "50%", marginRight: -22, background: BRAND.brick, color: "#fff", fontSize: 10, fontWeight: 700, padding: "1px 5px", borderRadius: 10, minWidth: 16, textAlign: "center" }}>{t.badge}</span>}
+              <span style={{ transition: "color 200ms" }}>{t.label}</span>
+              {t.badge > 0 && <span style={{ position: "absolute", top: 6, right: "50%", marginRight: -26, background: BRAND.brick, color: "#fff", fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 10, minWidth: 18, textAlign: "center", boxShadow: "0 1px 4px rgba(142,59,46,0.3)" }}>{t.badge}</span>}
             </button>
           );})}
         </nav>
