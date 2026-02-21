@@ -768,7 +768,7 @@ export default function App() {
   if (!currentUser) {
     if (loading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans }}><div style={{ textAlign: "center" }}><img src="/logo.png" alt="" style={{ width: 120, height: 120, objectFit: "contain", margin: "0 auto 16px", display: "block", opacity: 0.5 }} /><div style={{ fontSize: 14, color: BRAND.textMuted }}>Loading...</div></div></div>;
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans, padding: mob ? 16 : 0 }}>
+      <div style={{ minHeight: "100dvh", display: "flex", alignItems: "safe center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans, padding: mob ? "24px 16px" : 0, overflow: "auto", WebkitOverflowScrolling: "touch" }}>
         <div className="fade-in" style={{ textAlign: "center", maxWidth: 420, width: "100%" }}>
           <img src="/logo.png" alt="24 Mill" style={{ width: mob ? 160 : 200, height: mob ? 160 : 200, objectFit: "contain", margin: "0 auto 24px", display: "block" }} />
           <h1 style={{ fontFamily: BRAND.serif, fontSize: mob ? 28 : 34, fontWeight: 600, color: BRAND.navy, margin: "0 0 4px" }}>Log Your Work</h1>
@@ -982,9 +982,9 @@ export default function App() {
         {/* Bottom tab bar */}
         <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: BRAND.white, borderTop: "1px solid " + BRAND.border, display: "flex", zIndex: 20, paddingBottom: "env(safe-area-inset-bottom)" }}>
           {bottomTabs.map(t => (
-            <button key={t.id} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "8px 4px", background: "none", border: "none", cursor: "pointer", color: isActive(t.id) ? BRAND.brick : BRAND.textLight, fontFamily: BRAND.sans, fontSize: 11, fontWeight: isActive(t.id) ? 600 : 400, position: "relative" }} onClick={() => nav(t.id)}>
-              <Icon name={t.icon} size={20} /><span>{t.label}</span>
-              {t.badge > 0 && <span style={{ position: "absolute", top: 4, right: "50%", marginRight: -16, background: BRAND.brick, color: "#fff", fontSize: 10, fontWeight: 700, padding: "1px 5px", borderRadius: 10, minWidth: 16, textAlign: "center" }}>{t.badge}</span>}
+            <button key={t.id} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "12px 4px", background: "none", border: "none", cursor: "pointer", color: isActive(t.id) ? BRAND.brick : BRAND.textLight, fontFamily: BRAND.sans, fontSize: 12, fontWeight: isActive(t.id) ? 600 : 400, position: "relative" }} onClick={() => nav(t.id)}>
+              <Icon name={t.icon} size={30} /><span>{t.label}</span>
+              {t.badge > 0 && <span style={{ position: "absolute", top: 4, right: "50%", marginRight: -20, background: BRAND.brick, color: "#fff", fontSize: 10, fontWeight: 700, padding: "1px 5px", borderRadius: 10, minWidth: 16, textAlign: "center" }}>{t.badge}</span>}
             </button>
           ))}
         </nav>
