@@ -38,6 +38,7 @@ function mapSettings(row) {
     hoaName: row.hoa_name,
     defaultHourlyRate: Number(row.default_hourly_rate),
     currency: row.currency,
+    inviteCode: row.invite_code || "",
   };
 }
 
@@ -46,7 +47,7 @@ export function useSupabase() {
   const [currentUser, setCurrentUser] = useState(null);
   const [users, setUsers] = useState([]);
   const [entries, setEntries] = useState([]);
-  const [settings, setSettings] = useState({ hoaName: "24 Mill Street", defaultHourlyRate: 40, currency: "USD" });
+  const [settings, setSettings] = useState({ hoaName: "24 Mill Street", defaultHourlyRate: 40, currency: "USD", inviteCode: "" });
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState("");
 
@@ -113,6 +114,28 @@ export function useSupabase() {
     setCurrentUser(null);
     setUsers([]);
     setEntries([]);
+  }, []);
+
+  const register = useCallback(async (name, email, password, inviteCode) => {
+    setAuthError("");
+    // Validate invite code server-side
+    const { data: valid, error: valErr } = await supabase.rpc("validate_invite_code", { code: inviteCode });
+    if (valErr || !valid) {
+      const msg = "Invalid invite code. Ask your HOA Treasurer for the correct code.";
+      setAuthError(msg);
+      return { error: msg };
+    }
+    // Create the account
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { name, role: "Member" } },
+    });
+    if (error) {
+      setAuthError(error.message);
+      return { error: error.message };
+    }
+    return { user: data.user };
   }, []);
 
   // ── ENTRIES ────────────────────────────────────────────────────────────
@@ -191,6 +214,7 @@ export function useSupabase() {
       hoa_name: newSettings.hoaName,
       default_hourly_rate: newSettings.defaultHourlyRate,
       currency: newSettings.currency || "USD",
+      invite_code: newSettings.inviteCode || null,
     }).eq("id", 1);
     if (error) { console.error("Settings error:", error); return false; }
     setSettings(newSettings);
@@ -239,7 +263,7 @@ export function useSupabase() {
     // State
     currentUser, users, entries, settings, loading, authError,
     // Auth
-    login, logout,
+    login, logout, register,
     // Entries
     saveEntry, deleteEntry, approveEntry, rejectEntry, markPaid,
     // Settings & Users

@@ -604,6 +604,7 @@ const SettingsPage = ({ settings, users, currentUser, onSaveSettings, onAddUser,
         <div style={S.sectionLabel}>HOA Configuration</div>
         <Field label="HOA Name"><input style={S.input} value={form.hoaName} onChange={e => set("hoaName", e.target.value)} /></Field>
         <Field label="Default Hourly Rate ($)"><input type="number" min="0" step="0.50" style={S.input} value={form.defaultHourlyRate} onChange={e => set("defaultHourlyRate", Number(e.target.value))} /></Field>
+        <Field label="Invite Code"><div style={{ position: "relative" }}><input style={{ ...S.input, fontFamily: "monospace", letterSpacing: "0.1em", textTransform: "uppercase" }} value={form.inviteCode || ""} onChange={e => set("inviteCode", e.target.value.toUpperCase())} placeholder="e.g. MILL2024" /><div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 6 }}>New members need this code to register.</div></div></Field>
         <button style={S.btnPrimary} onClick={handleSave}>{saved ? "✓ Saved" : "Save Settings"}</button>
       </div>
       <div style={{ ...S.card, maxWidth: 600, marginTop: 20 }}>
@@ -650,7 +651,7 @@ export default function App() {
   const mob = useIsMobile();
   const {
     currentUser, users, entries, settings, loading, authError,
-    login, logout: sbLogout,
+    login, logout: sbLogout, register,
     saveEntry, deleteEntry, approveEntry, rejectEntry, markPaid,
     saveSettings, addUser, removeUser, updateUserRate,
     setAuthError,
@@ -665,6 +666,14 @@ export default function App() {
   const [loginError, setLoginError] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
+  const [authMode, setAuthMode] = useState("login"); // "login" or "register"
+  const [regName, setRegName] = useState("");
+  const [regEmail, setRegEmail] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+  const [regCode, setRegCode] = useState("");
+  const [regError, setRegError] = useState("");
+  const [registering, setRegistering] = useState(false);
+  const [regSuccess, setRegSuccess] = useState(false);
 
   // Sync auth errors from hook
   useEffect(() => { if (authError) setLoginError(authError); }, [authError]);
@@ -686,6 +695,20 @@ export default function App() {
     const ok = await login(email, loginPassword);
     setLoggingIn(false);
     if (ok) setPage("dashboard");
+  };
+  const handleRegister = async () => {
+    setRegError("");
+    const name = regName.trim();
+    const email = regEmail.trim().toLowerCase();
+    if (!name) { setRegError("Please enter your full name"); return; }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setRegError("Please enter a valid email"); return; }
+    if (!regPassword || regPassword.length < 6) { setRegError("Password must be at least 6 characters"); return; }
+    if (!regCode.trim()) { setRegError("Please enter the invite code from your HOA Treasurer"); return; }
+    setRegistering(true);
+    const result = await register(name, email, regPassword, regCode.trim());
+    setRegistering(false);
+    if (result.error) { setRegError(result.error); return; }
+    setRegSuccess(true);
   };
   const handleLogout = async () => { await sbLogout(); setLoginEmail(""); setLoginPassword(""); setLoginError(""); setPage("dashboard"); setViewEntry(null); setEditEntry(null); setNewEntry(false); };
   const nav = (p) => { setPage(p); setViewEntry(null); setEditEntry(null); setNewEntry(false); setDrawerOpen(false); };
@@ -736,17 +759,43 @@ export default function App() {
           <img src="/logo.png" alt="24 Mill" style={{ width: mob ? 160 : 200, height: mob ? 160 : 200, objectFit: "contain", margin: "0 auto 24px", display: "block" }} />
           <h1 style={{ fontFamily: BRAND.serif, fontSize: mob ? 28 : 34, fontWeight: 600, color: BRAND.navy, margin: "0 0 4px" }}>Log Your Work</h1>
           <p style={{ color: BRAND.textLight, margin: "0 0 32px", fontSize: 14 }}>24 Mill</p>
-          <div style={{ background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 12, padding: 32, textAlign: "left", boxShadow: "0 4px 20px rgba(31,42,56,0.06)" }}>
-            <div style={{ fontSize: 18, fontWeight: 600, color: BRAND.navy, marginBottom: 4, fontFamily: BRAND.serif }}>Sign In</div>
-            <div style={{ fontSize: 13, color: BRAND.textMuted, marginBottom: 24 }}>Enter your email and password to continue</div>
-            <label style={{ ...S.label }}>Email Address</label>
-            <input type="email" style={{ ...S.input, marginBottom: 16, fontSize: 15, padding: "12px 16px" }} value={loginEmail} onChange={e => { setLoginEmail(e.target.value); setLoginError(""); }} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="you@example.com" autoFocus />
-            <label style={{ ...S.label }}>Password</label>
-            <input type="password" style={{ ...S.input, marginBottom: loginError ? 8 : 20, fontSize: 15, padding: "12px 16px", borderColor: loginError ? BRAND.error : BRAND.border }} value={loginPassword} onChange={e => { setLoginPassword(e.target.value); setLoginError(""); }} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="Enter your password" />
-            {loginError && <div style={{ color: BRAND.error, fontSize: 13, marginBottom: 16, display: "flex", alignItems: "flex-start", gap: 6 }}><Icon name="alert" size={14} /><span>{loginError}</span></div>}
-            <button style={{ ...S.btnPrimary, width: "100%", justifyContent: "center", padding: "12px 20px", fontSize: 15, borderRadius: 8, opacity: loggingIn ? 0.6 : 1 }} onClick={handleLogin} disabled={loggingIn}>{loggingIn ? "Signing in..." : "Continue"}</button>
+          <div style={{ background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 12, padding: mob ? 24 : 32, textAlign: "left", boxShadow: "0 4px 20px rgba(31,42,56,0.06)" }}>
+            {/* Tab toggle */}
+            <div style={{ display: "flex", marginBottom: 24, borderRadius: 8, background: BRAND.bgSoft, padding: 4 }}>
+              <button style={{ flex: 1, padding: "10px 0", borderRadius: 6, border: "none", fontFamily: BRAND.sans, fontSize: 14, fontWeight: 600, cursor: "pointer", background: authMode === "login" ? BRAND.white : "transparent", color: authMode === "login" ? BRAND.navy : BRAND.textMuted, boxShadow: authMode === "login" ? "0 1px 3px rgba(0,0,0,0.08)" : "none", transition: "all 150ms" }} onClick={() => { setAuthMode("login"); setRegError(""); setRegSuccess(false); }}>Sign In</button>
+              <button style={{ flex: 1, padding: "10px 0", borderRadius: 6, border: "none", fontFamily: BRAND.sans, fontSize: 14, fontWeight: 600, cursor: "pointer", background: authMode === "register" ? BRAND.white : "transparent", color: authMode === "register" ? BRAND.navy : BRAND.textMuted, boxShadow: authMode === "register" ? "0 1px 3px rgba(0,0,0,0.08)" : "none", transition: "all 150ms" }} onClick={() => { setAuthMode("register"); setLoginError(""); }}>Register</button>
+            </div>
+            {authMode === "login" ? (
+              <div>
+                <label style={S.label}>Email Address</label>
+                <input type="email" style={{ ...S.input, marginBottom: 16, fontSize: 15, padding: "12px 16px" }} value={loginEmail} onChange={e => { setLoginEmail(e.target.value); setLoginError(""); }} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="you@example.com" autoFocus />
+                <label style={S.label}>Password</label>
+                <input type="password" style={{ ...S.input, marginBottom: loginError ? 8 : 20, fontSize: 15, padding: "12px 16px", borderColor: loginError ? BRAND.error : BRAND.border }} value={loginPassword} onChange={e => { setLoginPassword(e.target.value); setLoginError(""); }} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="Enter your password" />
+                {loginError && <div style={{ color: BRAND.error, fontSize: 13, marginBottom: 16, display: "flex", alignItems: "flex-start", gap: 6 }}><Icon name="alert" size={14} /><span>{loginError}</span></div>}
+                <button style={{ ...S.btnPrimary, width: "100%", justifyContent: "center", padding: "12px 20px", fontSize: 15, borderRadius: 8, opacity: loggingIn ? 0.6 : 1 }} onClick={handleLogin} disabled={loggingIn}>{loggingIn ? "Signing in..." : "Sign In"}</button>
+              </div>
+            ) : regSuccess ? (
+              <div style={{ textAlign: "center", padding: "20px 0" }}>
+                <div style={{ width: 48, height: 48, borderRadius: 24, background: BRAND.success + "15", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", color: BRAND.success }}><Icon name="check" size={24} /></div>
+                <div style={{ fontSize: 18, fontWeight: 600, color: BRAND.navy, marginBottom: 8, fontFamily: BRAND.serif }}>Account Created!</div>
+                <div style={{ fontSize: 14, color: BRAND.textMuted, marginBottom: 24, lineHeight: 1.6 }}>You can now sign in with your email and password.</div>
+                <button style={{ ...S.btnPrimary, width: "100%", justifyContent: "center", padding: "12px 20px", fontSize: 15, borderRadius: 8 }} onClick={() => { setAuthMode("login"); setLoginEmail(regEmail); setRegSuccess(false); }}>Go to Sign In</button>
+              </div>
+            ) : (
+              <div>
+                <label style={S.label}>Full Name</label>
+                <input type="text" style={{ ...S.input, marginBottom: 16, fontSize: 15, padding: "12px 16px" }} value={regName} onChange={e => { setRegName(e.target.value); setRegError(""); }} placeholder="Your full name" autoFocus />
+                <label style={S.label}>Email Address</label>
+                <input type="email" style={{ ...S.input, marginBottom: 16, fontSize: 15, padding: "12px 16px" }} value={regEmail} onChange={e => { setRegEmail(e.target.value); setRegError(""); }} placeholder="you@example.com" />
+                <label style={S.label}>Password</label>
+                <input type="password" style={{ ...S.input, marginBottom: 16, fontSize: 15, padding: "12px 16px" }} value={regPassword} onChange={e => { setRegPassword(e.target.value); setRegError(""); }} placeholder="Min 6 characters" />
+                <label style={S.label}>Invite Code</label>
+                <input type="text" style={{ ...S.input, marginBottom: regError ? 8 : 20, fontSize: 15, padding: "12px 16px", borderColor: regError ? BRAND.error : BRAND.border, textTransform: "uppercase", letterSpacing: "0.1em" }} value={regCode} onChange={e => { setRegCode(e.target.value); setRegError(""); }} onKeyDown={e => e.key === "Enter" && handleRegister()} placeholder="From your HOA Treasurer" />
+                {regError && <div style={{ color: BRAND.error, fontSize: 13, marginBottom: 16, display: "flex", alignItems: "flex-start", gap: 6 }}><Icon name="alert" size={14} /><span>{regError}</span></div>}
+                <button style={{ ...S.btnPrimary, width: "100%", justifyContent: "center", padding: "12px 20px", fontSize: 15, borderRadius: 8, opacity: registering ? 0.6 : 1 }} onClick={handleRegister} disabled={registering}>{registering ? "Creating account..." : "Create Account"}</button>
+              </div>
+            )}
           </div>
-          <p style={{ color: BRAND.textLight, fontSize: 12, marginTop: 24 }}>Don't have an account? Ask your HOA Treasurer to add you.</p>
         </div>
       </div>
     );
