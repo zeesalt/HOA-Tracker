@@ -33,7 +33,7 @@ const CATEGORIES = [
 ];
 const STATUSES = { DRAFT: "Draft", SUBMITTED: "Submitted", APPROVED: "Approved", REJECTED: "Rejected", PAID: "Paid" };
 const ROLES = { TREASURER: "Treasurer", MEMBER: "Member" };
-const DEFAULT_SETTINGS = { hoaName: "24 Mill Street", defaultHourlyRate: 35, userRates: {}, currency: "USD" };
+const DEFAULT_SETTINGS = { hoaName: "24 Mill Street", defaultHourlyRate: 40, userRates: {}, currency: "USD" };
 const INITIAL_USERS = [
   { id: "usr_admin", name: "Zsolt Kemecsei", email: "zsolt.kemecsei@gmail.com", role: ROLES.TREASURER, pin: "1013" },
   { id: "usr_lmv", name: "L. Vancheri", email: "lmvancheri@gmail.com", role: ROLES.MEMBER, pin: "1108" },
@@ -575,6 +575,8 @@ const SettingsPage = ({ settings, users, onSaveSettings, onSaveUsers }) => {
   const [saved, setSaved] = useState(false);
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
+  const [newRole, setNewRole] = useState(ROLES.MEMBER);
+  const [newPin, setNewPin] = useState("");
   const [memberError, setMemberError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -583,14 +585,16 @@ const SettingsPage = ({ settings, users, onSaveSettings, onSaveUsers }) => {
     setMemberError("");
     const email = newEmail.trim().toLowerCase();
     const name = newName.trim();
+    const pin = newPin.trim();
     if (!name) { setMemberError("Name is required"); return; }
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setMemberError("Valid email is required"); return; }
+    if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) { setMemberError("A 4-digit PIN is required"); return; }
     if (users.some(u => u.email.toLowerCase() === email)) { setMemberError("Email already registered"); return; }
-    onSaveUsers([...users, { id: "usr_" + uid(), name, email, role: ROLES.MEMBER }]);
-    setNewName(""); setNewEmail("");
+    onSaveUsers([...users, { id: "usr_" + uid(), name, email, role: newRole, pin }]);
+    setNewName(""); setNewEmail(""); setNewPin(""); setNewRole(ROLES.MEMBER);
   };
   const removeMember = (id) => { onSaveUsers(users.filter(u => u.id !== id)); setDeleteTarget(null); };
-  const members = users.filter(u => u.role === ROLES.MEMBER);
+  const members = users.filter(u => u.id !== "usr_admin");
 
   return (
     <div className="fade-in">
@@ -606,8 +610,12 @@ const SettingsPage = ({ settings, users, onSaveSettings, onSaveUsers }) => {
         <div style={{ padding: 16, background: BRAND.bgSoft, borderRadius: 8, border: "1px solid " + BRAND.borderLight, marginBottom: 20 }}>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: BRAND.navy }}>Add New Member</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-            <div><label style={S.label}>Full Name</label><input style={S.input} value={newName} onChange={e => setNewName(e.target.value)} placeholder="Jordan Chen" onKeyDown={e => e.key === "Enter" && addMember()} /></div>
-            <div><label style={S.label}>Email</label><input style={S.input} value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="jordan@email.com" onKeyDown={e => e.key === "Enter" && addMember()} /></div>
+            <div><label style={S.label}>Full Name</label><input style={S.input} value={newName} onChange={e => setNewName(e.target.value)} placeholder="Jordan Chen" /></div>
+            <div><label style={S.label}>Email</label><input style={S.input} value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="jordan@email.com" /></div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div><label style={S.label}>Role</label><select style={S.select} value={newRole} onChange={e => setNewRole(e.target.value)}><option value={ROLES.MEMBER}>Member</option><option value={ROLES.TREASURER}>Treasurer</option></select></div>
+            <div><label style={S.label}>4-Digit PIN</label><input type="text" inputMode="numeric" maxLength={4} style={S.input} value={newPin} onChange={e => setNewPin(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="e.g. 1234" onKeyDown={e => e.key === "Enter" && addMember()} /></div>
           </div>
           {memberError && <div style={{ color: BRAND.error, fontSize: 13, marginBottom: 10 }}>{memberError}</div>}
           <button style={S.btnPrimary} onClick={addMember}><Icon name="plus" size={16} /> Add Member</button>
