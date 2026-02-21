@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useSupabase } from "./useSupabase";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // BRAND TOKENS
@@ -34,28 +35,12 @@ const CATEGORIES = [
 const STATUSES = { DRAFT: "Draft", SUBMITTED: "Submitted", APPROVED: "Approved", REJECTED: "Rejected", PAID: "Paid" };
 const ROLES = { TREASURER: "Treasurer", MEMBER: "Member" };
 const DEFAULT_SETTINGS = { hoaName: "24 Mill Street", defaultHourlyRate: 40, userRates: {}, currency: "USD" };
-const INITIAL_USERS = [
-  { id: "usr_admin", name: "Zsolt Kemecsei", email: "zsolt.kemecsei@gmail.com", role: ROLES.TREASURER, pin: "1013" },
-  { id: "usr_lmv", name: "L. Vancheri", email: "lmvancheri@gmail.com", role: ROLES.MEMBER, pin: "1108" },
-  { id: "usr_clb", name: "Casey Bulmer", email: "caseylbulmer@gmail.com", role: ROLES.MEMBER, pin: "3221" },
-  { id: "usr_mpb", name: "M. Burke", email: "mpburke15@gmail.com", role: ROLES.MEMBER, pin: "7872" },
-];
 const MOBILE_BP = 768;
 
 function useIsMobile() {
   const [m, setM] = useState(typeof window !== "undefined" ? window.innerWidth < MOBILE_BP : false);
   useEffect(() => { const h = () => setM(window.innerWidth < MOBILE_BP); window.addEventListener("resize", h); return () => window.removeEventListener("resize", h); }, []);
   return m;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// STORAGE
-// ═══════════════════════════════════════════════════════════════════════════
-function load(key, fallback) {
-  try { const raw = localStorage.getItem(key); if (raw === null) return fallback; return JSON.parse(raw); } catch (e) { return fallback; }
-}
-function save(key, data) {
-  try { localStorage.setItem(key, JSON.stringify(data)); } catch (e) { /* ignore */ }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -80,6 +65,10 @@ function calcMaterialsTotal(materials) {
 }
 function formatDate(d) { if (!d) return ""; const date = new Date(d + "T00:00:00"); return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }
 function formatTime(t) { if (!t) return ""; const [h, m] = t.split(":"); const hr = parseInt(h); return (hr > 12 ? hr - 12 : hr || 12) + ":" + m + " " + (hr >= 12 ? "PM" : "AM"); }
+function getUserRate(users, settings, userId) {
+  const u = users?.find(u => u.id === userId);
+  return u?.hourlyRate || settings?.defaultHourlyRate || 40;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ICON COMPONENT
@@ -315,7 +304,7 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const hours = calcHours(form.startTime, form.endTime);
-  const rate = settings.userRates?.[form.userId] || settings.defaultHourlyRate;
+  const rate = getUserRate(users, settings, form.userId);
   const laborTotal = hours * rate;
   const matTotal = calcMaterialsTotal(form.materials);
   const grandTotal = laborTotal + matTotal;
@@ -404,7 +393,7 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
   const isTreasurer = currentUser.role === ROLES.TREASURER;
   const user = users.find(u => u.id === entry.userId);
   const hours = calcHours(entry.startTime, entry.endTime);
-  const rate = settings.userRates?.[entry.userId] || settings.defaultHourlyRate;
+  const rate = getUserRate(users, settings, entry.userId);
   const laborTotal = hours * rate;
   const matTotal = calcMaterialsTotal(entry.materials);
   const grandTotal = laborTotal + matTotal;
@@ -476,7 +465,7 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
 const EntryCard = ({entry, users, settings, onClick}) => {
   const u = users.find(u => u.id === entry.userId);
   const hrs = calcHours(entry.startTime, entry.endTime);
-  const rate = settings.userRates?.[entry.userId] || settings.defaultHourlyRate;
+  const rate = getUserRate(users, settings, entry.userId);
   const total = hrs * rate + calcMaterialsTotal(entry.materials);
   return (
     <div style={{ ...S.card, cursor: "pointer", padding: "14px 16px" }} onClick={onClick}>
@@ -513,13 +502,13 @@ const ReportsPage = ({ entries, users, settings, currentUser, mob }) => {
 
   const totals = useMemo(() => {
     let totalHours = 0, totalLabor = 0, totalMat = 0;
-    filtered.forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = settings.userRates?.[e.userId] || settings.defaultHourlyRate; totalHours += h; totalLabor += h * r; totalMat += calcMaterialsTotal(e.materials); });
+    filtered.forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); totalHours += h; totalLabor += h * r; totalMat += calcMaterialsTotal(e.materials); });
     return { totalHours, totalLabor, totalMat, grand: totalLabor + totalMat };
   }, [filtered, settings]);
 
   const exportCSV = () => {
     const header = "Date,Member,Category,Description,Hours,Rate,Labor,Materials,Total";
-    const rows = filtered.map(e => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = settings.userRates?.[e.userId] || settings.defaultHourlyRate; const l = h * r; const m = calcMaterialsTotal(e.materials); return e.date + ',"' + (u?.name || "") + '","' + e.category + '","' + e.description.replace(/"/g, '""') + '",' + h.toFixed(2) + ',' + r.toFixed(2) + ',' + l.toFixed(2) + ',' + m.toFixed(2) + ',' + (l + m).toFixed(2); });
+    const rows = filtered.map(e => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const l = h * r; const m = calcMaterialsTotal(e.materials); return e.date + ',"' + (u?.name || "") + '","' + e.category + '","' + e.description.replace(/"/g, '""') + '",' + h.toFixed(2) + ',' + r.toFixed(2) + ',' + l.toFixed(2) + ',' + m.toFixed(2) + ',' + (l + m).toFixed(2); });
     const csv = [header, ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = settings.hoaName.replace(/\s+/g, "_") + "_Report.csv"; a.click();
@@ -554,7 +543,7 @@ const ReportsPage = ({ entries, users, settings, currentUser, mob }) => {
               <div style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 8, overflow: "hidden" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                   <thead><tr><th style={S.th}>Date</th>{isTreasurer && <th style={S.th}>Member</th>}<th style={S.th}>Category</th><th style={S.th}>Description</th><th style={{ ...S.th, textAlign: "right" }}>Hours</th><th style={{ ...S.th, textAlign: "right" }}>Total</th></tr></thead>
-                  <tbody>{filtered.map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = settings.userRates?.[e.userId] || settings.defaultHourlyRate; return (
+                  <tbody>{filtered.map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); return (
                     <tr key={e.id} style={{ background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white }}><td style={S.td}>{formatDate(e.date)}</td>{isTreasurer && <td style={S.td}>{u?.name}</td>}<td style={S.td}><CategoryBadge category={e.category} /></td><td style={{ ...S.td, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</td><td style={{ ...S.td, textAlign: "right" }}>{h.toFixed(2)}</td><td style={{ ...S.td, textAlign: "right", fontWeight: 700 }}>{fmt(h * r + calcMaterialsTotal(e.materials))}</td></tr>
                   ); })}</tbody>
                 </table>
@@ -568,33 +557,45 @@ const ReportsPage = ({ entries, users, settings, currentUser, mob }) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// RATE INPUT (saves on blur)
+// ═══════════════════════════════════════════════════════════════════════════
+const RateInput = ({ initialValue, placeholder, onSave }) => {
+  const [val, setVal] = useState(initialValue || "");
+  return <input type="number" min="0" step="0.50" style={{ ...S.input, padding: "6px 10px" }} value={val} onChange={e => setVal(e.target.value)} onBlur={() => onSave(Number(val) || null)} placeholder={placeholder} />;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // SETTINGS PAGE
 // ═══════════════════════════════════════════════════════════════════════════
-const SettingsPage = ({ settings, users, onSaveSettings, onSaveUsers }) => {
+const SettingsPage = ({ settings, users, currentUser, onSaveSettings, onAddUser, onRemoveUser, onUpdateRate }) => {
   const [form, setForm] = useState({ ...settings });
   const [saved, setSaved] = useState(false);
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState(ROLES.MEMBER);
-  const [newPin, setNewPin] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [memberError, setMemberError] = useState("");
+  const [addingUser, setAddingUser] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const handleSave = () => { onSaveSettings(form); setSaved(true); setTimeout(() => setSaved(false), 2000); };
-  const addMember = () => {
+  const handleSave = async () => { await onSaveSettings(form); setSaved(true); setTimeout(() => setSaved(false), 2000); };
+  const addMember = async () => {
     setMemberError("");
     const email = newEmail.trim().toLowerCase();
     const name = newName.trim();
-    const pin = newPin.trim();
+    const password = newPassword.trim();
     if (!name) { setMemberError("Name is required"); return; }
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setMemberError("Valid email is required"); return; }
-    if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) { setMemberError("A 4-digit PIN is required"); return; }
+    if (!password || password.length < 6) { setMemberError("Password must be at least 6 characters"); return; }
     if (users.some(u => u.email.toLowerCase() === email)) { setMemberError("Email already registered"); return; }
-    onSaveUsers([...users, { id: "usr_" + uid(), name, email, role: newRole, pin }]);
-    setNewName(""); setNewEmail(""); setNewPin(""); setNewRole(ROLES.MEMBER);
+    setAddingUser(true);
+    const result = await onAddUser(name, email, newRole, password);
+    setAddingUser(false);
+    if (result.error) { setMemberError(result.error); return; }
+    setNewName(""); setNewEmail(""); setNewPassword(""); setNewRole(ROLES.MEMBER);
   };
-  const removeMember = (id) => { onSaveUsers(users.filter(u => u.id !== id)); setDeleteTarget(null); };
-  const members = users.filter(u => u.id !== "usr_admin");
+  const removeMember = async (id) => { await onRemoveUser(id); setDeleteTarget(null); };
+  const members = users.filter(u => u.id !== currentUser?.id);
 
   return (
     <div className="fade-in">
@@ -615,10 +616,10 @@ const SettingsPage = ({ settings, users, onSaveSettings, onSaveUsers }) => {
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
             <div><label style={S.label}>Role</label><select style={S.select} value={newRole} onChange={e => setNewRole(e.target.value)}><option value={ROLES.MEMBER}>Member</option><option value={ROLES.TREASURER}>Treasurer</option></select></div>
-            <div><label style={S.label}>4-Digit PIN</label><input type="text" inputMode="numeric" maxLength={4} style={S.input} value={newPin} onChange={e => setNewPin(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="e.g. 1234" onKeyDown={e => e.key === "Enter" && addMember()} /></div>
+            <div><label style={S.label}>Password</label><input type="password" style={S.input} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Min 6 chars" onKeyDown={e => e.key === "Enter" && addMember()} /></div>
           </div>
           {memberError && <div style={{ color: BRAND.error, fontSize: 13, marginBottom: 10 }}>{memberError}</div>}
-          <button style={S.btnPrimary} onClick={addMember}><Icon name="plus" size={16} /> Add Member</button>
+          <button style={{ ...S.btnPrimary, opacity: addingUser ? 0.6 : 1 }} onClick={addMember} disabled={addingUser}><Icon name="plus" size={16} /> {addingUser ? "Adding..." : "Add Member"}</button>
         </div>
         {members.length === 0 ? <div style={{ textAlign: "center", padding: 24, color: BRAND.textLight, fontSize: 14 }}>No members yet.</div> : (
           <div style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 8, overflow: "hidden" }}>
@@ -628,14 +629,14 @@ const SettingsPage = ({ settings, users, onSaveSettings, onSaveUsers }) => {
                 <tr key={u.id}>
                   <td style={{ ...S.td, fontWeight: 500 }}>{u.name}</td>
                   <td style={{ ...S.td, color: BRAND.textMuted }}>{u.email}</td>
-                  <td style={S.td}><input type="number" min="0" step="0.50" style={{ ...S.input, padding: "6px 10px" }} value={form.userRates?.[u.id] || ""} onChange={e => set("userRates", { ...form.userRates, [u.id]: Number(e.target.value) || undefined })} placeholder={"$" + form.defaultHourlyRate} /></td>
+                  <td style={S.td}><RateInput initialValue={u.hourlyRate} placeholder={"$" + form.defaultHourlyRate} onSave={val => onUpdateRate(u.id, val)} /></td>
                   <td style={S.td}><button style={{ ...S.btnGhost, padding: 6, color: BRAND.error }} onClick={() => setDeleteTarget(u)}><Icon name="trash" size={16} /></button></td>
                 </tr>
               ))}</tbody>
             </table>
           </div>
         )}
-        {members.length > 0 && <div style={{ marginTop: 12 }}><button style={S.btnPrimary} onClick={handleSave}>{saved ? "✓ Saved" : "Save Rates"}</button></div>}
+        {members.length > 0 && <div style={{ marginTop: 8, fontSize: 12, color: BRAND.textLight }}>Rates save automatically when you leave the field.</div>}
       </div>
       <ConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Remove Member?" message={deleteTarget ? "Remove " + deleteTarget.name + "?" : ""} confirmText="Remove" danger onConfirm={() => removeMember(deleteTarget.id)} />
     </div>
@@ -647,67 +648,71 @@ const SettingsPage = ({ settings, users, onSaveSettings, onSaveUsers }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 export default function App() {
   const mob = useIsMobile();
-  const [currentUser, setCurrentUser] = useState(() => load("hoa-user", null));
-  const [users, setUsers] = useState(() => {
-    const cached = load("hoa-users", null);
-    if (!cached || !cached[0]?.pin) return INITIAL_USERS;
-    return cached;
-  });
-  const [entries, setEntries] = useState(() => load("hoa-entries", []));
-  const [settings, setSettings] = useState(() => load("hoa-settings", DEFAULT_SETTINGS));
+  const {
+    currentUser, users, entries, settings, loading, authError,
+    login, logout: sbLogout,
+    saveEntry, deleteEntry, approveEntry, rejectEntry, markPaid,
+    saveSettings, addUser, removeUser, updateUserRate,
+    setAuthError,
+  } = useSupabase();
+
   const [page, setPage] = useState("dashboard");
   const [viewEntry, setViewEntry] = useState(null);
   const [editEntry, setEditEntry] = useState(null);
   const [newEntry, setNewEntry] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
-  const [loginPin, setLoginPin] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [loggingIn, setLoggingIn] = useState(false);
 
-  useEffect(() => { save("hoa-user", currentUser); }, [currentUser]);
-  useEffect(() => { save("hoa-users", users); }, [users]);
-  useEffect(() => { save("hoa-entries", entries); }, [entries]);
-  useEffect(() => { save("hoa-settings", settings); }, [settings]);
+  // Sync auth errors from hook
+  useEffect(() => { if (authError) setLoginError(authError); }, [authError]);
 
   const isTreasurer = currentUser?.role === ROLES.TREASURER;
   const myEntries = entries.filter(e => isTreasurer || e.userId === currentUser?.id).sort((a, b) => b.date.localeCompare(a.date));
   const pendingCount = entries.filter(e => e.status === STATUSES.SUBMITTED).length;
 
+  // Helper: get rate for a user
+  const getRate = (userId) => getUserRate(users, settings, userId);
+
   // Auth
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setLoginError("");
     const email = loginEmail.trim().toLowerCase();
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setLoginError("Please enter a valid email"); return; }
-    if (!loginPin || loginPin.length !== 4) { setLoginError("Please enter your 4-digit PIN"); return; }
-    const user = users.find(u => u.email.toLowerCase() === email);
-    if (!user) { setLoginError("No account found. Contact your HOA Treasurer."); return; }
-    if (user.pin !== loginPin) { setLoginError("Incorrect PIN. Please try again."); return; }
-    setCurrentUser(user); setPage("dashboard");
+    if (!loginPassword) { setLoginError("Please enter your password"); return; }
+    setLoggingIn(true);
+    const ok = await login(email, loginPassword);
+    setLoggingIn(false);
+    if (ok) setPage("dashboard");
   };
-  const handleLogout = () => { setCurrentUser(null); setLoginEmail(""); setLoginPin(""); setLoginError(""); setPage("dashboard"); setViewEntry(null); setEditEntry(null); setNewEntry(false); };
+  const handleLogout = async () => { await sbLogout(); setLoginEmail(""); setLoginPassword(""); setLoginError(""); setPage("dashboard"); setViewEntry(null); setEditEntry(null); setNewEntry(false); };
   const nav = (p) => { setPage(p); setViewEntry(null); setEditEntry(null); setNewEntry(false); setDrawerOpen(false); };
 
-  // Entry operations
-  const doSave = (formData) => {
+  // Entry operations (now async)
+  const doSave = async (formData) => {
     if (editEntry) {
-      setEntries(entries.map(e => e.id === editEntry.id ? { ...e, ...formData, userId: formData.userId || editEntry.userId } : e));
-      setViewEntry({ ...editEntry, ...formData }); setEditEntry(null);
+      const updated = await saveEntry(formData, editEntry.id);
+      if (updated) { setViewEntry(updated); setEditEntry(null); }
     } else {
-      const entry = { ...formData, id: uid(), userId: formData.userId || currentUser.id };
-      setEntries([entry, ...entries]); setNewEntry(false);
-      if (formData.status === STATUSES.SUBMITTED) setPage("entries"); else setViewEntry(entry);
+      const created = await saveEntry(formData, null);
+      if (created) { setNewEntry(false); if (formData.status === STATUSES.SUBMITTED) setPage("entries"); else setViewEntry(created); }
     }
   };
-  const doSubmit = (formData) => {
-    const id = editEntry?.id || uid();
-    const entry = { ...formData, id, userId: formData.userId || editEntry?.userId || currentUser.id, status: STATUSES.SUBMITTED };
-    setEntries(editEntry ? entries.map(e => e.id === id ? entry : e) : [entry, ...entries]);
+  const doSubmit = async (formData) => {
+    const data = { ...formData, status: STATUSES.SUBMITTED };
+    if (editEntry) {
+      await saveEntry(data, editEntry.id);
+    } else {
+      await saveEntry(data, null);
+    }
     setEditEntry(null); setNewEntry(false); setPage("entries");
   };
-  const doDelete = () => { if (editEntry) { setEntries(entries.filter(e => e.id !== editEntry.id)); setEditEntry(null); setPage("entries"); } };
-  const doApprove = (notes) => { if (viewEntry) { setEntries(entries.map(e => e.id === viewEntry.id ? { ...e, status: STATUSES.APPROVED, reviewerNotes: notes, reviewedAt: new Date().toISOString() } : e)); setViewEntry({ ...viewEntry, status: STATUSES.APPROVED, reviewerNotes: notes }); } };
-  const doReject = (notes) => { if (viewEntry) { setEntries(entries.map(e => e.id === viewEntry.id ? { ...e, status: STATUSES.REJECTED, reviewerNotes: notes, reviewedAt: new Date().toISOString() } : e)); setViewEntry({ ...viewEntry, status: STATUSES.REJECTED, reviewerNotes: notes }); } };
-  const doMarkPaid = () => { if (viewEntry) { setEntries(entries.map(e => e.id === viewEntry.id ? { ...e, status: STATUSES.PAID, paidAt: new Date().toISOString() } : e)); setViewEntry({ ...viewEntry, status: STATUSES.PAID, paidAt: new Date().toISOString() }); } };
+  const doDelete = async () => { if (editEntry) { await deleteEntry(editEntry.id); setEditEntry(null); setPage("entries"); } };
+  const doApprove = async (notes) => { if (viewEntry) { const updated = await approveEntry(viewEntry.id, notes); if (updated) setViewEntry(updated); } };
+  const doReject = async (notes) => { if (viewEntry) { const updated = await rejectEntry(viewEntry.id, notes); if (updated) setViewEntry(updated); } };
+  const doMarkPaid = async () => { if (viewEntry) { const updated = await markPaid(viewEntry.id); if (updated) setViewEntry(updated); } };
 
   // Dashboard stats
   const dashStats = (() => {
@@ -716,7 +721,7 @@ export default function App() {
     const approved = relevant.filter(e => e.status === STATUSES.APPROVED || e.status === STATUSES.PAID);
     const thisMonth = approved.filter(e => e.date.startsWith(new Date().toISOString().slice(0, 7)));
     let monthReimb = 0;
-    thisMonth.forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = settings.userRates?.[e.userId] || settings.defaultHourlyRate; monthReimb += h * r + calcMaterialsTotal(e.materials); });
+    thisMonth.forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getRate(e.userId); monthReimb += h * r + calcMaterialsTotal(e.materials); });
     return { total: relevant.length, approved: approved.length, pending: relevant.filter(e => e.status === STATUSES.SUBMITTED).length, monthReimb, paid: relevant.filter(e => e.status === STATUSES.PAID).length };
   })();
 
@@ -724,6 +729,7 @@ export default function App() {
   // LOGIN SCREEN
   // ══════════════════════════════════════════════════════════════════════════
   if (!currentUser) {
+    if (loading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans }}><div style={{ textAlign: "center" }}><img src="/logo.png" alt="" style={{ width: 80, height: 80, objectFit: "contain", margin: "0 auto 16px", display: "block", opacity: 0.5 }} /><div style={{ fontSize: 14, color: BRAND.textMuted }}>Loading...</div></div></div>;
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans, padding: mob ? 16 : 0 }}>
         <div className="fade-in" style={{ textAlign: "center", maxWidth: 420, width: "100%" }}>
@@ -733,13 +739,13 @@ export default function App() {
           <p style={{ color: BRAND.textLight, margin: "0 0 32px", fontSize: 13 }}>HOA Work Tracker</p>
           <div style={{ background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 12, padding: 32, textAlign: "left", boxShadow: "0 4px 20px rgba(31,42,56,0.06)" }}>
             <div style={{ fontSize: 18, fontWeight: 600, color: BRAND.navy, marginBottom: 4, fontFamily: BRAND.serif }}>Sign In</div>
-            <div style={{ fontSize: 13, color: BRAND.textMuted, marginBottom: 24 }}>Enter your email and PIN to continue</div>
+            <div style={{ fontSize: 13, color: BRAND.textMuted, marginBottom: 24 }}>Enter your email and password to continue</div>
             <label style={{ ...S.label }}>Email Address</label>
-            <input type="email" style={{ ...S.input, marginBottom: 16, fontSize: 15, padding: "12px 16px", borderColor: loginError ? BRAND.border : BRAND.border }} value={loginEmail} onChange={e => { setLoginEmail(e.target.value); setLoginError(""); }} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="you@example.com" autoFocus />
-            <label style={{ ...S.label }}>PIN</label>
-            <input type="password" inputMode="numeric" maxLength={4} style={{ ...S.input, marginBottom: loginError ? 8 : 20, fontSize: 20, padding: "12px 16px", letterSpacing: "0.3em", textAlign: "center", borderColor: loginError ? BRAND.error : BRAND.border }} value={loginPin} onChange={e => { setLoginPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setLoginError(""); }} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="····" />
+            <input type="email" style={{ ...S.input, marginBottom: 16, fontSize: 15, padding: "12px 16px" }} value={loginEmail} onChange={e => { setLoginEmail(e.target.value); setLoginError(""); }} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="you@example.com" autoFocus />
+            <label style={{ ...S.label }}>Password</label>
+            <input type="password" style={{ ...S.input, marginBottom: loginError ? 8 : 20, fontSize: 15, padding: "12px 16px", borderColor: loginError ? BRAND.error : BRAND.border }} value={loginPassword} onChange={e => { setLoginPassword(e.target.value); setLoginError(""); }} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="Enter your password" />
             {loginError && <div style={{ color: BRAND.error, fontSize: 13, marginBottom: 16, display: "flex", alignItems: "flex-start", gap: 6 }}><Icon name="alert" size={14} /><span>{loginError}</span></div>}
-            <button style={{ ...S.btnPrimary, width: "100%", justifyContent: "center", padding: "12px 20px", fontSize: 15, borderRadius: 8 }} onClick={handleLogin}>Continue</button>
+            <button style={{ ...S.btnPrimary, width: "100%", justifyContent: "center", padding: "12px 20px", fontSize: 15, borderRadius: 8, opacity: loggingIn ? 0.6 : 1 }} onClick={handleLogin} disabled={loggingIn}>{loggingIn ? "Signing in..." : "Continue"}</button>
           </div>
           <p style={{ color: BRAND.textLight, fontSize: 12, marginTop: 24 }}>Don't have an account? Ask your HOA Treasurer to add you.</p>
         </div>
@@ -804,7 +810,7 @@ export default function App() {
               <div style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 8, overflow: "hidden" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                   <thead><tr><th style={S.th}>Date</th>{isTreasurer && <th style={S.th}>Member</th>}<th style={S.th}>Category</th><th style={S.th}>Description</th><th style={{ ...S.th, textAlign: "right" }}>Total</th><th style={S.th}>Status</th></tr></thead>
-                  <tbody>{recent.map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = settings.userRates?.[e.userId] || settings.defaultHourlyRate; const total = h * r + calcMaterialsTotal(e.materials); return (
+                  <tbody>{recent.map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = h * r + calcMaterialsTotal(e.materials); return (
                     <tr key={e.id} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms" }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
                       <td style={S.td}>{formatDate(e.date)}</td>{isTreasurer && <td style={S.td}>{u?.name}</td>}<td style={S.td}><CategoryBadge category={e.category} /></td><td style={{ ...S.td, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</td><td style={{ ...S.td, textAlign: "right", fontWeight: 600 }}>{fmt(total)}</td><td style={S.td}><StatusBadge status={e.status} /></td>
                     </tr>); })}</tbody>
@@ -827,7 +833,7 @@ export default function App() {
           <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
               <thead><tr><th style={S.th}>Date</th>{isTreasurer && <th style={S.th}>Member</th>}<th style={S.th}>Category</th><th style={S.th}>Description</th><th style={{ ...S.th, textAlign: "right" }}>Hours</th><th style={{ ...S.th, textAlign: "right" }}>Total</th><th style={S.th}>Status</th></tr></thead>
-              <tbody>{myEntries.map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = settings.userRates?.[e.userId] || settings.defaultHourlyRate; const total = h * r + calcMaterialsTotal(e.materials); return (
+              <tbody>{myEntries.map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = h * r + calcMaterialsTotal(e.materials); return (
                 <tr key={e.id} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms" }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
                   <td style={S.td}>{formatDate(e.date)}</td>{isTreasurer && <td style={S.td}>{u?.name}</td>}<td style={S.td}><CategoryBadge category={e.category} /></td><td style={{ ...S.td, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</td><td style={{ ...S.td, textAlign: "right" }}>{fmtHours(h)}</td><td style={{ ...S.td, textAlign: "right", fontWeight: 600 }}>{fmt(total)}</td><td style={S.td}><StatusBadge status={e.status} /></td>
                 </tr>); })}</tbody>
@@ -844,7 +850,7 @@ export default function App() {
           <p style={{ margin: "0 0 24px", fontSize: 14, color: BRAND.textMuted }}>{pending.length} entries pending your review</p>
           {pending.length === 0 ? <div style={{ ...S.card, textAlign: "center", padding: 60, color: BRAND.textLight }}>All caught up! No entries to review.</div> : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {pending.map(e => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = settings.userRates?.[e.userId] || settings.defaultHourlyRate; const total = h * r + calcMaterialsTotal(e.materials); return (
+              {pending.map(e => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = h * r + calcMaterialsTotal(e.materials); return (
                 <div key={e.id} style={{ ...S.card, cursor: "pointer", padding: "20px 24px", transition: "box-shadow 150ms", borderLeft: "4px solid " + BRAND.brick }} onClick={() => setViewEntry(e)} onMouseEnter={ev => ev.currentTarget.style.boxShadow = "0 4px 16px rgba(31,42,56,0.08)"} onMouseLeave={ev => ev.currentTarget.style.boxShadow = "0 1px 3px rgba(31,42,56,0.04)"}>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <div><div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}><span style={{ fontWeight: 700, fontSize: 16, color: BRAND.navy }}>{u?.name}</span><CategoryBadge category={e.category} /></div><div style={{ fontSize: 14, color: BRAND.charcoal, marginBottom: 4 }}>{e.description}</div><div style={{ fontSize: 13, color: BRAND.textLight }}>{formatDate(e.date)} · {fmtHours(h)}</div></div>
@@ -857,7 +863,7 @@ export default function App() {
       );
     }
     if (page === "reports") return <ReportsPage entries={entries} users={users} settings={settings} currentUser={currentUser} mob={mob} />;
-    if (page === "settings") return <SettingsPage settings={settings} users={users} onSaveSettings={s => setSettings(s)} onSaveUsers={u => setUsers(u)} />;
+    if (page === "settings") return <SettingsPage settings={settings} users={users} currentUser={currentUser} onSaveSettings={saveSettings} onAddUser={addUser} onRemoveUser={removeUser} onUpdateRate={updateUserRate} />;
     return null;
   };
 
