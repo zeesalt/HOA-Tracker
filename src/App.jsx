@@ -91,32 +91,66 @@ function getUserRate(users, settings, userId) {
 // ═══════════════════════════════════════════════════════════════════════════
 // ICON COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
-const Icon = ({ name, size = 18 }) => {
+const Icon = ({ name, size = 18, filled = false }) => {
+  // For filled tab icons, render with fill instead of stroke
+  const filledIcons = {
+    homeFilled: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+        <path d="M12.71 2.29a1 1 0 00-1.42 0l-9 9a1 1 0 00.71 1.71H4v7a2 2 0 002 2h3a1 1 0 001-1v-4h4v4a1 1 0 001 1h3a2 2 0 002-2v-7h.59a1 1 0 00.7-1.71l-9-9z" />
+      </svg>
+    ),
+    clipboardFilled: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+        <path d="M10 3a1 1 0 00-1 1H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V6a2 2 0 00-2-2h-2a1 1 0 00-1-1h-4z" />
+        <rect x="9" y="12" width="6" height="1.5" rx=".75" fill="#fff" />
+        <rect x="9" y="15.5" width="4" height="1.5" rx=".75" fill="#fff" />
+      </svg>
+    ),
+    shieldCheckFilled: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+        <path d="M12 2L3.5 6.5V11c0 5.25 3.63 10.17 8.5 11.38C16.87 21.17 20.5 16.25 20.5 11V6.5L12 2z" />
+        <path d="M10 14.2l-2.1-2.1L6.5 13.5l3.5 3.5 7-7L15.6 8.6 10 14.2z" fill="#fff" />
+      </svg>
+    ),
+    barChartFilled: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+        <rect x="4" y="4" width="16" height="16" rx="2" />
+        <rect x="7" y="14" width="2" height="3" rx=".5" fill="#fff" />
+        <rect x="11" y="11" width="2" height="6" rx=".5" fill="#fff" />
+        <rect x="15" y="8" width="2" height="9" rx=".5" fill="#fff" />
+      </svg>
+    ),
+  };
+  if (filledIcons[name]) return filledIcons[name];
+
   const paths = {
     home: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z",
+    clipboard: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9h6m-6 4h4",
+    shieldCheck: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z",
+    barChart: "M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z",
     plus: "M12 4v16m8-8H4",
     check: "M5 13l4 4L19 7",
     x: "M6 18L18 6M6 6l12 12",
     edit: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z",
     clock: "M12 8v4l3 3M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
-    file: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+    file: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01",
     download: "M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 3v12",
     settings: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z",
     users: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z",
-    chart: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
+    chart: "M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z",
     send: "M12 19l9 2-9-18-9 18 9-2zm0 0v-8",
     back: "M10 19l-7-7m0 0l7-7m-7 7h18",
     trash: "M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16",
     alert: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z",
     logout: "M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1",
     dollar: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
-    inbox: "M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4",
+    inbox: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
     menu: "M4 6h16M4 12h16M4 18h16",
     wifiOff: "M1 1l22 22M16.72 11.06A10.94 10.94 0 0119 12.55M5 12.55a10.94 10.94 0 015.17-2.39M10.71 5.05A16 16 0 0122.56 9M1.42 9a15.91 15.91 0 014.7-2.88M8.53 16.11a6 6 0 016.95 0M12 20h.01",
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
       <path d={paths[name] || ""} />
     </svg>
   );
@@ -813,14 +847,14 @@ export default function App() {
               <button style={{ flex: 1, padding: "10px 0", borderRadius: 6, border: "none", fontFamily: BRAND.sans, fontSize: 14, fontWeight: 600, cursor: "pointer", background: authMode === "register" ? BRAND.white : "transparent", color: authMode === "register" ? BRAND.navy : BRAND.textMuted, boxShadow: authMode === "register" ? "0 1px 3px rgba(0,0,0,0.08)" : "none", transition: "all 150ms" }} onClick={() => { setAuthMode("register"); setLoginError(""); }}>Register</button>
             </div>
             {authMode === "login" ? (
-              <div>
-                <label style={S.label}>Email Address</label>
-                <input type="email" style={{ ...S.input, marginBottom: 16, fontSize: 15, padding: "12px 16px" }} value={loginEmail} onChange={e => { setLoginEmail(e.target.value); setLoginError(""); }} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="you@example.com" autoFocus />
-                <label style={S.label}>Password</label>
-                <input type="password" style={{ ...S.input, marginBottom: loginError ? 8 : 20, fontSize: 15, padding: "12px 16px", borderColor: loginError ? BRAND.error : BRAND.border }} value={loginPassword} onChange={e => { setLoginPassword(e.target.value); setLoginError(""); }} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="Enter your password" />
+              <form onSubmit={e => { e.preventDefault(); handleLogin(); }} autoComplete="on">
+                <label style={S.label} htmlFor="login-email">Email Address</label>
+                <input id="login-email" name="email" type="email" autoComplete="username" style={{ ...S.input, marginBottom: 16, fontSize: 15, padding: "12px 16px" }} value={loginEmail} onChange={e => { setLoginEmail(e.target.value); setLoginError(""); }} placeholder="you@example.com" autoFocus />
+                <label style={S.label} htmlFor="login-password">Password</label>
+                <input id="login-password" name="password" type="password" autoComplete="current-password" style={{ ...S.input, marginBottom: loginError ? 8 : 20, fontSize: 15, padding: "12px 16px", borderColor: loginError ? BRAND.error : BRAND.border }} value={loginPassword} onChange={e => { setLoginPassword(e.target.value); setLoginError(""); }} placeholder="Enter your password" />
                 {loginError && <div style={{ color: BRAND.error, fontSize: 13, marginBottom: 16, display: "flex", alignItems: "flex-start", gap: 6 }}><Icon name="alert" size={14} /><span>{loginError}</span></div>}
-                <button style={{ ...S.btnPrimary, width: "100%", justifyContent: "center", padding: "12px 20px", fontSize: 15, borderRadius: 8, opacity: loggingIn ? 0.6 : 1 }} onClick={handleLogin} disabled={loggingIn}>{loggingIn ? "Signing in..." : "Sign In"}</button>
-              </div>
+                <button type="submit" style={{ ...S.btnPrimary, width: "100%", justifyContent: "center", padding: "12px 20px", fontSize: 15, borderRadius: 8, opacity: loggingIn ? 0.6 : 1 }} disabled={loggingIn}>{loggingIn ? "Signing in..." : "Sign In"}</button>
+              </form>
             ) : regSuccess ? (
               <div style={{ textAlign: "center", padding: "20px 0" }}>
                 <div style={{ width: 48, height: 48, borderRadius: 24, background: BRAND.success + "15", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", color: BRAND.success }}><Icon name="check" size={24} /></div>
@@ -829,18 +863,18 @@ export default function App() {
                 <button style={{ ...S.btnPrimary, width: "100%", justifyContent: "center", padding: "12px 20px", fontSize: 15, borderRadius: 8 }} onClick={() => { setAuthMode("login"); setLoginEmail(regEmail); setRegSuccess(false); }}>Go to Sign In</button>
               </div>
             ) : (
-              <div>
-                <label style={S.label}>Full Name</label>
-                <input type="text" style={{ ...S.input, marginBottom: 16, fontSize: 15, padding: "12px 16px" }} value={regName} onChange={e => { setRegName(e.target.value); setRegError(""); }} placeholder="Your full name" autoFocus />
-                <label style={S.label}>Email Address</label>
-                <input type="email" style={{ ...S.input, marginBottom: 16, fontSize: 15, padding: "12px 16px" }} value={regEmail} onChange={e => { setRegEmail(e.target.value); setRegError(""); }} placeholder="you@example.com" />
-                <label style={S.label}>Password</label>
-                <input type="password" style={{ ...S.input, marginBottom: 16, fontSize: 15, padding: "12px 16px" }} value={regPassword} onChange={e => { setRegPassword(e.target.value); setRegError(""); }} placeholder="Min 6 characters" />
-                <label style={S.label}>Invite Code</label>
-                <input type="text" style={{ ...S.input, marginBottom: regError ? 8 : 20, fontSize: 15, padding: "12px 16px", borderColor: regError ? BRAND.error : BRAND.border, textTransform: "uppercase", letterSpacing: "0.1em" }} value={regCode} onChange={e => { setRegCode(e.target.value); setRegError(""); }} onKeyDown={e => e.key === "Enter" && handleRegister()} placeholder="From your HOA Treasurer" />
+              <form onSubmit={e => { e.preventDefault(); handleRegister(); }} autoComplete="on">
+                <label style={S.label} htmlFor="reg-name">Full Name</label>
+                <input id="reg-name" name="name" type="text" autoComplete="name" style={{ ...S.input, marginBottom: 16, fontSize: 15, padding: "12px 16px" }} value={regName} onChange={e => { setRegName(e.target.value); setRegError(""); }} placeholder="Your full name" autoFocus />
+                <label style={S.label} htmlFor="reg-email">Email Address</label>
+                <input id="reg-email" name="email" type="email" autoComplete="username" style={{ ...S.input, marginBottom: 16, fontSize: 15, padding: "12px 16px" }} value={regEmail} onChange={e => { setRegEmail(e.target.value); setRegError(""); }} placeholder="you@example.com" />
+                <label style={S.label} htmlFor="reg-password">Password</label>
+                <input id="reg-password" name="password" type="password" autoComplete="new-password" style={{ ...S.input, marginBottom: 16, fontSize: 15, padding: "12px 16px" }} value={regPassword} onChange={e => { setRegPassword(e.target.value); setRegError(""); }} placeholder="Min 6 characters" />
+                <label style={S.label} htmlFor="reg-code">Invite Code</label>
+                <input id="reg-code" name="invite-code" type="text" autoComplete="off" style={{ ...S.input, marginBottom: regError ? 8 : 20, fontSize: 15, padding: "12px 16px", borderColor: regError ? BRAND.error : BRAND.border, textTransform: "uppercase", letterSpacing: "0.1em" }} value={regCode} onChange={e => { setRegCode(e.target.value); setRegError(""); }} placeholder="From your HOA Treasurer" />
                 {regError && <div style={{ color: BRAND.error, fontSize: 13, marginBottom: 16, display: "flex", alignItems: "flex-start", gap: 6 }}><Icon name="alert" size={14} /><span>{regError}</span></div>}
-                <button style={{ ...S.btnPrimary, width: "100%", justifyContent: "center", padding: "12px 20px", fontSize: 15, borderRadius: 8, opacity: registering ? 0.6 : 1 }} onClick={handleRegister} disabled={registering}>{registering ? "Creating account..." : "Create Account"}</button>
-              </div>
+                <button type="submit" style={{ ...S.btnPrimary, width: "100%", justifyContent: "center", padding: "12px 20px", fontSize: 15, borderRadius: 8, opacity: registering ? 0.6 : 1 }} disabled={registering}>{registering ? "Creating account..." : "Create Account"}</button>
+              </form>
             )}
           </div>
         </div>
@@ -855,14 +889,17 @@ export default function App() {
     { id: "dashboard", label: "Dashboard", icon: "home" },
     { id: "entries", label: isTreasurer ? "All Entries" : "My Entries", icon: "file" },
     ...(isTreasurer ? [{ id: "review", label: "Review Queue", icon: "inbox", badge: pendingCount }] : []),
-    { id: "reports", label: "Reports", icon: "chart" },
+    ...(isTreasurer ? [{ id: "reports", label: "Reports", icon: "chart" }] : []),
     ...(isTreasurer ? [{ id: "settings", label: "Settings", icon: "settings" }] : []),
   ];
-  const bottomTabs = [
-    { id: "dashboard", label: "Home", icon: "home" },
-    { id: "entries", label: "Entries", icon: "file" },
-    ...(isTreasurer ? [{ id: "review", label: "Review", icon: "inbox", badge: pendingCount }] : []),
-    { id: "reports", label: "Reports", icon: "chart" },
+  const bottomTabs = isTreasurer ? [
+    { id: "dashboard", label: "Home", icon: "home", iconFilled: "homeFilled" },
+    { id: "entries", label: "Entries", icon: "clipboard", iconFilled: "clipboardFilled" },
+    { id: "review", label: "Review", icon: "shieldCheck", iconFilled: "shieldCheckFilled", badge: pendingCount },
+    { id: "reports", label: "Reports", icon: "barChart", iconFilled: "barChartFilled" },
+  ] : [
+    { id: "dashboard", label: "Home", icon: "home", iconFilled: "homeFilled" },
+    { id: "entries", label: "Entries", icon: "clipboard", iconFilled: "clipboardFilled" },
   ];
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -938,6 +975,7 @@ export default function App() {
       </div>
     );
     if (page === "review") {
+      if (!isTreasurer) { nav("dashboard"); return null; }
       const pending = entries.filter(e => e.status === STATUSES.SUBMITTED).sort((a, b) => a.date.localeCompare(b.date));
       return (
         <div className="fade-in">
@@ -957,8 +995,8 @@ export default function App() {
         </div>
       );
     }
-    if (page === "reports") return <ReportsPage entries={entries} users={users} settings={settings} currentUser={currentUser} mob={mob} />;
-    if (page === "settings") return <SettingsPage settings={settings} users={users} currentUser={currentUser} onSaveSettings={saveSettings} onAddUser={addUser} onRemoveUser={removeUser} onUpdateRate={updateUserRate} />;
+    if (page === "reports") { if (!isTreasurer) { nav("dashboard"); return null; } return <ReportsPage entries={entries} users={users} settings={settings} currentUser={currentUser} mob={mob} />; }
+    if (page === "settings") { if (!isTreasurer) { nav("dashboard"); return null; } return <SettingsPage settings={settings} users={users} currentUser={currentUser} onSaveSettings={saveSettings} onAddUser={addUser} onRemoveUser={removeUser} onUpdateRate={updateUserRate} />; }
     return null;
   };
 
@@ -1013,13 +1051,18 @@ export default function App() {
           </button>
         )}
         {/* Bottom tab bar */}
-        <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: BRAND.white, borderTop: "1px solid " + BRAND.border, display: "flex", zIndex: 20, paddingBottom: "env(safe-area-inset-bottom)" }}>
-          {bottomTabs.map(t => (
-            <button key={t.id} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "12px 4px", background: "none", border: "none", cursor: "pointer", color: isActive(t.id) ? BRAND.brick : BRAND.textLight, fontFamily: BRAND.sans, fontSize: 12, fontWeight: isActive(t.id) ? 600 : 400, position: "relative" }} onClick={() => nav(t.id)}>
-              <Icon name={t.icon} size={30} /><span>{t.label}</span>
-              {t.badge > 0 && <span style={{ position: "absolute", top: 4, right: "50%", marginRight: -20, background: BRAND.brick, color: "#fff", fontSize: 10, fontWeight: 700, padding: "1px 5px", borderRadius: 10, minWidth: 16, textAlign: "center" }}>{t.badge}</span>}
+        <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: BRAND.white, borderTop: "1px solid " + BRAND.border, display: "flex", zIndex: 20, paddingBottom: "env(safe-area-inset-bottom)", boxShadow: "0 -2px 12px rgba(0,0,0,0.06)" }}>
+          {bottomTabs.map(t => {
+            const active = isActive(t.id);
+            return (
+            <button key={t.id} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "10px 4px 8px", background: "none", border: "none", cursor: "pointer", color: active ? BRAND.brick : BRAND.textLight, fontFamily: BRAND.sans, fontSize: 11, fontWeight: active ? 700 : 500, position: "relative", letterSpacing: active ? "0.01em" : "0" }} onClick={() => nav(t.id)}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 48, height: 32, borderRadius: 16, background: active ? BRAND.brick + "14" : "transparent", transition: "background 200ms" }}>
+                <Icon name={active ? t.iconFilled : t.icon} size={26} />
+              </div>
+              <span>{t.label}</span>
+              {t.badge > 0 && <span style={{ position: "absolute", top: 4, right: "50%", marginRight: -22, background: BRAND.brick, color: "#fff", fontSize: 10, fontWeight: 700, padding: "1px 5px", borderRadius: 10, minWidth: 16, textAlign: "center" }}>{t.badge}</span>}
             </button>
-          ))}
+          );})}
         </nav>
       </div>
     );
