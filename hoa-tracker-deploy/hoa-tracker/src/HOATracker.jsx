@@ -64,7 +64,7 @@ async function loadData(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : fallback;
-  } catch {
+  } catch (e) {
     return fallback;
   }
 }
@@ -1035,7 +1035,6 @@ const LoginScreen = ({ settings, users, onLogin }) => {
       fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif"
     }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap');
         @keyframes shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
       `}</style>
       <div style={{ textAlign: "center", maxWidth: 400, width: "100%", padding: "0 20px" }}>
@@ -1118,32 +1117,34 @@ export default function HOATracker() {
   // Load data
   useEffect(() => {
     (async () => {
-      // Version check: clear stale data when app is upgraded
-      const savedVersion = await loadData(STORAGE_KEYS.version, null);
-      if (savedVersion !== STORAGE_VERSION) {
-        // Clear all old data
-        for (const key of Object.values(STORAGE_KEYS)) {
-          try { localStorage.removeItem(key); } catch {}
+      try {
+        // Version check: clear stale data when app is upgraded
+        const savedVersion = await loadData(STORAGE_KEYS.version, null);
+        if (savedVersion !== STORAGE_VERSION) {
+          for (const key of Object.values(STORAGE_KEYS)) {
+            try { localStorage.removeItem(key); } catch (e) {}
+          }
+          await saveData(STORAGE_KEYS.version, STORAGE_VERSION);
         }
-        await saveData(STORAGE_KEYS.version, STORAGE_VERSION);
-      }
 
-      const [savedSettings, savedEntries, savedUsers, savedCurrentUser] = await Promise.all([
-        loadData(STORAGE_KEYS.settings, DEFAULT_SETTINGS),
-        loadData(STORAGE_KEYS.entries, null),
-        loadData(STORAGE_KEYS.users, INITIAL_USERS),
-        loadData(STORAGE_KEYS.currentUser, null)
-      ]);
-      setSettings(savedSettings);
-      setUsers(savedUsers);
-      if (savedEntries) {
-        setEntries(savedEntries);
-      } else {
-        const seeded = seedEntries();
-        setEntries(seeded);
-        await saveData(STORAGE_KEYS.entries, seeded);
+        const savedSettings = await loadData(STORAGE_KEYS.settings, DEFAULT_SETTINGS);
+        const savedEntries = await loadData(STORAGE_KEYS.entries, null);
+        const savedUsers = await loadData(STORAGE_KEYS.users, INITIAL_USERS);
+        const savedCurrentUser = await loadData(STORAGE_KEYS.currentUser, null);
+
+        setSettings(savedSettings);
+        setUsers(savedUsers);
+        if (savedEntries) {
+          setEntries(savedEntries);
+        } else {
+          const seeded = seedEntries();
+          setEntries(seeded);
+          await saveData(STORAGE_KEYS.entries, seeded);
+        }
+        if (savedCurrentUser) setCurrentUser(savedCurrentUser);
+      } catch (err) {
+        console.error("Init failed:", err);
       }
-      if (savedCurrentUser) setCurrentUser(savedCurrentUser);
       setLoading(false);
     })();
   }, []);
@@ -1274,8 +1275,11 @@ export default function HOATracker() {
   // ── Loading Screen ──────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif" }}>
-        <div style={{ textAlign: "center", color: "#6b6b60" }}>Loading...</div>
+      <div style={{
+        minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+        fontFamily: "system-ui, -apple-system, sans-serif", background: "#1a1a18"
+      }}>
+        <div style={{ textAlign: "center", color: "#fff", fontSize: 16 }}>Loading...</div>
       </div>
     );
   }
@@ -1553,11 +1557,6 @@ export default function HOATracker() {
   return (
     <div style={S.app}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap');
-        * { box-sizing: border-box; }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
         button:hover { opacity: 0.92; }
         input:focus, select:focus, textarea:focus { border-color: #1a1a18 !important; }
       `}</style>
