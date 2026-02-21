@@ -43,6 +43,18 @@ function useIsMobile() {
   return m;
 }
 
+function useOnline() {
+  const [online, setOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+  return online;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // UTILITIES
 // ═══════════════════════════════════════════════════════════════════════════
@@ -94,6 +106,7 @@ const Icon = ({ name, size = 18 }) => {
     dollar: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
     inbox: "M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4",
     menu: "M4 6h16M4 12h16M4 18h16",
+    wifiOff: "M1 1l22 22M16.72 11.06A10.94 10.94 0 0119 12.55M5 12.55a10.94 10.94 0 015.17-2.39M10.71 5.05A16 16 0 0122.56 9M1.42 9a15.91 15.91 0 014.7-2.88M8.53 16.11a6 6 0 016.95 0M12 20h.01",
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -649,6 +662,7 @@ const SettingsPage = ({ settings, users, currentUser, onSaveSettings, onAddUser,
 // ═══════════════════════════════════════════════════════════════════════════
 export default function App() {
   const mob = useIsMobile();
+  const online = useOnline();
   const {
     currentUser, users, entries, settings, loading, authError,
     login, logout: sbLogout, register,
@@ -955,6 +969,8 @@ export default function App() {
             </div>
           </div>
         )}
+        {/* Offline banner */}
+        {!online && <div style={{ background: "#FFF3E0", borderBottom: "1px solid #FFB74D", padding: "8px 16px", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#E65100" }}><Icon name="wifiOff" size={16} /><span>You're offline. Viewing cached data.</span></div>}
         {/* Content */}
         <div style={{ padding: "16px 16px" }}>{renderPage()}</div>
         {/* FAB */}
@@ -1016,6 +1032,7 @@ export default function App() {
             <RoleBadge role={currentUser.role} />
           </div>
         </header>
+        {!online && <div style={{ background: "#FFF3E0", borderBottom: "1px solid #FFB74D", padding: "10px 32px", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#E65100" }}><Icon name="wifiOff" size={16} /><span>You're offline. Viewing cached data — changes require an internet connection.</span></div>}
         <div style={S.content}>{renderPage()}</div>
       </main>
     </div>
