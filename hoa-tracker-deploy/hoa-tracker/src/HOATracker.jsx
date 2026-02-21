@@ -21,8 +21,10 @@ const STORAGE_KEYS = {
   entries: "hoa-entries",
   users: "hoa-users",
   currentUser: "hoa-current-user",
-  materials: "hoa-materials"
+  materials: "hoa-materials",
+  version: "hoa-version"
 };
+const STORAGE_VERSION = "2"; // bump this to reset all data
 
 // ─── Utility Functions ───────────────────────────────────────────────────────
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -74,66 +76,12 @@ async function saveData(key, data) {
 }
 
 // ─── Seed Data ───────────────────────────────────────────────────────────────
-const SEED_USERS = [
-  { id: "usr_treasurer", name: "Pat Rivera", email: "pat@24mill.org", role: ROLES.TREASURER },
-  { id: "usr_member1", name: "Jordan Chen", email: "jordan@24mill.org", role: ROLES.MEMBER },
-  { id: "usr_member2", name: "Sam Okafor", email: "sam@24mill.org", role: ROLES.MEMBER }
+const INITIAL_USERS = [
+  { id: "usr_admin", name: "Zsolt Kemecsei", email: "zsolt.kemecsei@gmail.com", role: ROLES.TREASURER }
 ];
 
 function seedEntries() {
-  return [
-    {
-      id: uid(), userId: "usr_member1", date: "2026-02-14", startTime: "08:00", endTime: "11:30",
-      category: "Snow Removal", description: "Cleared main walkways and parking lot after overnight storm. Salted all entry steps.",
-      location: "Main lot & walkways", notes: "Used 3 bags of salt",
-      materials: [{ id: uid(), name: "Rock salt (50lb bag)", quantity: 3, unitCost: 12.99 }],
-      photos: [], receipts: [], mileage: "",
-      status: STATUSES.APPROVED, reviewerNotes: "Great job getting this done early. Approved.", reviewedAt: "2026-02-15T10:00:00Z"
-    },
-    {
-      id: uid(), userId: "usr_member1", date: "2026-02-18", startTime: "13:00", endTime: "15:00",
-      category: "Plumbing", description: "Fixed leaking faucet in unit 3B kitchen. Replaced washers and tightened connections.",
-      location: "Unit 3B", notes: "",
-      materials: [{ id: uid(), name: "Faucet washer kit", quantity: 1, unitCost: 8.49 }],
-      photos: [], receipts: [], mileage: "",
-      status: STATUSES.SUBMITTED, reviewerNotes: "", reviewedAt: null
-    },
-    {
-      id: uid(), userId: "usr_member2", date: "2026-02-17", startTime: "09:00", endTime: "12:00",
-      category: "Landscaping", description: "Pruned hedges along east property line. Removed dead branches from oak near unit 5.",
-      location: "East perimeter", notes: "Oak may need arborist assessment in spring",
-      materials: [{ id: uid(), name: "Yard waste bags", quantity: 10, unitCost: 2.50 }],
-      photos: [], receipts: [], mileage: "12",
-      status: STATUSES.SUBMITTED, reviewerNotes: "", reviewedAt: null
-    },
-    {
-      id: uid(), userId: "usr_member2", date: "2026-02-10", startTime: "14:00", endTime: "16:30",
-      category: "General Maintenance", description: "Replaced burnt-out hallway lights in building A (floors 1-3). Checked smoke detectors.",
-      location: "Building A", notes: "",
-      materials: [
-        { id: uid(), name: "LED bulbs (4-pack)", quantity: 3, unitCost: 15.99 },
-        { id: uid(), name: "9V batteries", quantity: 6, unitCost: 2.99 }
-      ],
-      photos: [], receipts: [], mileage: "",
-      status: STATUSES.APPROVED, reviewerNotes: "Thank you for checking detectors too.", reviewedAt: "2026-02-11T09:15:00Z"
-    },
-    {
-      id: uid(), userId: "usr_member1", date: "2026-02-20", startTime: "10:00", endTime: "10:45",
-      category: "Administrative Work", description: "Called three vendors for HVAC maintenance quotes for spring servicing.",
-      location: "", notes: "Best quote: CoolAir Co at $2,400 for full building",
-      materials: [],
-      photos: [], receipts: [], mileage: "",
-      status: STATUSES.DRAFT, reviewerNotes: "", reviewedAt: null
-    },
-    {
-      id: uid(), userId: "usr_member2", date: "2026-02-19", startTime: "07:30", endTime: "09:00",
-      category: "Cleaning", description: "Deep cleaned lobby and common area. Mopped floors, wiped all surfaces, cleaned glass doors.",
-      location: "Main lobby", notes: "",
-      materials: [{ id: uid(), name: "All-purpose cleaner (gal)", quantity: 1, unitCost: 11.99 }],
-      photos: [], receipts: [], mileage: "",
-      status: STATUSES.REJECTED, reviewerNotes: "Please add the receipt for the cleaning supplies before resubmitting.", reviewedAt: "2026-02-20T08:00:00Z"
-    }
-  ];
+  return [];
 }
 
 // ─── Icons (inline SVG) ──────────────────────────────────────────────────────
@@ -918,9 +866,13 @@ const ReportsPage = ({ entries, users, settings, currentUser }) => {
 };
 
 // ─── Settings Page ───────────────────────────────────────────────────────────
-const SettingsPage = ({ settings, users, onSave }) => {
+const SettingsPage = ({ settings, users, onSave, onSaveUsers }) => {
   const [form, setForm] = useState({ ...settings });
   const [saved, setSaved] = useState(false);
+  const [newMemberEmail, setNewMemberEmail] = useState("");
+  const [newMemberName, setNewMemberName] = useState("");
+  const [memberError, setMemberError] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -930,11 +882,34 @@ const SettingsPage = ({ settings, users, onSave }) => {
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const addMember = () => {
+    setMemberError("");
+    const email = newMemberEmail.trim().toLowerCase();
+    const name = newMemberName.trim();
+    if (!name) { setMemberError("Name is required"); return; }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setMemberError("Valid email is required"); return; }
+    if (users.some(u => u.email.toLowerCase() === email)) { setMemberError("This email is already registered"); return; }
+    const newUser = { id: "usr_" + uid(), name, email, role: ROLES.MEMBER };
+    onSaveUsers([...users, newUser]);
+    setNewMemberEmail("");
+    setNewMemberName("");
+  };
+
+  const removeMember = (userId) => {
+    onSaveUsers(users.filter(u => u.id !== userId));
+    setShowDeleteConfirm(null);
+  };
+
+  const members = users.filter(u => u.role === ROLES.MEMBER);
+
   return (
     <div>
       <h2 style={{ margin: "0 0 24px", fontSize: 24, fontWeight: 800 }}>Settings</h2>
 
-      <div style={{ ...S.card, maxWidth: 560 }}>
+      <div style={{ ...S.card, maxWidth: 600 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#6b6b60", marginBottom: 16 }}>
+          HOA Configuration
+        </div>
         <Field label="HOA Name">
           <input style={S.input} value={form.hoaName} onChange={e => set("hoaName", e.target.value)} />
         </Field>
@@ -942,25 +917,183 @@ const SettingsPage = ({ settings, users, onSave }) => {
           <input type="number" min="0" step="0.50" style={S.input}
             value={form.defaultHourlyRate} onChange={e => set("defaultHourlyRate", Number(e.target.value))} />
         </Field>
-
-        <div style={{ marginTop: 24, marginBottom: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#6b6b60", marginBottom: 12 }}>
-            Per-Member Rate Overrides
-          </div>
-          {users.filter(u => u.role === ROLES.MEMBER).map(u => (
-            <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-              <span style={{ flex: 1, fontSize: 14, fontWeight: 500 }}>{u.name}</span>
-              <input type="number" min="0" step="0.50" style={{ ...S.input, width: 120 }}
-                value={form.userRates?.[u.id] || ""}
-                onChange={e => set("userRates", { ...form.userRates, [u.id]: Number(e.target.value) || undefined })}
-                placeholder={`$${form.defaultHourlyRate}`} />
-            </div>
-          ))}
-        </div>
-
         <button style={S.btnPrimary} onClick={handleSave}>
           {saved ? <><Icon name="check" size={16} /> Saved!</> : "Save Settings"}
         </button>
+      </div>
+
+      {/* Member Management */}
+      <div style={{ ...S.card, maxWidth: 600, marginTop: 20 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#6b6b60", marginBottom: 16 }}>
+          HOA Members
+        </div>
+
+        {/* Add new member */}
+        <div style={{ padding: 16, background: "#fafaf8", borderRadius: 10, border: "1px solid #e5e5e0", marginBottom: 20 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Add New Member</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={S.label}>Full Name</label>
+              <input style={S.input} value={newMemberName} onChange={e => setNewMemberName(e.target.value)}
+                placeholder="e.g. Jordan Chen" onKeyDown={e => e.key === "Enter" && addMember()} />
+            </div>
+            <div>
+              <label style={S.label}>Email Address</label>
+              <input style={S.input} value={newMemberEmail} onChange={e => setNewMemberEmail(e.target.value)}
+                placeholder="e.g. jordan@email.com" onKeyDown={e => e.key === "Enter" && addMember()} />
+            </div>
+          </div>
+          {memberError && <div style={{ color: "#c53030", fontSize: 13, marginBottom: 10 }}>{memberError}</div>}
+          <button style={S.btnPrimary} onClick={addMember}>
+            <Icon name="plus" size={16} /> Add Member
+          </button>
+        </div>
+
+        {/* Members list */}
+        {members.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "24px 16px", color: "#8a8a82", fontSize: 14 }}>
+            No members added yet. Add members above so they can log in and submit work entries.
+          </div>
+        ) : (
+          <div style={{ border: "1px solid #e5e5e0", borderRadius: 10, overflow: "hidden" }}>
+            <table style={{ ...S.table, marginBottom: 0 }}>
+              <thead>
+                <tr>
+                  <th style={S.th}>Name</th>
+                  <th style={S.th}>Email</th>
+                  <th style={{ ...S.th, width: 120 }}>Rate Override</th>
+                  <th style={{ ...S.th, width: 60 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {members.map(u => (
+                  <tr key={u.id}>
+                    <td style={{ ...S.td, fontWeight: 500 }}>{u.name}</td>
+                    <td style={{ ...S.td, color: "#6b6b60" }}>{u.email}</td>
+                    <td style={S.td}>
+                      <input type="number" min="0" step="0.50" style={{ ...S.input, padding: "6px 10px" }}
+                        value={form.userRates?.[u.id] || ""}
+                        onChange={e => set("userRates", { ...form.userRates, [u.id]: Number(e.target.value) || undefined })}
+                        placeholder={`$${form.defaultHourlyRate}`} />
+                    </td>
+                    <td style={S.td}>
+                      <button style={{ ...S.btnGhost, padding: 6, color: "#c53030" }}
+                        onClick={() => setShowDeleteConfirm(u)}>
+                        <Icon name="trash" size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {members.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <button style={S.btnPrimary} onClick={handleSave}>
+              {saved ? <><Icon name="check" size={16} /> Saved!</> : "Save Rate Overrides"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <ConfirmDialog open={!!showDeleteConfirm} onClose={() => setShowDeleteConfirm(null)}
+        title="Remove Member?"
+        message={showDeleteConfirm ? `Remove ${showDeleteConfirm.name} (${showDeleteConfirm.email}) from the HOA? Their existing work entries will be preserved.` : ""}
+        confirmText="Remove Member" danger
+        onConfirm={() => removeMember(showDeleteConfirm.id)} />
+    </div>
+  );
+};
+
+// ─── Login Screen ────────────────────────────────────────────────────────────
+const LoginScreen = ({ settings, users, onLogin }) => {
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState("");
+  const [shaking, setShaking] = useState(false);
+
+  const handleLogin = () => {
+    setError("");
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed) { setError("Please enter your email address"); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) { setError("Please enter a valid email address"); return; }
+    const user = users.find(u => u.email.toLowerCase() === trimmed);
+    if (!user) {
+      setError("No account found for this email. Contact your HOA Treasurer to be added.");
+      setShaking(true);
+      setTimeout(() => setShaking(false), 500);
+      return;
+    }
+    onLogin(user);
+  };
+
+  return (
+    <div style={{
+      minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+      background: "linear-gradient(145deg, #1a1a18 0%, #2a2a28 50%, #1a1a18 100%)",
+      fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif"
+    }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap');
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+      `}</style>
+      <div style={{ textAlign: "center", maxWidth: 400, width: "100%", padding: "0 20px" }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: 16, background: "#fff",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          margin: "0 auto 24px", boxShadow: "0 8px 32px rgba(0,0,0,0.3)"
+        }}>
+          <Icon name="home" size={32} className="" />
+        </div>
+        <h1 style={{ color: "#fff", margin: "0 0 8px", fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em" }}>
+          {settings.hoaName}
+        </h1>
+        <p style={{ color: "#8a8a82", margin: "0 0 36px", fontSize: 15 }}>HOA Work Tracker</p>
+
+        <div style={{
+          background: "#2a2a28", border: "1px solid #3a3a38", borderRadius: 16,
+          padding: 32, textAlign: "left",
+          animation: shaking ? "shake 0.4s ease-in-out" : "none"
+        }}>
+          <div style={{ fontSize: 16, fontWeight: 600, color: "#fff", marginBottom: 4 }}>Sign in</div>
+          <div style={{ fontSize: 13, color: "#8a8a82", marginBottom: 24 }}>Enter your email address to continue</div>
+
+          <label style={{ ...S.label, color: "#a0a098" }}>Email Address</label>
+          <input
+            type="email"
+            style={{
+              ...S.input,
+              background: "#1a1a18", color: "#fff", border: error ? "1px solid #c53030" : "1px solid #3a3a38",
+              marginBottom: error ? 8 : 20, fontSize: 15, padding: "12px 16px"
+            }}
+            value={email}
+            onChange={e => { setEmail(e.target.value); setError(""); }}
+            onKeyDown={e => e.key === "Enter" && handleLogin()}
+            placeholder="you@example.com"
+            autoFocus
+          />
+          {error && (
+            <div style={{
+              color: "#f87171", fontSize: 13, marginBottom: 16,
+              display: "flex", alignItems: "flex-start", gap: 6
+            }}>
+              <Icon name="alert" size={14} />
+              <span>{error}</span>
+            </div>
+          )}
+          <button style={{
+            ...S.btnPrimary, width: "100%", justifyContent: "center",
+            padding: "12px 20px", fontSize: 15, borderRadius: 10,
+            background: "#fff", color: "#1a1a18"
+          }} onClick={handleLogin}>
+            Continue
+          </button>
+        </div>
+
+        <p style={{ color: "#4a4a44", fontSize: 12, marginTop: 24, lineHeight: 1.6 }}>
+          Don't have an account? Ask your HOA Treasurer to add you.
+        </p>
       </div>
     </div>
   );
@@ -973,7 +1106,7 @@ export default function HOATracker() {
   // State
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
-  const [users, setUsers] = useState(SEED_USERS);
+  const [users, setUsers] = useState(INITIAL_USERS);
   const [entries, setEntries] = useState([]);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [page, setPage] = useState("dashboard");
@@ -985,10 +1118,20 @@ export default function HOATracker() {
   // Load data
   useEffect(() => {
     (async () => {
+      // Version check: clear stale data when app is upgraded
+      const savedVersion = await loadData(STORAGE_KEYS.version, null);
+      if (savedVersion !== STORAGE_VERSION) {
+        // Clear all old data
+        for (const key of Object.values(STORAGE_KEYS)) {
+          try { localStorage.removeItem(key); } catch {}
+        }
+        await saveData(STORAGE_KEYS.version, STORAGE_VERSION);
+      }
+
       const [savedSettings, savedEntries, savedUsers, savedCurrentUser] = await Promise.all([
         loadData(STORAGE_KEYS.settings, DEFAULT_SETTINGS),
         loadData(STORAGE_KEYS.entries, null),
-        loadData(STORAGE_KEYS.users, SEED_USERS),
+        loadData(STORAGE_KEYS.users, INITIAL_USERS),
         loadData(STORAGE_KEYS.currentUser, null)
       ]);
       setSettings(savedSettings);
@@ -1016,9 +1159,23 @@ export default function HOATracker() {
     await saveData(STORAGE_KEYS.settings, next);
   }, []);
 
-  const switchUser = useCallback(async (user) => {
+  const persistUsers = useCallback(async (next) => {
+    setUsers(next);
+    await saveData(STORAGE_KEYS.users, next);
+  }, []);
+
+  const login = useCallback(async (user) => {
     setCurrentUser(user);
     await saveData(STORAGE_KEYS.currentUser, user);
+    setPage("dashboard");
+    setViewEntry(null);
+    setEditEntry(null);
+    setNewEntry(false);
+  }, []);
+
+  const logout = useCallback(async () => {
+    setCurrentUser(null);
+    await saveData(STORAGE_KEYS.currentUser, null);
     setPage("dashboard");
     setViewEntry(null);
     setEditEntry(null);
@@ -1104,55 +1261,7 @@ export default function HOATracker() {
 
   // ── Login Screen ─────────────────────────────────────────────────────────
   if (!currentUser) {
-    return (
-      <div style={{
-        minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-        background: "linear-gradient(145deg, #1a1a18 0%, #2a2a28 50%, #1a1a18 100%)",
-        fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif"
-      }}>
-        <div style={{ textAlign: "center", maxWidth: 440 }}>
-          <div style={{
-            width: 64, height: 64, borderRadius: 16, background: "#fff",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            margin: "0 auto 24px", boxShadow: "0 8px 32px rgba(0,0,0,0.3)"
-          }}>
-            <Icon name="home" size={32} className="" />
-          </div>
-          <h1 style={{ color: "#fff", margin: "0 0 8px", fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em" }}>
-            {settings.hoaName}
-          </h1>
-          <p style={{ color: "#8a8a82", margin: "0 0 36px", fontSize: 15 }}>HOA Work Tracker</p>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {SEED_USERS.map(u => (
-              <button key={u.id} onClick={() => switchUser(u)}
-                style={{
-                  display: "flex", alignItems: "center", gap: 14, padding: "16px 20px",
-                  background: "#2a2a28", border: "1px solid #3a3a38", borderRadius: 12,
-                  color: "#fff", cursor: "pointer", transition: "all 0.15s",
-                  fontFamily: "inherit", textAlign: "left"
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = "#3a3a38"; e.currentTarget.style.borderColor = "#5a5a58"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "#2a2a28"; e.currentTarget.style.borderColor = "#3a3a38"; }}
-              >
-                <div style={{
-                  width: 42, height: 42, borderRadius: 10,
-                  background: u.role === ROLES.TREASURER ? "#f97316" : "#2563eb",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 16, fontWeight: 700, color: "#fff"
-                }}>
-                  {u.name.split(" ").map(n => n[0]).join("")}
-                </div>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 15 }}>{u.name}</div>
-                  <div style={{ fontSize: 12, color: "#8a8a82" }}>{u.role} &middot; {u.email}</div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
+    return <LoginScreen settings={settings} users={users} onLogin={login} />;
   }
 
   // ── Dashboard Stats ────────────────────────────────────────────────────────
@@ -1433,7 +1542,7 @@ export default function HOATracker() {
 
     // Settings
     if (page === "settings") {
-      return <SettingsPage settings={settings} users={users} onSave={persistSettings} />;
+      return <SettingsPage settings={settings} users={users} onSave={persistSettings} onSaveUsers={persistUsers} />;
     }
 
     return null;
@@ -1485,7 +1594,7 @@ export default function HOATracker() {
           ))}
         </nav>
 
-        {/* User switcher */}
+        {/* Current user + logout */}
         <div style={{ padding: "16px 12px", borderTop: "1px solid #2a2a28" }}>
           <div style={{ padding: "10px 12px", borderRadius: 8, background: "#2a2a28", marginBottom: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -1497,28 +1606,16 @@ export default function HOATracker() {
               }}>
                 {currentUser.name.split(" ").map(n => n[0]).join("")}
               </div>
-              <div>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>{currentUser.name}</div>
-                <div style={{ fontSize: 11, color: "#6b6b60" }}>{currentUser.role}</div>
+                <div style={{ fontSize: 11, color: "#6b6b60", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser.email}</div>
               </div>
             </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {SEED_USERS.filter(u => u.id !== currentUser.id).map(u => (
-              <button key={u.id} style={{ ...S.navItem(false), padding: "8px 12px", fontSize: 13 }}
-                onClick={() => switchUser(u)}>
-                <div style={{
-                  width: 24, height: 24, borderRadius: 6,
-                  background: u.role === ROLES.TREASURER ? "#f9731640" : "#2563eb40",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 10, fontWeight: 700, color: u.role === ROLES.TREASURER ? "#f97316" : "#2563eb"
-                }}>
-                  {u.name.split(" ").map(n => n[0]).join("")}
-                </div>
-                Switch to {u.name.split(" ")[0]}
-              </button>
-            ))}
-          </div>
+          <button style={{ ...S.navItem(false), padding: "8px 12px", fontSize: 13 }} onClick={logout}>
+            <Icon name="logout" size={16} />
+            Sign Out
+          </button>
         </div>
       </aside>
 
