@@ -321,12 +321,35 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
   const [errors, setErrors] = useState({});
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [draftId, setDraftId] = useState(entry?.id || null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState(""); // "", "saving", "saved"
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const hours = calcHours(form.startTime, form.endTime);
   const rate = getUserRate(users, settings, form.userId);
   const laborTotal = calcLabor(hours, rate);
   const matTotal = calcMaterialsTotal(form.materials);
   const grandTotal = laborTotal + matTotal;
+
+  // Auto-save draft every 3 seconds when form changes
+  useEffect(() => {
+    // Don't auto-save if editing a submitted/approved/paid entry
+    if (entry && entry.status && entry.status !== STATUSES.DRAFT && entry.status !== STATUSES.REJECTED) return;
+    const timer = setTimeout(async () => {
+      // Need at least date to save
+      if (!form.date) return;
+      setAutoSaveStatus("saving");
+      const data = { ...form, status: STATUSES.DRAFT, userId: form.userId || currentUser.id };
+      try {
+        const result = await onSave(data, draftId, true); // true = silent (don't navigate)
+        if (result && !draftId) setDraftId(result.id);
+        setAutoSaveStatus("saved");
+        setTimeout(() => setAutoSaveStatus(""), 2000);
+      } catch (e) {
+        setAutoSaveStatus("");
+      }
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [form]);
 
   const validate = () => {
     const e = {};
@@ -388,15 +411,19 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
         <div style={{ fontSize: 11, color: BRAND.textLight, marginTop: 10 }}>Billed in 30-min increments, rounded up.</div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: mob ? "column-reverse" : "row", gap: 10, justifyContent: "space-between" }}>
-        <div>{entry && entry.status === STATUSES.DRAFT && <button style={S.btnDanger} onClick={() => setShowDeleteConfirm(true)}><Icon name="trash" size={16} /> Delete</button>}</div>
-        <div style={{ display: "flex", flexDirection: mob ? "column" : "row", gap: 10 }}>
+      <div style={{ display: "flex", flexDirection: mob ? "column-reverse" : "row", gap: 10, justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {entry && entry.status === STATUSES.DRAFT && <button style={S.btnDanger} onClick={() => setShowDeleteConfirm(true)}><Icon name="trash" size={16} /> Delete</button>}
+          {autoSaveStatus === "saving" && <span style={{ fontSize: 12, color: BRAND.textLight }}>Saving...</span>}
+          {autoSaveStatus === "saved" && <span style={{ fontSize: 12, color: BRAND.success }}>✓ Draft saved</span>}
+        </div>
+        <div style={{ display: "flex", flexDirection: mob ? "column" : "row", gap: 10, width: mob ? "100%" : "auto" }}>
           <button style={S.btnSecondary} onClick={onCancel}>Cancel</button>
-          <button style={S.btnSecondary} onClick={() => { if (validate()) onSave({ ...form, status: STATUSES.DRAFT }); }}><Icon name="edit" size={16} /> Save Draft</button>
+          <button style={S.btnSecondary} onClick={async () => { const data = { ...form, status: STATUSES.DRAFT, userId: form.userId || currentUser.id }; const result = await onSave(data, draftId, false); if (result && !draftId) setDraftId(result.id); }}><Icon name="edit" size={16} /> Save Draft</button>
           <button style={S.btnPrimary} onClick={() => { if (validate()) setShowSubmitConfirm(true); }}><Icon name="send" size={16} /> Submit for Review</button>
         </div>
       </div>
-      <ConfirmDialog open={showSubmitConfirm} onClose={() => setShowSubmitConfirm(false)} title="Submit Entry?" message={"Submit for review? Total: " + fmt(grandTotal)} confirmText="Submit" onConfirm={() => onSubmit({ ...form, status: STATUSES.SUBMITTED })} />
+      <ConfirmDialog open={showSubmitConfirm} onClose={() => setShowSubmitConfirm(false)} title="Submit Entry?" message={"Submit for review? Total: " + fmt(grandTotal)} confirmText="Submit" onConfirm={() => onSubmit({ ...form, status: STATUSES.SUBMITTED }, draftId)} />
       <ConfirmDialog open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Delete Entry?" message="This draft will be permanently deleted." confirmText="Delete" danger onConfirm={onDelete} />
     </div>
   );
@@ -735,22 +762,22 @@ export default function App() {
   const nav = (p) => { setPage(p); setViewEntry(null); setEditEntry(null); setNewEntry(false); setDrawerOpen(false); };
 
   // Entry operations (now async)
-  const doSave = async (formData) => {
-    if (editEntry) {
-      const updated = await saveEntry(formData, editEntry.id);
-      if (updated) { setViewEntry(updated); setEditEntry(null); }
+  const doSave = async (formData, existingId, silent) => {
+    const id = existingId || (editEntry ? editEntry.id : null);
+    if (id) {
+      const updated = await saveEntry(formData, id);
+      if (!silent && updated) { setViewEntry(updated); setEditEntry(null); setNewEntry(false); }
+      return updated;
     } else {
       const created = await saveEntry(formData, null);
-      if (created) { setNewEntry(false); if (formData.status === STATUSES.SUBMITTED) setPage("entries"); else setViewEntry(created); }
+      if (!silent && created) { setNewEntry(false); setEditEntry(null); if (formData.status === STATUSES.SUBMITTED) setPage("entries"); else setViewEntry(created); }
+      return created;
     }
   };
-  const doSubmit = async (formData) => {
+  const doSubmit = async (formData, draftId) => {
+    const id = draftId || (editEntry ? editEntry.id : null);
     const data = { ...formData, status: STATUSES.SUBMITTED };
-    if (editEntry) {
-      await saveEntry(data, editEntry.id);
-    } else {
-      await saveEntry(data, null);
-    }
+    await saveEntry(data, id);
     setEditEntry(null); setNewEntry(false); setPage("entries");
   };
   const doDelete = async () => { if (editEntry) { await deleteEntry(editEntry.id); setEditEntry(null); setPage("entries"); } };
