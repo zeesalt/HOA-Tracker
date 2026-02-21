@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSupabase } from "./useSupabase";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -147,6 +147,7 @@ const Icon = ({ name, size = 18, filled = false }) => {
     users: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z",
     chart: "M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z",
     send: "M12 19l9 2-9-18-9 18 9-2zm0 0v-8",
+    camera: "M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z M15 13a3 3 0 11-6 0 3 3 0 016 0z",
     back: "M10 19l-7-7m0 0l7-7m-7 7h18",
     trash: "M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16",
     alert: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z",
@@ -154,6 +155,8 @@ const Icon = ({ name, size = 18, filled = false }) => {
     dollar: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
     inbox: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
     menu: "M4 6h16M4 12h16M4 18h16",
+    bell: "M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0",
+    bellOff: "M13.73 21a2 2 0 01-3.46 0M18.63 13A17.89 17.89 0 0118 8M6.26 6.26A5.86 5.86 0 006 8c0 7-3 9-3 9h14M1 1l22 22",
     wifiOff: "M1 1l22 22M16.72 11.06A10.94 10.94 0 0119 12.55M5 12.55a10.94 10.94 0 015.17-2.39M10.71 5.05A16 16 0 0122.56 9M1.42 9a15.91 15.91 0 014.7-2.88M8.53 16.11a6 6 0 016.95 0M12 20h.01",
   };
   return (
@@ -312,37 +315,144 @@ const StatCard = ({ label, value, icon, accentColor }) => (
 );
 
 // ═══════════════════════════════════════════════════════════════════════════
+// IMAGE COMPRESSION + UPLOADER
+// ═══════════════════════════════════════════════════════════════════════════
+function compressImage(file, maxWidth = 1200, quality = 0.7) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let w = img.width, h = img.height;
+        if (w > maxWidth) { h = Math.round((h * maxWidth) / w); w = maxWidth; }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+const ImageUploader = ({ images, onChange, label, color, icon, readOnly, mob }) => {
+  const [dragOver, setDragOver] = useState(false);
+  const [viewImg, setViewImg] = useState(null);
+  const inputRef = useRef(null);
+
+  const handleFiles = async (files) => {
+    const newImages = [];
+    for (const file of files) {
+      if (!file.type.startsWith("image/")) continue;
+      const dataUrl = await compressImage(file);
+      newImages.push({ id: uid(), dataUrl, caption: "", createdAt: new Date().toISOString() });
+    }
+    if (newImages.length) onChange([...images, ...newImages]);
+  };
+
+  const handleDrop = (e) => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); };
+  const updateCaption = (id, caption) => onChange(images.map(img => img.id === id ? { ...img, caption } : img));
+  const removeImage = (id) => onChange(images.filter(img => img.id !== id));
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <div style={{ width: 28, height: 28, borderRadius: 14, background: color + "18", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Icon name={icon} size={16} />
+        </div>
+        <span style={{ fontSize: 14, fontWeight: 600, color: BRAND.navy }}>{label}</span>
+        <span style={{ fontSize: 12, color: BRAND.textLight }}>({images.length})</span>
+      </div>
+
+      {/* Thumbnails grid */}
+      {images.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: mob ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: 10, marginBottom: 12 }}>
+          {images.map(img => (
+            <div key={img.id} style={{ position: "relative", borderRadius: 10, overflow: "hidden", border: "1px solid " + BRAND.borderLight, background: BRAND.bgSoft }}>
+              <img src={img.dataUrl} alt="" style={{ width: "100%", height: 100, objectFit: "cover", display: "block", cursor: "pointer" }} onClick={() => setViewImg(img)} />
+              {!readOnly && (
+                <>
+                  <button onClick={() => removeImage(img.id)} style={{ position: "absolute", top: 4, right: 4, width: 22, height: 22, borderRadius: 11, background: "rgba(0,0,0,0.6)", color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>✕</button>
+                  <input style={{ width: "100%", border: "none", borderTop: "1px solid " + BRAND.borderLight, padding: "6px 8px", fontSize: 11, fontFamily: BRAND.sans, outline: "none", background: BRAND.white }} placeholder="Add caption..." value={img.caption || ""} onChange={e => updateCaption(img.id, e.target.value)} />
+                </>
+              )}
+              {readOnly && img.caption && <div style={{ padding: "4px 8px", fontSize: 11, color: BRAND.textMuted, background: BRAND.white }}>{img.caption}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Upload zone */}
+      {!readOnly && (
+        <div onDragOver={e => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={handleDrop} onClick={() => inputRef.current?.click()} style={{ border: "2px dashed " + (dragOver ? color : BRAND.border), borderRadius: 10, padding: "18px 16px", textAlign: "center", cursor: "pointer", background: dragOver ? color + "08" : BRAND.bgSoft, transition: "all 200ms" }}>
+          <input ref={inputRef} type="file" accept="image/*" multiple capture="environment" style={{ display: "none" }} onChange={e => { handleFiles(e.target.files); e.target.value = ""; }} />
+          <div style={{ fontSize: 24, marginBottom: 4, opacity: 0.5 }}>📷</div>
+          <div style={{ fontSize: 13, color: BRAND.textMuted }}>Tap to take a photo or choose from gallery</div>
+          <div style={{ fontSize: 11, color: BRAND.textLight, marginTop: 2 }}>Drag & drop also works</div>
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {viewImg && (
+        <Modal open={true} onClose={() => setViewImg(null)} title={label}>
+          <img src={viewImg.dataUrl} alt="" style={{ width: "100%", borderRadius: 8, marginBottom: viewImg.caption ? 8 : 0 }} />
+          {viewImg.caption && <div style={{ fontSize: 13, color: BRAND.textMuted, textAlign: "center" }}>{viewImg.caption}</div>}
+        </Modal>
+      )}
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MATERIALS EDITOR
 // ═══════════════════════════════════════════════════════════════════════════
-const MaterialsEditor = ({ materials, onChange, readOnly }) => {
-  const add = () => onChange([...materials, { id: uid(), name: "", quantity: 1, unitCost: 0 }]);
+const MaterialsEditor = ({ materials, onChange, readOnly, mob }) => {
+  const add = () => onChange([...materials, { id: uid(), name: "", quantity: 1, unitCost: 0, description: "", notes: "" }]);
   const update = (i, field, val) => { const next = [...materials]; next[i] = { ...next[i], [field]: val }; onChange(next); };
   const remove = (i) => onChange(materials.filter((_, idx) => idx !== i));
   const total = calcMaterialsTotal(materials);
   return (
     <div>
-      {materials.length > 0 && (
-        <div style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 8, overflow: "hidden", marginBottom: 12 }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead><tr>
-              <th style={S.th}>Item</th><th style={{ ...S.th, width: 80 }}>Qty</th>
-              <th style={{ ...S.th, width: 100 }}>Unit Cost</th><th style={{ ...S.th, width: 90, textAlign: "right" }}>Total</th>
-              {!readOnly && <th style={{ ...S.th, width: 40 }}></th>}
-            </tr></thead>
-            <tbody>
-              {materials.map((m, i) => (
-                <tr key={m.id}>
-                  <td style={S.td}>{readOnly ? m.name : <input style={{ ...S.input, padding: "6px 10px" }} value={m.name} onChange={e => update(i, "name", e.target.value)} placeholder="Item name" />}</td>
-                  <td style={S.td}>{readOnly ? m.quantity : <input type="number" min="0" style={{ ...S.input, padding: "6px 10px" }} value={m.quantity} onChange={e => update(i, "quantity", e.target.value)} />}</td>
-                  <td style={S.td}>{readOnly ? fmt(m.unitCost) : <input type="number" min="0" step="0.01" style={{ ...S.input, padding: "6px 10px" }} value={m.unitCost} onChange={e => update(i, "unitCost", e.target.value)} />}</td>
-                  <td style={{ ...S.td, textAlign: "right", fontWeight: 600 }}>{fmt((Number(m.quantity) || 0) * (Number(m.unitCost) || 0))}</td>
-                  {!readOnly && <td style={S.td}><button style={{ ...S.btnGhost, padding: 4, color: BRAND.error }} onClick={() => remove(i)}><Icon name="trash" size={16} /></button></td>}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {materials.map((m, i) => (
+        <div key={m.id} style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 10, padding: mob ? 12 : 16, marginBottom: 10, background: BRAND.white }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 18 }}>🧱</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: BRAND.navy }}>Item {i + 1}</span>
+            </div>
+            {!readOnly && <button style={{ ...S.btnGhost, padding: 4, color: BRAND.error }} onClick={() => remove(i)}><Icon name="trash" size={16} /></button>}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "2fr 1fr 1fr 1fr", gap: 10, marginBottom: 8 }}>
+            <div>
+              <div style={{ fontSize: 11, color: BRAND.textLight, marginBottom: 3 }}>Item Name</div>
+              {readOnly ? <div style={{ fontSize: 14, fontWeight: 500 }}>{m.name}</div> : <input style={{ ...S.input, padding: "8px 10px" }} value={m.name} onChange={e => update(i, "name", e.target.value)} placeholder="e.g. PVC Pipe 3/4 in" />}
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: BRAND.textLight, marginBottom: 3 }}>Qty</div>
+              {readOnly ? <div style={{ fontSize: 14 }}>{m.quantity}</div> : <input type="number" min="0" style={{ ...S.input, padding: "8px 10px" }} value={m.quantity} onChange={e => update(i, "quantity", e.target.value)} />}
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: BRAND.textLight, marginBottom: 3 }}>Unit Cost</div>
+              {readOnly ? <div style={{ fontSize: 14 }}>{fmt(m.unitCost)}</div> : <input type="number" min="0" step="0.01" style={{ ...S.input, padding: "8px 10px" }} value={m.unitCost} onChange={e => update(i, "unitCost", e.target.value)} />}
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: BRAND.textLight, marginBottom: 3 }}>Total</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: BRAND.brick, paddingTop: readOnly ? 0 : 8 }}>{fmt((Number(m.quantity) || 0) * (Number(m.unitCost) || 0))}</div>
+            </div>
+          </div>
+          {/* Description */}
+          <div style={{ marginBottom: 6 }}>
+            <div style={{ fontSize: 11, color: BRAND.textLight, marginBottom: 3 }}>Description</div>
+            {readOnly ? (m.description && <div style={{ fontSize: 13, color: BRAND.charcoal }}>{m.description}</div>) : <input style={{ ...S.input, padding: "8px 10px", fontSize: 13 }} value={m.description || ""} onChange={e => update(i, "description", e.target.value)} placeholder="What is this for? Where to get it?" />}
+          </div>
+          {/* Notes */}
+          <div>
+            <div style={{ fontSize: 11, color: BRAND.textLight, marginBottom: 3 }}>Notes</div>
+            {readOnly ? (m.notes && <div style={{ fontSize: 13, color: BRAND.charcoal, fontStyle: "italic" }}>{m.notes}</div>) : <input style={{ ...S.input, padding: "8px 10px", fontSize: 13 }} value={m.notes || ""} onChange={e => update(i, "notes", e.target.value)} placeholder="Receipt #, vendor, notes..." />}
+          </div>
         </div>
-      )}
+      ))}
       {!readOnly && <button style={{ ...S.btnGhost, color: BRAND.navy }} onClick={add}><Icon name="plus" size={16} /> Add Material</button>}
       {materials.length > 0 && <div style={{ textAlign: "right", fontSize: 14, fontWeight: 700, marginTop: 8, color: BRAND.navy }}>Materials Total: {fmt(total)}</div>}
     </div>
@@ -357,7 +467,8 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
   const [form, setForm] = useState({
     date: entry?.date || todayStr(), startTime: entry?.startTime || nowTime(), endTime: entry?.endTime || "",
     category: entry?.category || "", description: entry?.description || "", location: entry?.location || "",
-    materials: entry?.materials || [], notes: entry?.notes || "", mileage: entry?.mileage || "",
+    materials: entry?.materials || [], preImages: entry?.preImages || [], postImages: entry?.postImages || [],
+    notes: entry?.notes || "", mileage: entry?.mileage || "",
     userId: entry?.userId || currentUser.id,
   });
   const [errors, setErrors] = useState({});
@@ -438,7 +549,18 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
         <Field label="Location"><input style={S.input} value={form.location} onChange={e => set("location", e.target.value)} placeholder="e.g. Unit 3B" /></Field>
         <Field label="Mileage"><input type="number" min="0" style={S.input} value={form.mileage} onChange={e => set("mileage", e.target.value)} placeholder="Miles driven" /></Field>
       </div>
-      <Field label="Materials"><MaterialsEditor materials={form.materials} onChange={m => set("materials", m)} /></Field>
+      <Field label="Materials"><MaterialsEditor materials={form.materials} onChange={m => set("materials", m)} mob={mob} /></Field>
+
+      {/* Pre / Post Images */}
+      <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: mob ? 16 : 20, marginBottom: 16 }}>
+        <Field label="">
+          <ImageUploader images={form.preImages} onChange={imgs => set("preImages", imgs)} label="Before Photos" color="#E65100" icon="camera" mob={mob} />
+        </Field>
+        <Field label="">
+          <ImageUploader images={form.postImages} onChange={imgs => set("postImages", imgs)} label="After Photos" color="#2E7D32" icon="camera" mob={mob} />
+        </Field>
+      </div>
+
       <Field label="Notes"><textarea style={{ ...S.textarea, minHeight: 60 }} value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Additional notes..." /></Field>
 
       {/* Summary */}
@@ -453,17 +575,31 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
         <div style={{ fontSize: 11, color: BRAND.textLight, marginTop: 10 }}>Billed in 30-min increments, rounded up.</div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: mob ? "column-reverse" : "row", gap: 10, justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {entry && entry.status === STATUSES.DRAFT && <button style={S.btnDanger} onClick={() => setShowDeleteConfirm(true)}><Icon name="trash" size={16} /> Delete</button>}
-          {autoSaveStatus === "saving" && <span style={{ fontSize: 12, color: BRAND.textLight }}>Saving...</span>}
-          {autoSaveStatus === "saved" && <span style={{ fontSize: 12, color: BRAND.success }}>✓ Draft saved</span>}
-        </div>
-        <div style={{ display: "flex", flexDirection: mob ? "column" : "row", gap: 10, width: mob ? "100%" : "auto" }}>
-          <button style={S.btnSecondary} onClick={onCancel}>Cancel</button>
-          <button style={S.btnSecondary} onClick={async () => { const data = { ...form, status: STATUSES.DRAFT, userId: form.userId || currentUser.id }; const result = await onSave(data, draftId, false); if (result && !draftId) setDraftId(result.id); }}><Icon name="edit" size={16} /> Save Draft</button>
-          <button style={S.btnPrimary} onClick={() => { if (validate()) setShowSubmitConfirm(true); }}><Icon name="send" size={16} /> Submit for Review</button>
-        </div>
+      {/* Action bar */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: mob ? 10 : 14, marginBottom: 16 }}>
+        {/* Cancel */}
+        <button onClick={onCancel} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: mob ? "16px 8px" : "20px 12px", borderRadius: 14, border: "1px solid " + BRAND.border, background: BRAND.white, cursor: "pointer", transition: "all 200ms", fontFamily: BRAND.sans, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }} onMouseEnter={ev => { ev.currentTarget.style.transform = "translateY(-2px)"; ev.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.1)"; }} onMouseLeave={ev => { ev.currentTarget.style.transform = "translateY(0)"; ev.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)"; }}>
+          <div style={{ width: 44, height: 44, borderRadius: 22, background: "#F3F4F6", display: "flex", alignItems: "center", justifyContent: "center", color: "#6B7280" }}><Icon name="x" size={22} /></div>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "#6B7280" }}>Cancel</span>
+        </button>
+        {/* Save Draft */}
+        <button onClick={async () => { const data = { ...form, status: STATUSES.DRAFT, userId: form.userId || currentUser.id }; setAutoSaveStatus("saving"); const result = await onSave(data, draftId, false); if (result && !draftId) setDraftId(result.id); setAutoSaveStatus("saved"); setTimeout(() => setAutoSaveStatus(""), 2000); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: mob ? "16px 8px" : "20px 12px", borderRadius: 14, border: "1px solid #DBEAFE", background: "#EFF6FF", cursor: "pointer", transition: "all 200ms", fontFamily: BRAND.sans, boxShadow: "0 2px 8px rgba(21,101,192,0.08)" }} onMouseEnter={ev => { ev.currentTarget.style.transform = "translateY(-2px)"; ev.currentTarget.style.boxShadow = "0 4px 16px rgba(21,101,192,0.18)"; }} onMouseLeave={ev => { ev.currentTarget.style.transform = "translateY(0)"; ev.currentTarget.style.boxShadow = "0 2px 8px rgba(21,101,192,0.08)"; }}>
+          <div style={{ width: 44, height: 44, borderRadius: 22, background: "#1565C0", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}><Icon name="edit" size={22} /></div>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "#1565C0" }}>Save Draft</span>
+          {autoSaveStatus === "saving" && <span style={{ fontSize: 10, color: "#1565C0", opacity: 0.7 }}>Saving...</span>}
+          {autoSaveStatus === "saved" && <span style={{ fontSize: 10, color: BRAND.success }}>✓ Saved</span>}
+        </button>
+        {/* Submit for Review */}
+        <button onClick={() => { if (validate()) setShowSubmitConfirm(true); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: mob ? "16px 8px" : "20px 12px", borderRadius: 14, border: "1px solid " + BRAND.brick + "30", background: BRAND.brick + "0A", cursor: "pointer", transition: "all 200ms", fontFamily: BRAND.sans, boxShadow: "0 2px 8px rgba(142,59,46,0.08)" }} onMouseEnter={ev => { ev.currentTarget.style.transform = "translateY(-3px)"; ev.currentTarget.style.boxShadow = "0 6px 20px rgba(142,59,46,0.22)"; }} onMouseLeave={ev => { ev.currentTarget.style.transform = "translateY(0)"; ev.currentTarget.style.boxShadow = "0 2px 8px rgba(142,59,46,0.08)"; }}>
+          <div style={{ width: 44, height: 44, borderRadius: 22, background: BRAND.brick, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}><Icon name="send" size={22} /></div>
+          <span style={{ fontSize: 13, fontWeight: 700, color: BRAND.brick }}>Submit</span>
+          <span style={{ fontSize: 10, color: BRAND.brick, opacity: 0.7 }}>For Review</span>
+        </button>
+      </div>
+
+      {/* Delete + auto-save row */}
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 16 }}>
+        {entry && entry.status === STATUSES.DRAFT && <button style={{ ...S.btnGhost, color: BRAND.error, fontSize: 13 }} onClick={() => setShowDeleteConfirm(true)}><Icon name="trash" size={14} /> Delete Draft</button>}
       </div>
       <ConfirmDialog open={showSubmitConfirm} onClose={() => setShowSubmitConfirm(false)} title="Submit Entry?" message={"Submit for review? Total: " + fmt(grandTotal)} confirmText="Submit" onConfirm={() => onSubmit({ ...form, status: STATUSES.SUBMITTED }, draftId)} />
       <ConfirmDialog open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Delete Entry?" message="This draft will be permanently deleted." confirmText="Delete" danger onConfirm={onDelete} />
@@ -510,7 +646,17 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
         {entry.mileage && <div style={{ marginTop: 6, fontSize: 13, color: BRAND.textMuted }}>🚗 {entry.mileage} miles</div>}
         {entry.notes && <div style={{ marginTop: 16, padding: 14, background: BRAND.bgSoft, borderRadius: 6, fontSize: 14, border: "1px solid " + BRAND.borderLight }}><span style={{ fontWeight: 600, color: BRAND.textMuted }}>Notes: </span>{entry.notes}</div>}
       </div>
-      {entry.materials?.length > 0 && <div style={S.card}><div style={S.sectionLabel}>Materials</div><MaterialsEditor materials={entry.materials} readOnly onChange={() => {}} /></div>}
+      {entry.materials?.length > 0 && <div style={S.card}><div style={S.sectionLabel}>Materials</div><MaterialsEditor materials={entry.materials} readOnly onChange={() => {}} mob={mob} /></div>}
+
+      {/* Pre/Post Images */}
+      {(entry.preImages?.length > 0 || entry.postImages?.length > 0) && (
+        <div style={S.card}>
+          <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 20 }}>
+            {entry.preImages?.length > 0 && <ImageUploader images={entry.preImages} onChange={() => {}} label="Before Photos" color="#E65100" icon="camera" readOnly mob={mob} />}
+            {entry.postImages?.length > 0 && <ImageUploader images={entry.postImages} onChange={() => {}} label="After Photos" color="#2E7D32" icon="camera" readOnly mob={mob} />}
+          </div>
+        </div>
+      )}
       <div style={{ ...S.cardAccent, display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: mob ? 12 : 20, background: BRAND.bgSoft }}>
         <div><div style={{ fontSize: 12, color: BRAND.textLight, marginBottom: 4 }}>Hours</div><div style={{ fontSize: 20, fontWeight: 700, color: BRAND.navy }}>{fmtHours(hours)}</div></div>
         <div><div style={{ fontSize: 12, color: BRAND.textLight, marginBottom: 4 }}>Labor ({fmt(rate)}/hr)</div><div style={{ fontSize: 20, fontWeight: 700, color: BRAND.navy }}>{fmt(laborTotal)}</div></div>
@@ -741,7 +887,7 @@ const CommunityInsights = ({ fetchStats, settings, mob }) => {
       // Minimum display time for the fun loader
       const [data] = await Promise.all([
         fetchStats(),
-        new Promise(r => setTimeout(r, 600 + Math.random() * 500)),
+        new Promise(r => setTimeout(r, 1200 + Math.random() * 1000)),
       ]);
       if (!cancelled && data) setStats(data);
       if (!cancelled) setLoading(false);
@@ -869,6 +1015,75 @@ const CommunityInsights = ({ fetchStats, settings, mob }) => {
   );
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// IN-APP NOTIFICATION PANEL
+// ═══════════════════════════════════════════════════════════════════════════
+const NotificationPanel = ({ entries, users, settings, onView, onClose, onReviewAll, mob }) => {
+  const pending = entries.filter(e => e.status === STATUSES.SUBMITTED).sort((a, b) => b.createdAt?.localeCompare(a.createdAt) || b.date.localeCompare(a.date));
+  const timeAgo = (dateStr) => {
+    if (!dateStr) return "";
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return mins + "m ago";
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + "h ago";
+    const days = Math.floor(hrs / 24);
+    return days + "d ago";
+  };
+  return (
+    <>
+      <div style={{ position: "fixed", inset: 0, zIndex: 89 }} onClick={onClose} />
+      <div style={{ position: "absolute", top: mob ? "100%" : 44, right: mob ? 16 : 0, width: mob ? "calc(100vw - 32px)" : 360, maxHeight: 420, background: BRAND.white, borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,0.15)", border: "1px solid " + BRAND.borderLight, zIndex: 90, overflow: "hidden", animation: "fadeIn 200ms ease-out" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid " + BRAND.borderLight }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Icon name="bell" size={18} />
+            <span style={{ fontWeight: 700, fontSize: 15, color: BRAND.navy }}>Notifications</span>
+            {pending.length > 0 && <span style={{ background: "#EF4444", color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>{pending.length}</span>}
+          </div>
+          <button style={{ background: "none", border: "none", color: BRAND.textLight, cursor: "pointer", padding: 4 }} onClick={onClose}><Icon name="x" size={18} /></button>
+        </div>
+        <div style={{ overflowY: "auto", maxHeight: 320 }}>
+          {pending.length === 0 ? (
+            <div style={{ padding: "40px 20px", textAlign: "center" }}>
+              <div style={{ fontSize: 36, marginBottom: 8 }}>✅</div>
+              <div style={{ fontWeight: 600, color: BRAND.navy, marginBottom: 4 }}>All caught up!</div>
+              <div style={{ fontSize: 13, color: BRAND.textLight }}>No entries waiting for your review.</div>
+            </div>
+          ) : (
+            pending.map((e, i) => {
+              const u = users.find(u => u.id === e.userId);
+              const h = calcHours(e.startTime, e.endTime);
+              const r = getUserRate(users, settings, e.userId);
+              const total = calcLabor(h, r) + calcMaterialsTotal(e.materials);
+              return (
+                <div key={e.id} style={{ padding: "12px 16px", borderBottom: i < pending.length - 1 ? "1px solid " + BRAND.borderLight : "none", cursor: "pointer", background: BRAND.white, transition: "background 150ms" }} onClick={() => onView(e)} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.bgSoft} onMouseLeave={ev => ev.currentTarget.style.background = BRAND.white}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 14, background: BRAND.brick + "18", color: BRAND.brick, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{(u?.name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
+                      <span style={{ fontWeight: 600, fontSize: 13, color: BRAND.navy }}>{u?.name || "Member"}</span>
+                    </div>
+                    <span style={{ fontSize: 11, color: BRAND.textLight, whiteSpace: "nowrap" }}>{timeAgo(e.createdAt)}</span>
+                  </div>
+                  <div style={{ marginLeft: 36, fontSize: 13, color: BRAND.charcoal, marginBottom: 4 }}><CategoryBadge category={e.category} /> <span style={{ marginLeft: 4 }}>{e.description.slice(0, 60)}{e.description.length > 60 ? "..." : ""}</span></div>
+                  <div style={{ marginLeft: 36, display: "flex", gap: 12, fontSize: 12, color: BRAND.textLight }}>
+                    <span>{formatDate(e.date)}</span><span>{fmtHours(h)}</span><span style={{ fontWeight: 600, color: BRAND.brick }}>{fmt(total)}</span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+        {pending.length > 0 && (
+          <div style={{ padding: "10px 16px", borderTop: "1px solid " + BRAND.borderLight, textAlign: "center" }}>
+            <button style={{ background: "none", border: "none", color: BRAND.brick, fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: BRAND.sans }} onClick={onReviewAll}>Review All ({pending.length}) →</button>
+          </div>
+        )}
+      </div>
+    </>
+  );
+};
+
 const SettingsPage = ({ settings, users, currentUser, onSaveSettings, onAddUser, onRemoveUser, onUpdateRate }) => {
   const [form, setForm] = useState({ ...settings });
   const [saved, setSaved] = useState(false);
@@ -968,6 +1183,7 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
   const [pageLoading, setPageLoading] = useState(null); // null = not loading, string = target page
   const [authMode, setAuthMode] = useState("login"); // "login" or "register"
@@ -1019,7 +1235,7 @@ export default function App() {
     if (p === page && !viewEntry && !editEntry && !newEntry) return; // already there
     setViewEntry(null); setEditEntry(null); setNewEntry(false); setDrawerOpen(false);
     setPageLoading(p);
-    const delay = 400 + Math.floor(Math.random() * 400); // 400-800ms
+    const delay = 800 + Math.floor(Math.random() * 800); // 800-1600ms
     setTimeout(() => { setPageLoading(null); setPage(p); }, delay);
   };
 
@@ -1254,8 +1470,18 @@ export default function App() {
             <img src="/logo.png" alt="" style={{ width: 32, height: 32, borderRadius: 4, objectFit: "cover", background: BRAND.beige }} />
             <span style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 16, color: "#fff" }}>24 Mill</span>
           </div>
-          <button style={{ background: "none", border: "none", color: "#fff", padding: 4, cursor: "pointer" }} onClick={() => setDrawerOpen(true)}><Icon name="menu" size={24} /></button>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {isTreasurer && (
+              <button style={{ background: "none", border: "none", color: "#fff", padding: 6, cursor: "pointer", position: "relative" }} onClick={() => setShowNotifPanel(p => !p)}>
+                <Icon name="bell" size={22} />
+                {pendingCount > 0 && <span style={{ position: "absolute", top: 2, right: 2, background: "#EF4444", color: "#fff", fontSize: 9, fontWeight: 700, width: 16, height: 16, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid " + BRAND.navy }}>{pendingCount}</span>}
+              </button>
+            )}
+            <button style={{ background: "none", border: "none", color: "#fff", padding: 4, cursor: "pointer" }} onClick={() => setDrawerOpen(true)}><Icon name="menu" size={24} /></button>
+          </div>
         </header>
+        {/* Notification panel */}
+        {showNotifPanel && isTreasurer && <NotificationPanel entries={entries} users={users} settings={settings} onView={(e) => { setShowNotifPanel(false); setViewEntry(e); }} onClose={() => setShowNotifPanel(false)} onReviewAll={() => { setShowNotifPanel(false); nav("review"); }} mob={mob} />}
         {/* Slide-out drawer */}
         {drawerOpen && (
           <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.4)" }} onClick={() => setDrawerOpen(false)}>
@@ -1342,9 +1568,16 @@ export default function App() {
       <main style={S.main}>
         <header style={S.header}>
           <span style={{ fontSize: 14, color: BRAND.textMuted }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, position: "relative" }}>
+            {isTreasurer && (
+              <button style={{ background: "none", border: "none", color: BRAND.charcoal, padding: 6, cursor: "pointer", position: "relative", borderRadius: 8 }} onClick={() => setShowNotifPanel(p => !p)}>
+                <Icon name="bell" size={20} />
+                {pendingCount > 0 && <span style={{ position: "absolute", top: 2, right: 2, background: "#EF4444", color: "#fff", fontSize: 9, fontWeight: 700, width: 16, height: 16, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>{pendingCount}</span>}
+              </button>
+            )}
             <span style={{ fontSize: 14, fontWeight: 500, color: BRAND.charcoal }}>{currentUser.name}</span>
             <RoleBadge role={currentUser.role} />
+            {showNotifPanel && isTreasurer && <NotificationPanel entries={entries} users={users} settings={settings} onView={(e) => { setShowNotifPanel(false); setViewEntry(e); }} onClose={() => setShowNotifPanel(false)} onReviewAll={() => { setShowNotifPanel(false); nav("review"); }} mob={mob} />}
           </div>
         </header>
         {!online && <div style={{ background: "#FFF3E0", borderBottom: "1px solid #FFB74D", padding: "10px 32px", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#E65100" }}><Icon name="wifiOff" size={16} /><span>You're offline. Viewing cached data — changes require an internet connection.</span></div>}

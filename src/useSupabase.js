@@ -14,6 +14,8 @@ function mapEntry(row) {
     location: row.location || "",
     mileage: row.mileage || "",
     materials: row.materials || [],
+    preImages: row.pre_images || [],
+    postImages: row.post_images || [],
     notes: row.notes || "",
     status: row.status,
     reviewerNotes: row.reviewer_notes || "",
@@ -150,6 +152,8 @@ export function useSupabase() {
       location: formData.location || null,
       mileage: formData.mileage ? Number(formData.mileage) : null,
       materials: formData.materials || [],
+      pre_images: formData.preImages || [],
+      post_images: formData.postImages || [],
       notes: formData.notes || null,
       status: formData.status,
     };
