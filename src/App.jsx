@@ -729,14 +729,13 @@ export default function App() {
   // LOGIN SCREEN
   // ══════════════════════════════════════════════════════════════════════════
   if (!currentUser) {
-    if (loading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans }}><div style={{ textAlign: "center" }}><img src="/logo.png" alt="" style={{ width: 80, height: 80, objectFit: "contain", margin: "0 auto 16px", display: "block", opacity: 0.5 }} /><div style={{ fontSize: 14, color: BRAND.textMuted }}>Loading...</div></div></div>;
+    if (loading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans }}><div style={{ textAlign: "center" }}><img src="/logo.png" alt="" style={{ width: 120, height: 120, objectFit: "contain", margin: "0 auto 16px", display: "block", opacity: 0.5 }} /><div style={{ fontSize: 14, color: BRAND.textMuted }}>Loading...</div></div></div>;
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans, padding: mob ? 16 : 0 }}>
         <div className="fade-in" style={{ textAlign: "center", maxWidth: 420, width: "100%" }}>
-          <img src="/logo.png" alt="24 Mill Street" style={{ width: mob ? 100 : 140, height: mob ? 100 : 140, objectFit: "contain", margin: "0 auto 20px", display: "block" }} />
-          <h1 style={{ fontFamily: BRAND.serif, fontSize: 32, fontWeight: 600, color: BRAND.navy, margin: "0 0 4px" }}>24 Mill Street</h1>
-          <p style={{ color: BRAND.textMuted, margin: "0 0 6px", fontSize: 14 }}>Dorchester, MA · Est. 2010</p>
-          <p style={{ color: BRAND.textLight, margin: "0 0 32px", fontSize: 13 }}>HOA Work Tracker</p>
+          <img src="/logo.png" alt="24 Mill" style={{ width: mob ? 160 : 200, height: mob ? 160 : 200, objectFit: "contain", margin: "0 auto 24px", display: "block" }} />
+          <h1 style={{ fontFamily: BRAND.serif, fontSize: mob ? 28 : 34, fontWeight: 600, color: BRAND.navy, margin: "0 0 4px" }}>Log Your Work</h1>
+          <p style={{ color: BRAND.textLight, margin: "0 0 32px", fontSize: 14 }}>24 Mill</p>
           <div style={{ background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 12, padding: 32, textAlign: "left", boxShadow: "0 4px 20px rgba(31,42,56,0.06)" }}>
             <div style={{ fontSize: 18, fontWeight: 600, color: BRAND.navy, marginBottom: 4, fontFamily: BRAND.serif }}>Sign In</div>
             <div style={{ fontSize: 13, color: BRAND.textMuted, marginBottom: 24 }}>Enter your email and password to continue</div>
@@ -880,7 +879,7 @@ export default function App() {
         <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: BRAND.navy, position: "sticky", top: 0, zIndex: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <img src="/logo.png" alt="" style={{ width: 32, height: 32, borderRadius: 4, objectFit: "cover", background: BRAND.beige }} />
-            <span style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 16, color: "#fff" }}>24 Mill Street</span>
+            <span style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 16, color: "#fff" }}>24 Mill</span>
           </div>
           <button style={{ background: "none", border: "none", color: "#fff", padding: 4, cursor: "pointer" }} onClick={() => setDrawerOpen(true)}><Icon name="menu" size={24} /></button>
         </header>
@@ -936,8 +935,8 @@ export default function App() {
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <img src="/logo.png" alt="" style={{ width: 40, height: 40, borderRadius: 6, objectFit: "cover", background: BRAND.beige }} />
             <div>
-              <div style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 17, color: "#FFFFFF", lineHeight: 1.2 }}>24 Mill Street</div>
-              <div style={{ fontSize: 11, color: "#7A766E", letterSpacing: "0.02em" }}>Dorchester, MA</div>
+              <div style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 17, color: "#FFFFFF", lineHeight: 1.2 }}>24 Mill</div>
+              <div style={{ fontSize: 11, color: "#7A766E", letterSpacing: "0.02em" }}>Log Your Work</div>
             </div>
           </div>
         </div>
