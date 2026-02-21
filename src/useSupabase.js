@@ -254,15 +254,15 @@ export function useSupabase() {
     return true;
   }, []);
 
-  // ── REFRESH ────────────────────────────────────────────────────────────
-  const refresh = useCallback(() => {
-
   // ── COMMUNITY STATS (aggregates visible to all members) ───────────────
   async function fetchCommunityStats() {
     const { data, error } = await supabase.rpc("get_community_stats");
     if (error) { console.error("Community stats error:", error); return null; }
     return data;
   }
+
+  // ── REFRESH ────────────────────────────────────────────────────────────
+  const refresh = useCallback(() => {
     if (session?.user?.id) loadAll(session.user.id);
   }, [session?.user?.id]);
 
