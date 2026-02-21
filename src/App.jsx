@@ -35,7 +35,10 @@ const STATUSES = { DRAFT: "Draft", SUBMITTED: "Submitted", APPROVED: "Approved",
 const ROLES = { TREASURER: "Treasurer", MEMBER: "Member" };
 const DEFAULT_SETTINGS = { hoaName: "24 Mill Street", defaultHourlyRate: 35, userRates: {}, currency: "USD" };
 const INITIAL_USERS = [
-  { id: "usr_admin", name: "Zsolt Kemecsei", email: "zsolt.kemecsei@gmail.com", role: ROLES.TREASURER }
+  { id: "usr_admin", name: "Zsolt Kemecsei", email: "zsolt.kemecsei@gmail.com", role: ROLES.TREASURER, pin: "1013" },
+  { id: "usr_lmv", name: "L. Vancheri", email: "lmvancheri@gmail.com", role: ROLES.MEMBER, pin: "1108" },
+  { id: "usr_clb", name: "Casey Bulmer", email: "caseylbulmer@gmail.com", role: ROLES.MEMBER, pin: "3221" },
+  { id: "usr_mpb", name: "M. Burke", email: "mpburke15@gmail.com", role: ROLES.MEMBER, pin: "7872" },
 ];
 const MOBILE_BP = 768;
 
@@ -637,7 +640,11 @@ const SettingsPage = ({ settings, users, onSaveSettings, onSaveUsers }) => {
 export default function App() {
   const mob = useIsMobile();
   const [currentUser, setCurrentUser] = useState(() => load("hoa-user", null));
-  const [users, setUsers] = useState(() => load("hoa-users", INITIAL_USERS));
+  const [users, setUsers] = useState(() => {
+    const cached = load("hoa-users", null);
+    if (!cached || !cached[0]?.pin) return INITIAL_USERS;
+    return cached;
+  });
   const [entries, setEntries] = useState(() => load("hoa-entries", []));
   const [settings, setSettings] = useState(() => load("hoa-settings", DEFAULT_SETTINGS));
   const [page, setPage] = useState("dashboard");
@@ -645,6 +652,7 @@ export default function App() {
   const [editEntry, setEditEntry] = useState(null);
   const [newEntry, setNewEntry] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
+  const [loginPin, setLoginPin] = useState("");
   const [loginError, setLoginError] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -662,11 +670,13 @@ export default function App() {
     setLoginError("");
     const email = loginEmail.trim().toLowerCase();
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setLoginError("Please enter a valid email"); return; }
+    if (!loginPin || loginPin.length !== 4) { setLoginError("Please enter your 4-digit PIN"); return; }
     const user = users.find(u => u.email.toLowerCase() === email);
     if (!user) { setLoginError("No account found. Contact your HOA Treasurer."); return; }
+    if (user.pin !== loginPin) { setLoginError("Incorrect PIN. Please try again."); return; }
     setCurrentUser(user); setPage("dashboard");
   };
-  const handleLogout = () => { setCurrentUser(null); setLoginEmail(""); setLoginError(""); setPage("dashboard"); setViewEntry(null); setEditEntry(null); setNewEntry(false); };
+  const handleLogout = () => { setCurrentUser(null); setLoginEmail(""); setLoginPin(""); setLoginError(""); setPage("dashboard"); setViewEntry(null); setEditEntry(null); setNewEntry(false); };
   const nav = (p) => { setPage(p); setViewEntry(null); setEditEntry(null); setNewEntry(false); setDrawerOpen(false); };
 
   // Entry operations
@@ -715,9 +725,11 @@ export default function App() {
           <p style={{ color: BRAND.textLight, margin: "0 0 32px", fontSize: 13 }}>HOA Work Tracker</p>
           <div style={{ background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 12, padding: 32, textAlign: "left", boxShadow: "0 4px 20px rgba(31,42,56,0.06)" }}>
             <div style={{ fontSize: 18, fontWeight: 600, color: BRAND.navy, marginBottom: 4, fontFamily: BRAND.serif }}>Sign In</div>
-            <div style={{ fontSize: 13, color: BRAND.textMuted, marginBottom: 24 }}>Enter your email address to continue</div>
+            <div style={{ fontSize: 13, color: BRAND.textMuted, marginBottom: 24 }}>Enter your email and PIN to continue</div>
             <label style={{ ...S.label }}>Email Address</label>
-            <input type="email" style={{ ...S.input, marginBottom: loginError ? 8 : 20, fontSize: 15, padding: "12px 16px", borderColor: loginError ? BRAND.error : BRAND.border }} value={loginEmail} onChange={e => { setLoginEmail(e.target.value); setLoginError(""); }} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="you@example.com" autoFocus />
+            <input type="email" style={{ ...S.input, marginBottom: 16, fontSize: 15, padding: "12px 16px", borderColor: loginError ? BRAND.border : BRAND.border }} value={loginEmail} onChange={e => { setLoginEmail(e.target.value); setLoginError(""); }} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="you@example.com" autoFocus />
+            <label style={{ ...S.label }}>PIN</label>
+            <input type="password" inputMode="numeric" maxLength={4} style={{ ...S.input, marginBottom: loginError ? 8 : 20, fontSize: 20, padding: "12px 16px", letterSpacing: "0.3em", textAlign: "center", borderColor: loginError ? BRAND.error : BRAND.border }} value={loginPin} onChange={e => { setLoginPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setLoginError(""); }} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="····" />
             {loginError && <div style={{ color: BRAND.error, fontSize: 13, marginBottom: 16, display: "flex", alignItems: "flex-start", gap: 6 }}><Icon name="alert" size={14} /><span>{loginError}</span></div>}
             <button style={{ ...S.btnPrimary, width: "100%", justifyContent: "center", padding: "12px 20px", fontSize: 15, borderRadius: 8 }} onClick={handleLogin}>Continue</button>
           </div>
