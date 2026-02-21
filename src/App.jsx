@@ -37,6 +37,13 @@ const DEFAULT_SETTINGS = { hoaName: "24 Mill Street", defaultHourlyRate: 35, use
 const INITIAL_USERS = [
   { id: "usr_admin", name: "Zsolt Kemecsei", email: "zsolt.kemecsei@gmail.com", role: ROLES.TREASURER }
 ];
+const MOBILE_BP = 768;
+
+function useIsMobile() {
+  const [m, setM] = useState(typeof window !== "undefined" ? window.innerWidth < MOBILE_BP : false);
+  useEffect(() => { const h = () => setM(window.innerWidth < MOBILE_BP); window.addEventListener("resize", h); return () => window.removeEventListener("resize", h); }, []);
+  return m;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STORAGE
@@ -94,6 +101,7 @@ const Icon = ({ name, size = 18 }) => {
     logout: "M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1",
     dollar: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
     inbox: "M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4",
+    menu: "M4 6h16M4 12h16M4 18h16",
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -291,7 +299,7 @@ const MaterialsEditor = ({ materials, onChange, readOnly }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // ENTRY FORM
 // ═══════════════════════════════════════════════════════════════════════════
-const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSubmit, onDelete }) => {
+const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSubmit, onDelete, mob }) => {
   const isTreasurer = currentUser.role === ROLES.TREASURER;
   const [form, setForm] = useState({
     date: entry?.date || todayStr(), startTime: entry?.startTime || nowTime(), endTime: entry?.endTime || "",
@@ -335,7 +343,7 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
           </select>{errors.userId && <span style={{ color: BRAND.error, fontSize: 12 }}>{errors.userId}</span>}
         </Field>
       )}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr 1fr", gap: mob ? 12 : 16 }}>
         <Field label="Date" required><input type="date" style={{ ...S.input, ...errStyle("date") }} value={form.date} onChange={e => set("date", e.target.value)} />{errors.date && <span style={{ color: BRAND.error, fontSize: 12 }}>{errors.date}</span>}</Field>
         <Field label="Start Time" required><input type="time" style={{ ...S.input, ...errStyle("startTime") }} value={form.startTime} onChange={e => set("startTime", e.target.value)} />{errors.startTime && <span style={{ color: BRAND.error, fontSize: 12 }}>{errors.startTime}</span>}</Field>
         <Field label="End Time" required><input type="time" style={{ ...S.input, ...errStyle("endTime") }} value={form.endTime} onChange={e => set("endTime", e.target.value)} />{errors.endTime && <span style={{ color: BRAND.error, fontSize: 12 }}>{errors.endTime}</span>}</Field>
@@ -350,7 +358,7 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
         <textarea style={{ ...S.textarea, ...errStyle("description") }} value={form.description} onChange={e => set("description", e.target.value)} placeholder="Describe the work performed..." />
         {errors.description && <span style={{ color: BRAND.error, fontSize: 12 }}>{errors.description}</span>}
       </Field>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: mob ? 12 : 16 }}>
         <Field label="Location"><input style={S.input} value={form.location} onChange={e => set("location", e.target.value)} placeholder="e.g. Unit 3B" /></Field>
         <Field label="Mileage"><input type="number" min="0" style={S.input} value={form.mileage} onChange={e => set("mileage", e.target.value)} placeholder="Miles driven" /></Field>
       </div>
@@ -360,7 +368,7 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
       {/* Summary */}
       <div style={{ background: BRAND.bgSoft, borderRadius: 8, padding: 20, marginBottom: 24, border: "1px solid " + BRAND.borderLight }}>
         <div style={S.sectionLabel}>Reimbursement Summary</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: mob ? 12 : 16 }}>
           <div><div style={{ fontSize: 12, color: BRAND.textLight }}>Hours</div><div style={{ fontSize: 18, fontWeight: 700, color: BRAND.navy }}>{fmtHours(hours)}</div></div>
           <div><div style={{ fontSize: 12, color: BRAND.textLight }}>Labor ({fmt(rate)}/hr)</div><div style={{ fontSize: 18, fontWeight: 700, color: BRAND.navy }}>{fmt(laborTotal)}</div></div>
           <div><div style={{ fontSize: 12, color: BRAND.textLight }}>Materials</div><div style={{ fontSize: 18, fontWeight: 700, color: BRAND.navy }}>{fmt(matTotal)}</div></div>
@@ -368,9 +376,9 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 10, justifyContent: "space-between" }}>
+      <div style={{ display: "flex", flexDirection: mob ? "column-reverse" : "row", gap: 10, justifyContent: "space-between" }}>
         <div>{entry && entry.status === STATUSES.DRAFT && <button style={S.btnDanger} onClick={() => setShowDeleteConfirm(true)}><Icon name="trash" size={16} /> Delete</button>}</div>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", flexDirection: mob ? "column" : "row", gap: 10 }}>
           <button style={S.btnSecondary} onClick={onCancel}>Cancel</button>
           <button style={S.btnSecondary} onClick={() => { if (validate()) onSave({ ...form, status: STATUSES.DRAFT }); }}><Icon name="edit" size={16} /> Save Draft</button>
           <button style={S.btnPrimary} onClick={() => { if (validate()) setShowSubmitConfirm(true); }}><Icon name="send" size={16} /> Submit for Review</button>
@@ -385,7 +393,7 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
 // ═══════════════════════════════════════════════════════════════════════════
 // ENTRY DETAIL
 // ═══════════════════════════════════════════════════════════════════════════
-const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onApprove, onReject, onMarkPaid }) => {
+const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onApprove, onReject, onMarkPaid, mob }) => {
   const [reviewNotes, setReviewNotes] = useState(entry.reviewerNotes || "");
   const [showApproveConfirm, setShowApproveConfirm] = useState(false);
   const [showRejectConfirm, setShowRejectConfirm] = useState(false);
@@ -422,7 +430,7 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
         {entry.notes && <div style={{ marginTop: 16, padding: 14, background: BRAND.bgSoft, borderRadius: 6, fontSize: 14, border: "1px solid " + BRAND.borderLight }}><span style={{ fontWeight: 600, color: BRAND.textMuted }}>Notes: </span>{entry.notes}</div>}
       </div>
       {entry.materials?.length > 0 && <div style={S.card}><div style={S.sectionLabel}>Materials</div><MaterialsEditor materials={entry.materials} readOnly onChange={() => {}} /></div>}
-      <div style={{ ...S.cardAccent, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 20, background: BRAND.bgSoft }}>
+      <div style={{ ...S.cardAccent, display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: mob ? 12 : 20, background: BRAND.bgSoft }}>
         <div><div style={{ fontSize: 12, color: BRAND.textLight, marginBottom: 4 }}>Hours</div><div style={{ fontSize: 20, fontWeight: 700, color: BRAND.navy }}>{fmtHours(hours)}</div></div>
         <div><div style={{ fontSize: 12, color: BRAND.textLight, marginBottom: 4 }}>Labor ({fmt(rate)}/hr)</div><div style={{ fontSize: 20, fontWeight: 700, color: BRAND.navy }}>{fmt(laborTotal)}</div></div>
         <div><div style={{ fontSize: 12, color: BRAND.textLight, marginBottom: 4 }}>Materials</div><div style={{ fontSize: 20, fontWeight: 700, color: BRAND.navy }}>{fmt(matTotal)}</div></div>
@@ -460,9 +468,31 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ENTRY CARD (Mobile list replacement for tables)
+// ═══════════════════════════════════════════════════════════════════════════
+const EntryCard = ({entry, users, settings, onClick}) => {
+  const u = users.find(u => u.id === entry.userId);
+  const hrs = calcHours(entry.startTime, entry.endTime);
+  const rate = settings.userRates?.[entry.userId] || settings.defaultHourlyRate;
+  const total = hrs * rate + calcMaterialsTotal(entry.materials);
+  return (
+    <div style={{ ...S.card, cursor: "pointer", padding: "14px 16px" }} onClick={onClick}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}><CategoryBadge category={entry.category} /><StatusBadge status={entry.status} /></div>
+          <div style={{ fontSize: 14, fontWeight: 500, color: BRAND.charcoal, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{entry.description}</div>
+        </div>
+        <div style={{ textAlign: "right", marginLeft: 12 }}><div style={{ fontSize: 16, fontWeight: 700, color: BRAND.navy }}>{fmt(total)}</div></div>
+      </div>
+      <div style={{ fontSize: 12, color: BRAND.textLight }}>{formatDate(entry.date)} · {fmtHours(hrs)}{u ? " · " + u.name : ""}</div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // REPORTS PAGE
 // ═══════════════════════════════════════════════════════════════════════════
-const ReportsPage = ({ entries, users, settings, currentUser }) => {
+const ReportsPage = ({ entries, users, settings, currentUser, mob }) => {
   const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().split("T")[0]; });
   const [dateTo, setDateTo] = useState(todayStr());
   const [filterUser, setFilterUser] = useState("all");
@@ -496,7 +526,7 @@ const ReportsPage = ({ entries, users, settings, currentUser }) => {
     <div className="fade-in">
       <h2 style={{ ...S.h2, marginBottom: 24 }}>Reports</h2>
       <div style={S.card}>
-        <div style={{ display: "grid", gridTemplateColumns: isTreasurer ? "1fr 1fr 1fr 1fr" : "1fr 1fr 1fr", gap: 16, marginBottom: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : (isTreasurer ? "1fr 1fr 1fr 1fr" : "1fr 1fr 1fr"), gap: mob ? 12 : 16, marginBottom: 20 }}>
           <Field label="From"><input type="date" style={S.input} value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></Field>
           <Field label="To"><input type="date" style={S.input} value={dateTo} onChange={e => setDateTo(e.target.value)} /></Field>
           {isTreasurer && <Field label="Member"><select style={S.select} value={filterUser} onChange={e => setFilterUser(e.target.value)}><option value="all">All Members</option>{users.filter(u => u.role === ROLES.MEMBER).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select></Field>}
@@ -506,7 +536,7 @@ const ReportsPage = ({ entries, users, settings, currentUser }) => {
       </div>
       {generated && (
         <div className="fade-in">
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16, marginBottom: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: mob ? 8 : 16, marginBottom: 20 }}>
             <StatCard label="Entries" value={filtered.length} icon="file" />
             <StatCard label="Total Hours" value={fmtHours(totals.totalHours)} icon="clock" accentColor="#2563eb" />
             <StatCard label="Labor" value={fmt(totals.totalLabor)} icon="users" accentColor={BRAND.green} />
@@ -605,6 +635,7 @@ const SettingsPage = ({ settings, users, onSaveSettings, onSaveUsers }) => {
 // MAIN APP
 // ═══════════════════════════════════════════════════════════════════════════
 export default function App() {
+  const mob = useIsMobile();
   const [currentUser, setCurrentUser] = useState(() => load("hoa-user", null));
   const [users, setUsers] = useState(() => load("hoa-users", INITIAL_USERS));
   const [entries, setEntries] = useState(() => load("hoa-entries", []));
@@ -615,6 +646,7 @@ export default function App() {
   const [newEntry, setNewEntry] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => { save("hoa-user", currentUser); }, [currentUser]);
   useEffect(() => { save("hoa-users", users); }, [users]);
@@ -635,6 +667,7 @@ export default function App() {
     setCurrentUser(user); setPage("dashboard");
   };
   const handleLogout = () => { setCurrentUser(null); setLoginEmail(""); setLoginError(""); setPage("dashboard"); setViewEntry(null); setEditEntry(null); setNewEntry(false); };
+  const nav = (p) => { setPage(p); setViewEntry(null); setEditEntry(null); setNewEntry(false); setDrawerOpen(false); };
 
   // Entry operations
   const doSave = (formData) => {
@@ -674,9 +707,9 @@ export default function App() {
   // ══════════════════════════════════════════════════════════════════════════
   if (!currentUser) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans }}>
-        <div className="fade-in" style={{ textAlign: "center", maxWidth: 420, width: "100%", padding: "0 20px" }}>
-          <img src="/logo.png" alt="24 Mill Street" style={{ width: 140, height: 140, objectFit: "contain", margin: "0 auto 20px", display: "block" }} />
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans, padding: mob ? 16 : 0 }}>
+        <div className="fade-in" style={{ textAlign: "center", maxWidth: 420, width: "100%" }}>
+          <img src="/logo.png" alt="24 Mill Street" style={{ width: mob ? 100 : 140, height: mob ? 100 : 140, objectFit: "contain", margin: "0 auto 20px", display: "block" }} />
           <h1 style={{ fontFamily: BRAND.serif, fontSize: 32, fontWeight: 600, color: BRAND.navy, margin: "0 0 4px" }}>24 Mill Street</h1>
           <p style={{ color: BRAND.textMuted, margin: "0 0 6px", fontSize: 14 }}>Dorchester, MA · Est. 2010</p>
           <p style={{ color: BRAND.textLight, margin: "0 0 32px", fontSize: 13 }}>HOA Work Tracker</p>
@@ -704,6 +737,12 @@ export default function App() {
     { id: "reports", label: "Reports", icon: "chart" },
     ...(isTreasurer ? [{ id: "settings", label: "Settings", icon: "settings" }] : []),
   ];
+  const bottomTabs = [
+    { id: "dashboard", label: "Home", icon: "home" },
+    { id: "entries", label: "Entries", icon: "file" },
+    ...(isTreasurer ? [{ id: "review", label: "Review", icon: "inbox", badge: pendingCount }] : []),
+    { id: "reports", label: "Reports", icon: "chart" },
+  ];
 
   // ══════════════════════════════════════════════════════════════════════════
   // PAGE CONTENT
@@ -711,11 +750,11 @@ export default function App() {
   const renderPage = () => {
     if (newEntry || editEntry) return (
       <div className="fade-in"><h2 style={{ ...S.h2, marginBottom: 24 }}>{editEntry ? "Edit Entry" : "New Work Entry"}</h2>
-        <div style={S.card}><EntryForm entry={editEntry} settings={settings} users={users} currentUser={currentUser} onSave={doSave} onSubmit={doSubmit} onCancel={() => { setNewEntry(false); setEditEntry(null); }} onDelete={doDelete} /></div></div>
+        <div style={S.card}><EntryForm entry={editEntry} settings={settings} users={users} currentUser={currentUser} onSave={doSave} onSubmit={doSubmit} onCancel={() => { setNewEntry(false); setEditEntry(null); }} onDelete={doDelete} mob={mob} /></div></div>
     );
     if (viewEntry) {
       const fresh = entries.find(e => e.id === viewEntry.id) || viewEntry;
-      return <EntryDetail entry={fresh} settings={settings} users={users} currentUser={currentUser} onBack={() => setViewEntry(null)} onEdit={() => { setEditEntry(fresh); setViewEntry(null); }} onApprove={doApprove} onReject={doReject} onMarkPaid={doMarkPaid} />;
+      return <EntryDetail entry={fresh} settings={settings} users={users} currentUser={currentUser} onBack={() => setViewEntry(null)} onEdit={() => { setEditEntry(fresh); setViewEntry(null); }} onApprove={doApprove} onReject={doReject} onMarkPaid={doMarkPaid} mob={mob} />;
     }
     if (page === "dashboard") {
       const recent = myEntries.slice(0, 5);
@@ -723,9 +762,9 @@ export default function App() {
         <div className="fade-in">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
             <h2 style={S.h2}>Dashboard</h2>
-            <button style={S.btnPrimary} onClick={() => setNewEntry(true)}><Icon name="plus" size={16} /> New Entry</button>
+            {!mob && <button style={S.btnPrimary} onClick={() => setNewEntry(true)}><Icon name="plus" size={16} /> New Entry</button>}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
+          <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "repeat(4, 1fr)", gap: mob ? 8 : 16, marginBottom: mob ? 16 : 28 }}>
             <StatCard label={isTreasurer ? "Total Entries" : "My Entries"} value={dashStats.total} icon="file" />
             <StatCard label="Pending Review" value={dashStats.pending} icon="clock" accentColor={BRAND.warning} />
             <StatCard label="Approved" value={dashStats.approved} icon="check" accentColor={BRAND.success} />
@@ -739,7 +778,9 @@ export default function App() {
           )}
           <div style={S.card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}><h3 style={S.h3}>Recent Entries</h3><button style={S.btnGhost} onClick={() => setPage("entries")}>View all →</button></div>
-            {recent.length === 0 ? <div style={{ textAlign: "center", padding: 40, color: BRAND.textLight }}>No entries yet. Create your first work entry.</div> : (
+            {recent.length === 0 ? <div style={{ textAlign: "center", padding: 40, color: BRAND.textLight }}>No entries yet. Create your first work entry.</div>
+            : mob ? recent.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} onClick={() => setViewEntry(e)} />)
+            : (
               <div style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 8, overflow: "hidden" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                   <thead><tr><th style={S.th}>Date</th>{isTreasurer && <th style={S.th}>Member</th>}<th style={S.th}>Category</th><th style={S.th}>Description</th><th style={{ ...S.th, textAlign: "right" }}>Total</th><th style={S.th}>Status</th></tr></thead>
@@ -758,9 +799,11 @@ export default function App() {
       <div className="fade-in">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <h2 style={S.h2}>{isTreasurer ? "All Entries" : "My Entries"}</h2>
-          <button style={S.btnPrimary} onClick={() => setNewEntry(true)}><Icon name="plus" size={16} /> New Entry</button>
+          {!mob && <button style={S.btnPrimary} onClick={() => setNewEntry(true)}><Icon name="plus" size={16} /> New Entry</button>}
         </div>
-        {myEntries.length === 0 ? <div style={{ ...S.card, textAlign: "center", padding: 60, color: BRAND.textLight }}>No entries yet.</div> : (
+        {myEntries.length === 0 ? <div style={{ ...S.card, textAlign: "center", padding: 60, color: BRAND.textLight }}>No entries yet.</div>
+        : mob ? myEntries.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} onClick={() => setViewEntry(e)} />)
+        : (
           <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
               <thead><tr><th style={S.th}>Date</th>{isTreasurer && <th style={S.th}>Member</th>}<th style={S.th}>Category</th><th style={S.th}>Description</th><th style={{ ...S.th, textAlign: "right" }}>Hours</th><th style={{ ...S.th, textAlign: "right" }}>Total</th><th style={S.th}>Status</th></tr></thead>
@@ -793,7 +836,7 @@ export default function App() {
         </div>
       );
     }
-    if (page === "reports") return <ReportsPage entries={entries} users={users} settings={settings} currentUser={currentUser} />;
+    if (page === "reports") return <ReportsPage entries={entries} users={users} settings={settings} currentUser={currentUser} mob={mob} />;
     if (page === "settings") return <SettingsPage settings={settings} users={users} onSaveSettings={s => setSettings(s)} onSaveUsers={u => setUsers(u)} />;
     return null;
   };
@@ -801,9 +844,67 @@ export default function App() {
   // ══════════════════════════════════════════════════════════════════════════
   // MAIN LAYOUT
   // ══════════════════════════════════════════════════════════════════════════
+  const initials = currentUser.name.split(" ").map(n => n[0]).join("");
+  const isActive = (id) => page === id && !viewEntry && !editEntry && !newEntry;
+
+  if (mob) {
+    return (
+      <div style={{ minHeight: "100vh", fontFamily: BRAND.sans, background: BRAND.bgSoft, color: BRAND.charcoal, paddingBottom: 72 }}>
+        {/* Mobile top bar */}
+        <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: BRAND.navy, position: "sticky", top: 0, zIndex: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <img src="/logo.png" alt="" style={{ width: 32, height: 32, borderRadius: 4, objectFit: "cover", background: BRAND.beige }} />
+            <span style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 16, color: "#fff" }}>24 Mill Street</span>
+          </div>
+          <button style={{ background: "none", border: "none", color: "#fff", padding: 4, cursor: "pointer" }} onClick={() => setDrawerOpen(true)}><Icon name="menu" size={24} /></button>
+        </header>
+        {/* Slide-out drawer */}
+        {drawerOpen && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.4)" }} onClick={() => setDrawerOpen(false)}>
+            <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 280, background: BRAND.navy, padding: "20px 16px", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+                <span style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 18, color: "#fff" }}>Menu</span>
+                <button style={{ background: "none", border: "none", color: "#9B978F", cursor: "pointer" }} onClick={() => setDrawerOpen(false)}><Icon name="x" size={24} /></button>
+              </div>
+              <div style={{ padding: "12px 8px", borderRadius: 8, background: "rgba(255,255,255,0.06)", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 6, background: isTreasurer ? BRAND.brick : BRAND.green, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#fff" }}>{initials}</div>
+                <div><div style={{ fontSize: 14, fontWeight: 600, color: "#fff" }}>{currentUser.name}</div><div style={{ fontSize: 12, color: "#7A766E" }}>{currentUser.role}</div></div>
+              </div>
+              {navItems.map(item => (
+                <button key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 12px", borderRadius: 6, fontSize: 15, fontWeight: isActive(item.id) ? 600 : 400, background: isActive(item.id) ? "rgba(255,255,255,0.1)" : "transparent", color: isActive(item.id) ? "#fff" : "#9B978F", cursor: "pointer", border: "none", width: "100%", textAlign: "left", fontFamily: BRAND.sans, marginBottom: 2 }} onClick={() => nav(item.id)}>
+                  <Icon name={item.icon} size={20} /><span style={{ flex: 1 }}>{item.label}</span>
+                  {item.badge > 0 && <span style={{ background: BRAND.brick, color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>{item.badge}</span>}
+                </button>
+              ))}
+              <div style={{ flex: 1 }} />
+              <button style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 12px", borderRadius: 6, fontSize: 15, background: "transparent", color: "#9B978F", cursor: "pointer", border: "none", width: "100%", textAlign: "left", fontFamily: BRAND.sans }} onClick={handleLogout}><Icon name="logout" size={20} /> Sign Out</button>
+            </div>
+          </div>
+        )}
+        {/* Content */}
+        <div style={{ padding: "16px 16px" }}>{renderPage()}</div>
+        {/* FAB */}
+        {!newEntry && !editEntry && !viewEntry && (page === "dashboard" || page === "entries") && (
+          <button style={{ position: "fixed", bottom: 84, right: 20, width: 56, height: 56, borderRadius: 28, background: BRAND.brick, color: "#fff", border: "none", boxShadow: "0 4px 16px rgba(142,59,46,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 15 }} onClick={() => setNewEntry(true)}>
+            <Icon name="plus" size={24} />
+          </button>
+        )}
+        {/* Bottom tab bar */}
+        <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: BRAND.white, borderTop: "1px solid " + BRAND.border, display: "flex", zIndex: 20, paddingBottom: "env(safe-area-inset-bottom)" }}>
+          {bottomTabs.map(t => (
+            <button key={t.id} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "8px 4px", background: "none", border: "none", cursor: "pointer", color: isActive(t.id) ? BRAND.brick : BRAND.textLight, fontFamily: BRAND.sans, fontSize: 11, fontWeight: isActive(t.id) ? 600 : 400, position: "relative" }} onClick={() => nav(t.id)}>
+              <Icon name={t.icon} size={20} /><span>{t.label}</span>
+              {t.badge > 0 && <span style={{ position: "absolute", top: 4, right: "50%", marginRight: -16, background: BRAND.brick, color: "#fff", fontSize: 10, fontWeight: 700, padding: "1px 5px", borderRadius: 10, minWidth: 16, textAlign: "center" }}>{t.badge}</span>}
+            </button>
+          ))}
+        </nav>
+      </div>
+    );
+  }
+
+  // ── DESKTOP LAYOUT ─────────────────────────────────────────────────────
   return (
     <div style={S.app}>
-      {/* Sidebar */}
       <aside style={S.sidebar}>
         <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -816,16 +917,15 @@ export default function App() {
         </div>
         <nav style={{ padding: "12px 12px", flex: 1 }}>
           {navItems.map(item => (
-            <button key={item.id} style={S.navItem(page === item.id && !viewEntry && !editEntry && !newEntry)} onClick={() => { setPage(item.id); setViewEntry(null); setEditEntry(null); setNewEntry(false); }}>
+            <button key={item.id} style={S.navItem(isActive(item.id))} onClick={() => nav(item.id)}>
               <Icon name={item.icon} size={18} /><span style={{ flex: 1 }}>{item.label}</span>
               {item.badge > 0 && <span style={{ background: BRAND.brick, color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>{item.badge}</span>}
             </button>
           ))}
         </nav>
-        {/* User info + logout */}
         <div style={{ padding: "16px 12px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ padding: "10px 12px", borderRadius: 8, background: "rgba(255,255,255,0.06)", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 6, background: isTreasurer ? BRAND.brick : BRAND.green, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff" }}>{currentUser.name.split(" ").map(n => n[0]).join("")}</div>
+            <div style={{ width: 32, height: 32, borderRadius: 6, background: isTreasurer ? BRAND.brick : BRAND.green, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff" }}>{initials}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>{currentUser.name}</div>
               <div style={{ fontSize: 11, color: "#7A766E", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser.role}</div>
@@ -834,7 +934,6 @@ export default function App() {
           <button style={{ ...S.navItem(false), padding: "8px 12px", fontSize: 13 }} onClick={handleLogout}><Icon name="logout" size={16} /> Sign Out</button>
         </div>
       </aside>
-      {/* Main */}
       <main style={S.main}>
         <header style={S.header}>
           <span style={{ fontSize: 14, color: BRAND.textMuted }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</span>
