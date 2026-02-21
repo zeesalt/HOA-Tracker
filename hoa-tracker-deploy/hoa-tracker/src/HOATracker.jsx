@@ -1250,22 +1250,9 @@ export default function HOATracker() {
     setViewEntry({ ...viewEntry, status: STATUSES.REJECTED, reviewerNotes: notes });
   }, [viewEntry, entries, persistEntries]);
 
-  // ── Loading Screen ──────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif" }}>
-        <div style={{ textAlign: "center", color: "#6b6b60" }}>Loading...</div>
-      </div>
-    );
-  }
-
-  // ── Login Screen ─────────────────────────────────────────────────────────
-  if (!currentUser) {
-    return <LoginScreen settings={settings} users={users} onLogin={login} />;
-  }
-
-  // ── Dashboard Stats ────────────────────────────────────────────────────────
+  // ── Dashboard Stats (must be before early returns to satisfy Rules of Hooks) ──
   const dashStats = useMemo(() => {
+    if (!currentUser) return { total: 0, approved: 0, pending: 0, totalReimb: 0, monthReimb: 0, totalHours: 0 };
     const relevant = isTreasurer ? entries : entries.filter(e => e.userId === currentUser.id);
     const approved = relevant.filter(e => e.status === STATUSES.APPROVED);
     const thisMonth = approved.filter(e => e.date.startsWith(new Date().toISOString().slice(0, 7)));
@@ -1283,6 +1270,20 @@ export default function HOATracker() {
     });
     return { total: relevant.length, approved: approved.length, pending: relevant.filter(e => e.status === STATUSES.SUBMITTED).length, totalReimb, monthReimb, totalHours };
   }, [entries, currentUser, isTreasurer, settings]);
+
+  // ── Loading Screen ──────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif" }}>
+        <div style={{ textAlign: "center", color: "#6b6b60" }}>Loading...</div>
+      </div>
+    );
+  }
+
+  // ── Login Screen ─────────────────────────────────────────────────────────
+  if (!currentUser) {
+    return <LoginScreen settings={settings} users={users} onLogin={login} />;
+  }
 
   // ── Navigation ─────────────────────────────────────────────────────────────
   const navItems = [
