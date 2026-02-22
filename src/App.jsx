@@ -198,8 +198,20 @@ const Icon = ({ name, size = 18, filled = false }) => {
 // BRANDED UI COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Status Badge — branded pill style
+// Status Badge — branded pill style with transition animation
 const StatusBadge = ({ status }) => {
+  const prevStatus = useRef(status);
+  const [animating, setAnimating] = useState(false);
+
+  useEffect(() => {
+    if (prevStatus.current !== status) {
+      setAnimating(true);
+      const t = setTimeout(() => setAnimating(false), 400);
+      prevStatus.current = status;
+      return () => clearTimeout(t);
+    }
+  }, [status]);
+
   const map = {
     Draft: { bg: "#EDEBE8", text: BRAND.textMuted, border: "#D5D0C9" },
     Submitted: { bg: "#FFF0E0", text: BRAND.brick, border: "#E8C4A8" },
@@ -212,7 +224,7 @@ const StatusBadge = ({ status }) => {
   };
   const c = map[status] || map.Draft;
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, fontFamily: BRAND.sans, background: c.bg, color: c.text, border: "1px solid " + c.border, letterSpacing: "0.02em" }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, fontFamily: BRAND.sans, background: c.bg, color: c.text, border: "1px solid " + c.border, letterSpacing: "0.02em", animation: animating ? "badgeSwap 400ms ease-in-out" : "none", transition: "background 300ms ease, color 300ms ease, border-color 300ms ease" }}>
       {status === "Approved"   && <Icon name="check" size={12} />}
       {status === "Paid"       && <Icon name="dollar" size={12} />}
       {status === "Rejected"   && <Icon name="x" size={12} />}
@@ -522,6 +534,7 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
     userId: entry?.userId || currentUser.id,
   });
   const [errors, setErrors] = useState({});
+  const [shakeFields, setShakeFields] = useState({});
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -586,9 +599,17 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
     if (form.description.trim().length < 10) e.description = "Minimum 10 characters";
     if (isTreasurer && !form.userId) e.userId = "Required";
     setErrors(e);
+    if (Object.keys(e).length > 0) {
+      // Trigger shake on all errored fields simultaneously
+      const shaking = Object.keys(e).reduce((acc, k) => ({ ...acc, [k]: true }), {});
+      setShakeFields(shaking);
+      setTimeout(() => setShakeFields({}), 400);
+    }
     return Object.keys(e).length === 0;
   };
-  const errStyle = (f) => errors[f] ? { border: "1px solid " + BRAND.error } : {};
+  const errStyle = (f) => errors[f]
+    ? { border: "1px solid " + BRAND.error, animation: shakeFields[f] ? "validShake 350ms ease-in-out" : "none" }
+    : {};
   const allMembers = users.filter(u => u.role === ROLES.MEMBER || u.role === ROLES.TREASURER);
 
   return (
@@ -705,7 +726,7 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
           fontFamily: BRAND.sans,
         }}>
           {autoSaveStatus === "saving" && <span style={{ display: "inline-block", animation: "spin 1s linear infinite" }}>⟳</span>}
-          {autoSaveStatus === "saved"  && <span>✓</span>}
+          {autoSaveStatus === "saved"  && <span style={{ display: "inline-block", animation: "saveCheck 350ms cubic-bezier(0.34,1.56,0.64,1)" }}>✓</span>}
           {autoSaveStatus === "saving" ? "Saving draft..." : "Draft saved"}
         </div>
       )}
@@ -750,10 +771,35 @@ const WORKFLOW_STEPS = [
   { key: "Paid", label: "Paid", icon: "dollar" },
 ];
 const WorkflowStepper = ({ status, mob }) => {
+  const [mounted, setMounted] = useState(false);
+  const prevStatus = useRef(status);
+  const [animatingIdx, setAnimatingIdx] = useState(null);
+
+  useEffect(() => {
+    // Stagger mount trigger — tiny delay so React paints first
+    const t = setTimeout(() => setMounted(true), 30);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (prevStatus.current !== status) {
+      // Find which step just became active and fire pop animation
+      const rejected = status === STATUSES.REJECTED;
+      const awaitingSecond = status === STATUSES.AWAITING_SECOND;
+      const steps = rejected ? WORKFLOW_STEPS.slice(0, 2) : awaitingSecond ? [...WORKFLOW_STEPS.slice(0, 3)] : WORKFLOW_STEPS;
+      const newIdx = rejected ? 1 : awaitingSecond ? 2 : steps.findIndex(s => s.key === status);
+      setAnimatingIdx(newIdx);
+      const t = setTimeout(() => setAnimatingIdx(null), 600);
+      prevStatus.current = status;
+      return () => clearTimeout(t);
+    }
+  }, [status]);
+
   const rejected = status === STATUSES.REJECTED;
   const awaitingSecond = status === STATUSES.AWAITING_SECOND;
   const steps = rejected ? WORKFLOW_STEPS.slice(0, 2) : awaitingSecond ? [...WORKFLOW_STEPS.slice(0, 3)] : WORKFLOW_STEPS;
   const currentIdx = rejected ? 1 : awaitingSecond ? 2 : steps.findIndex(s => s.key === status);
+
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 0, width: "100%", overflow: "hidden" }}>
       {steps.map((s, i) => {
@@ -763,17 +809,57 @@ const WorkflowStepper = ({ status, mob }) => {
         const isAwaitStep = awaitingSecond && active;
         const dotColor = isRejectStep ? BRAND.error : isAwaitStep ? "#4338CA" : done ? BRAND.success : active ? BRAND.navy : BRAND.border;
         const lineColor = done ? BRAND.success : BRAND.borderLight;
+        const delay = i * 70; // stagger ms
+        const isAnimating = animatingIdx === i;
+
         return (
           <div key={s.key} style={{ display: "flex", alignItems: "center", flex: i < steps.length - 1 ? 1 : "none" }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: mob ? 48 : 64 }}>
-              <div style={{ width: mob ? 28 : 32, height: mob ? 28 : 32, borderRadius: 16, background: (done || active) ? dotColor : BRAND.bgSoft, border: "2px solid " + dotColor, display: "flex", alignItems: "center", justifyContent: "center", color: (done || active) ? "#fff" : BRAND.textLight, transition: "all 300ms" }}>
+              {/* Dot */}
+              <div style={{
+                width: mob ? 28 : 32, height: mob ? 28 : 32, borderRadius: 16,
+                background: (done || active) ? dotColor : BRAND.bgSoft,
+                border: "2px solid " + dotColor,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: (done || active) ? "#fff" : BRAND.textLight,
+                transition: "background 400ms ease, border-color 400ms ease, transform 300ms ease",
+                opacity: mounted ? 1 : 0,
+                transform: mounted ? "scale(1)" : "scale(0.5)",
+                animation: mounted
+                  ? isAnimating
+                    ? "stepPop 500ms cubic-bezier(0.34,1.56,0.64,1)"
+                    : active
+                      ? (isRejectStep ? "none" : `stepPulse${done ? "Success" : ""} 2s ease-in-out 800ms infinite`)
+                      : "none"
+                  : "none",
+                // Stagger the initial transition delay
+                transitionDelay: mounted ? "0ms" : `${delay}ms`,
+                animationName: isAnimating ? "stepPop" : active && !isRejectStep ? (done ? "stepPulseSuccess" : "stepPulse") : "none",
+              }}>
                 {isRejectStep ? <Icon name="x" size={14} /> : done ? <Icon name="check" size={14} /> : <Icon name={s.icon} size={14} />}
               </div>
-              <span style={{ fontSize: 11, fontWeight: active ? 700 : 500, color: active ? dotColor : done ? BRAND.success : BRAND.textLight, marginTop: 4, whiteSpace: "nowrap" }}>
+              {/* Label */}
+              <span style={{
+                fontSize: 11, fontWeight: active ? 700 : 500,
+                color: active ? dotColor : done ? BRAND.success : BRAND.textLight,
+                marginTop: 4, whiteSpace: "nowrap",
+                opacity: mounted ? 1 : 0,
+                transition: `opacity 300ms ease ${delay + 80}ms, color 400ms ease`,
+              }}>
                 {isRejectStep ? "Rejected" : isAwaitStep ? "Awaiting 2nd" : s.label}
               </span>
             </div>
-            {i < steps.length - 1 && <div style={{ flex: 1, height: 2, background: lineColor, minWidth: 12, marginBottom: 18 }} />}
+            {/* Connecting line with fill animation */}
+            {i < steps.length - 1 && (
+              <div style={{ flex: 1, height: 2, background: BRAND.borderLight, minWidth: 12, marginBottom: 18, position: "relative", overflow: "hidden" }}>
+                <div style={{
+                  position: "absolute", inset: 0,
+                  background: BRAND.success,
+                  width: done ? "100%" : "0%",
+                  transition: `width 500ms ease ${delay + 120}ms`,
+                }} />
+              </div>
+            )}
           </div>
         );
       })}
@@ -795,6 +881,18 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
   const [trashNote, setTrashNote] = useState("");
   const [payMethod, setPayMethod] = useState("Zelle");
   const [payRef, setPayRef] = useState("");
+  const [approveRipple, setApproveRipple] = useState(false);
+  const [declineShake, setDeclineShake] = useState(false);
+  const [paidAnimating, setPaidAnimating] = useState(false);
+
+  const fireApproveRipple = () => {
+    setApproveRipple(true);
+    setTimeout(() => setApproveRipple(false), 600);
+  };
+  const fireDeclineShake = () => {
+    setDeclineShake(true);
+    setTimeout(() => setDeclineShake(false), 320);
+  };
   const isTreasurer = currentUser.role === ROLES.TREASURER;
   const user = users.find(u => u.id === entry.userId);
   const hours = calcHours(entry.startTime, entry.endTime);
@@ -898,12 +996,23 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
           {!canRestore && (
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: (showDeclinePanel || showTrashPanel) ? 12 : 0 }}>
               {canReview && (
-                <button style={S.btnSuccess} onClick={() => setShowApproveConfirm(true)}>
+                <button
+                  style={{ ...S.btnSuccess, position: "relative", overflow: "hidden" }}
+                  onClick={() => { fireApproveRipple(); setShowApproveConfirm(true); }}
+                >
+                  {approveRipple && (
+                    <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+                      <span style={{ width: 20, height: 20, borderRadius: "50%", background: "rgba(255,255,255,0.4)", animation: "ripple 500ms ease-out forwards" }} />
+                    </span>
+                  )}
                   <Icon name="check" size={16} /> {dualRequired ? "First Approval" : "Approve"}
                 </button>
               )}
               {canDecline && !showDeclinePanel && (
-                <button style={S.btnDanger} onClick={() => { setShowDeclinePanel(true); setShowTrashPanel(false); }}>
+                <button
+                  style={{ ...S.btnDanger, animation: declineShake ? "shake 300ms ease-in-out" : "none" }}
+                  onClick={() => { fireDeclineShake(); setTimeout(() => { setShowDeclinePanel(true); setShowTrashPanel(false); }, 150); }}
+                >
                   <Icon name="x" size={16} /> Decline
                 </button>
               )}
@@ -985,7 +1094,15 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
             <div><label style={S.label}>Reference # (optional)</label><input style={S.input} value={payRef} onChange={e => setPayRef(e.target.value)} placeholder="Check #, transaction ID..." /></div>
           </div>
           <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-            <button style={{ ...S.btnPrimary, background: "#3B5998" }} onClick={() => setShowPaidConfirm(true)}><Icon name="dollar" size={16} /> Mark as Paid — {fmt(grandTotal)}</button>
+            <button
+              style={{ ...S.btnPrimary, background: "#3B5998", position: "relative", overflow: "hidden", transition: "transform 150ms ease" }}
+              onMouseDown={e => { e.currentTarget.style.transform = "scale(0.96)"; }}
+              onMouseUp={e => { e.currentTarget.style.transform = "scale(1)"; setPaidAnimating(true); setTimeout(() => setPaidAnimating(false), 800); setShowPaidConfirm(true); }}
+              onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; }}
+            >
+              <Icon name="dollar" size={16} /> Mark as Paid —{" "}
+              <span style={{ animation: paidAnimating ? "paidCount 400ms ease-out" : "none" }}>{fmt(grandTotal)}</span>
+            </button>
           </div>
         </div>
       )}
@@ -1235,7 +1352,7 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
           padding: "14px 16px",
           marginBottom: 0,
           transform: `translateX(${offsetX}px)`,
-          transition: swiping ? "none" : "transform 250ms ease",
+          transition: swiping ? "none" : "transform 380ms cubic-bezier(0.34,1.56,0.64,1)",
           userSelect: "none",
           WebkitUserSelect: "none",
           position: "relative",
@@ -1293,8 +1410,9 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
           {canApprove && (
             <button
               aria-label="Approve"
-              style={{ background: BRAND.success, color: "#fff", border: "none", width: 64, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 22 }}
-              onClick={(e) => { e.stopPropagation(); reset(); onApprove(entry); }}
+              style={{ background: BRAND.success, color: "#fff", border: "none", width: 64, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 22, transition: "transform 120ms ease, filter 120ms ease" }}
+              onTouchStart={e => e.currentTarget.style.transform = "scale(0.88)"}
+              onTouchEnd={e => { e.currentTarget.style.transform = "scale(1)"; e.stopPropagation(); reset(); onApprove(entry); }}
             >
               <Icon name="check" size={22} />
             </button>
@@ -1302,8 +1420,9 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
           {canDecline && (
             <button
               aria-label="Decline"
-              style={{ background: BRAND.brick, color: "#fff", border: "none", width: 64, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
-              onClick={(e) => { e.stopPropagation(); reset(); onReject(entry); }}
+              style={{ background: BRAND.brick, color: "#fff", border: "none", width: 64, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "transform 120ms ease" }}
+              onTouchStart={e => e.currentTarget.style.transform = "scale(0.88)"}
+              onTouchEnd={e => { e.currentTarget.style.transform = "scale(1)"; e.stopPropagation(); reset(); onReject(entry); }}
             >
               <Icon name="x" size={22} />
             </button>
@@ -1311,8 +1430,9 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
           {canTreasDelete && (
             <button
               aria-label="Move to trash"
-              style={{ background: "#7f1d1d", color: "#fff", border: "none", width: 64, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 20 }}
-              onClick={(e) => { e.stopPropagation(); reset(); onDelete(entry); }}
+              style={{ background: "#7f1d1d", color: "#fff", border: "none", width: 64, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 20, transition: "transform 120ms ease" }}
+              onTouchStart={e => e.currentTarget.style.transform = "scale(0.88)"}
+              onTouchEnd={e => { e.currentTarget.style.transform = "scale(1)"; e.stopPropagation(); reset(); onDelete(entry); }}
             >
               <Icon name="trash" size={20} />
             </button>
@@ -2161,7 +2281,36 @@ export default function App() {
       @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       @keyframes bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
       @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+      @keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+      @keyframes slideDown { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(16px); } }
+      @keyframes slideInRight { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: translateX(0); } }
+      @keyframes slideOutLeft { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(-24px); } }
+      @keyframes stepPop { 0% { transform: scale(0.6); opacity: 0; } 70% { transform: scale(1.18); } 100% { transform: scale(1); opacity: 1; } }
+      @keyframes stepPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(31,42,56,0.18); } 50% { box-shadow: 0 0 0 7px rgba(31,42,56,0); } }
+      @keyframes stepPulseSuccess { 0%,100% { box-shadow: 0 0 0 0 rgba(46,125,50,0.22); } 50% { box-shadow: 0 0 0 8px rgba(46,125,50,0); } }
+      @keyframes lineFill { from { width: 0%; } to { width: 100%; } }
+      @keyframes ripple { 0% { transform: scale(0); opacity: 0.5; } 100% { transform: scale(4); opacity: 0; } }
+      @keyframes shake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-5px); } 40% { transform: translateX(5px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }
+      @keyframes badgeSwap { 0% { transform: scale(1); opacity: 1; } 40% { transform: scale(0.75); opacity: 0; } 60% { transform: scale(0.75); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+      @keyframes countUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+      @keyframes ringDraw { from { stroke-dashoffset: 113; } to { stroke-dashoffset: 0; } }
+      @keyframes cardSlideIn { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
+      @keyframes cardCollapse { 0% { max-height: 200px; opacity: 1; margin-bottom: 10px; } 100% { max-height: 0; opacity: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; } }
+      @keyframes highlightFlash { 0% { background-color: rgba(245,194,72,0.35); } 100% { background-color: transparent; } }
+      @keyframes toastSlideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+      @keyframes undoBar { from { width: 100%; } to { width: 0%; } }
+      @keyframes saveCheck { 0% { transform: scale(0.7) rotate(-10deg); opacity: 0; } 60% { transform: scale(1.15) rotate(2deg); } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
+      @keyframes validShake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+      @keyframes paidCount { from { opacity: 0; transform: translateY(4px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+      @keyframes springBack { 0% { transform: translateX(var(--snap-x, 0px)); } 60% { transform: translateX(calc(var(--snap-x, 0px) * -0.08)); } 100% { transform: translateX(0); } }
       .fade-in { animation: fadeIn 200ms ease-out; }
+      .page-enter { animation: slideInRight 220ms cubic-bezier(0.25,0.46,0.45,0.94); }
+      .page-exit { animation: slideOutLeft 180ms ease-in forwards; }
+      .card-new { animation: cardSlideIn 320ms cubic-bezier(0.34,1.56,0.64,1); }
+      .card-remove { animation: cardCollapse 280ms ease-in forwards; overflow: hidden; }
+      .card-highlight { animation: highlightFlash 1400ms ease-out forwards; }
+      .toast-enter { animation: toastSlideUp 280ms cubic-bezier(0.34,1.56,0.64,1); }
+      .shake { animation: shake 300ms ease-in-out; }
       .skip-link { position: absolute; left: -9999px; top: 0; }
       .skip-link:focus { left: 0; background: #fff; padding: 8px 16px; z-index: 9999; color: #000; font-weight: 600; }
       .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
@@ -2857,7 +3006,11 @@ export default function App() {
               </div>
             );
           }
-          return mob ? filtered.map(e => <EntryCard key={e.id + "-" + page} entry={e} users={users} settings={settings} currentUser={viewAs} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => doApproveEntry(e.id, "")} onReject={(e) => setViewEntry(e)} onDelete={(e) => doTrashFromList(e, "")} />)
+          return mob ? filtered.map((e, i) => (
+            <div key={e.id + "-" + page} style={{ animation: `cardSlideIn 280ms cubic-bezier(0.34,1.56,0.64,1) ${Math.min(i, 7) * 45}ms both` }}>
+              <EntryCard entry={e} users={users} settings={settings} currentUser={viewAs} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => doApproveEntry(e.id, "")} onReject={(e) => setViewEntry(e)} onDelete={(e) => doTrashFromList(e, "")} />
+            </div>
+          ))
           : (
             <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
@@ -3254,7 +3407,7 @@ export default function App() {
           </div>
         )}
         <PreviewBanner />
-        <main id="main-content" style={{ padding: "16px 16px", paddingTop: 72 }}>{renderPage()}</main>
+        <main id="main-content" style={{ padding: "16px 16px", paddingTop: 72 }}><div key={page} className="page-enter">{renderPage()}</div></main>
         {/* FAB */}
         {!newEntry && !editEntry && !viewEntry && (page === "dashboard" || page === "entries") && (
           <button aria-label="Create new work entry" style={{ position: "fixed", bottom: 160, right: 20, width: 56, height: 56, borderRadius: 28, background: BRAND.brick, color: "#fff", border: "none", boxShadow: "0 4px 16px rgba(142,59,46,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 15 }} onClick={() => setNewEntry(true)}>
@@ -3293,16 +3446,24 @@ export default function App() {
         <ChangePasswordModal />
         {/* Toast notification */}
         {toast && (
-          <div className="fade-in" role="status" aria-live="polite" style={{ position: "fixed", bottom: 96, left: 16, right: 16, zIndex: 50, background: toast.type === "success" ? "#065F46" : toast.type === "error" ? "#991B1B" : BRAND.navy, color: "#fff", borderRadius: 12, padding: "14px 18px", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", display: "flex", alignItems: "flex-start", gap: 12 }}>
-            <span style={{ fontSize: 20 }}>{toast.type === "success" ? "✅" : toast.type === "error" ? "❌" : "ℹ️"}</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{toast.message}</div>
-              {toast.detail && <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>{toast.detail}</div>}
+          <div className="toast-enter" role="status" aria-live="polite" style={{ position: "fixed", bottom: 96, left: 16, right: 16, zIndex: 50, background: toast.type === "success" ? "#065F46" : toast.type === "error" ? "#991B1B" : BRAND.navy, color: "#fff", borderRadius: 12, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,0.25)" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 18px" }}>
+              <span style={{ fontSize: 20 }}>{toast.type === "success" ? "✅" : toast.type === "error" ? "❌" : "ℹ️"}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{toast.message}</div>
+                {toast.detail && <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>{toast.detail}</div>}
+              </div>
+              {undoStack.length > 0 && (
+                <button onClick={popUndo} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: BRAND.sans, whiteSpace: "nowrap", flexShrink: 0 }}>Undo</button>
+              )}
+              <button onClick={() => setToast(null)} aria-label="Dismiss" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "0 0 0 4px", flexShrink: 0 }}>×</button>
             </div>
+            {/* Undo countdown bar */}
             {undoStack.length > 0 && (
-              <button onClick={popUndo} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: BRAND.sans, whiteSpace: "nowrap", flexShrink: 0 }}>Undo</button>
+              <div style={{ height: 3, background: "rgba(255,255,255,0.15)", position: "relative" }}>
+                <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.55)", animation: "undoBar 6000ms linear forwards", transformOrigin: "left" }} />
+              </div>
             )}
-            <button onClick={() => setToast(null)} aria-label="Dismiss" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "0 0 0 4px", flexShrink: 0 }}>×</button>
           </div>
         )}
         {/* Bottom tab bar */}
@@ -3387,19 +3548,26 @@ export default function App() {
         </header>
         {!online && <div role="alert" style={{ background: "#FFF3E0", borderBottom: "1px solid #FFB74D", padding: "10px 32px", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#E65100" }}><Icon name="wifiOff" size={16} /><span>You're offline. Viewing cached data — changes require an internet connection.</span></div>}
         <PreviewBanner />
-        <main id="main-content" style={S.content}>{renderPage()}</main>
+        <main id="main-content" style={S.content}><div key={page} className="page-enter">{renderPage()}</div></main>
         <ChangePasswordModal />
         {toast && (
-          <div className="fade-in" role="status" aria-live="polite" style={{ position: "fixed", bottom: 24, right: 24, zIndex: 50, background: toast.type === "success" ? "#065F46" : toast.type === "error" ? "#991B1B" : BRAND.navy, color: "#fff", borderRadius: 12, padding: "14px 20px", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", display: "flex", alignItems: "flex-start", gap: 12, maxWidth: 420 }}>
-            <span style={{ fontSize: 20 }}>{toast.type === "success" ? "✅" : toast.type === "error" ? "❌" : "ℹ️"}</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{toast.message}</div>
-              {toast.detail && <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>{toast.detail}</div>}
+          <div className="toast-enter" role="status" aria-live="polite" style={{ position: "fixed", bottom: 24, right: 24, zIndex: 50, background: toast.type === "success" ? "#065F46" : toast.type === "error" ? "#991B1B" : BRAND.navy, color: "#fff", borderRadius: 12, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", maxWidth: 420 }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 20px" }}>
+              <span style={{ fontSize: 20 }}>{toast.type === "success" ? "✅" : toast.type === "error" ? "❌" : "ℹ️"}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{toast.message}</div>
+                {toast.detail && <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>{toast.detail}</div>}
+              </div>
+              {undoStack.length > 0 && (
+                <button onClick={popUndo} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: BRAND.sans, whiteSpace: "nowrap", flexShrink: 0 }}>Undo</button>
+              )}
+              <button onClick={() => setToast(null)} aria-label="Dismiss" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "0 0 0 4px", flexShrink: 0 }}>×</button>
             </div>
             {undoStack.length > 0 && (
-              <button onClick={popUndo} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: BRAND.sans, whiteSpace: "nowrap", flexShrink: 0 }}>Undo</button>
+              <div style={{ height: 3, background: "rgba(255,255,255,0.15)", position: "relative" }}>
+                <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.55)", animation: "undoBar 6000ms linear forwards" }} />
+              </div>
             )}
-            <button onClick={() => setToast(null)} aria-label="Dismiss" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "0 0 0 4px", flexShrink: 0 }}>×</button>
           </div>
         )}
       </div>
