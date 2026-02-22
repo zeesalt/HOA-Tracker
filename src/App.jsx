@@ -2196,6 +2196,7 @@ const ReportsPage = ({ entries, purchaseEntries, users, settings, currentUser, m
   // ── Fiscal Year Report (CPA-ready) ──────────────────────────────────────
   const exportFiscalYear = (year) => {
     const yrEntries = entries.filter(e => e.date.startsWith(String(year)) && (e.status === "Approved" || e.status === "Paid"));
+    const yrPurchases = (purchaseEntries || []).filter(e => e.date.startsWith(String(year)) && (e.status === "Approved" || e.status === "Paid"));
 
     // By Category
     const byCat = {};
@@ -2210,12 +2211,12 @@ const ReportsPage = ({ entries, purchaseEntries, users, settings, currentUser, m
       byCat[e.category].count += 1;
     });
 
-    // By Member
+    // By Member (work)
     const byMember = {};
     yrEntries.forEach(e => {
       const u = users.find(u => u.id === e.userId);
       const name = u?.name || "Unknown";
-      if (!byMember[name]) byMember[name] = { labor: 0, materials: 0, hours: 0, count: 0 };
+      if (!byMember[name]) byMember[name] = { labor: 0, materials: 0, hours: 0, count: 0, purchases: 0 };
       const h = calcHours(e.startTime, e.endTime);
       const r = getUserRate(users, settings, e.userId);
       byMember[name].labor += calcLabor(h, r);
@@ -2223,12 +2224,20 @@ const ReportsPage = ({ entries, purchaseEntries, users, settings, currentUser, m
       byMember[name].hours += h;
       byMember[name].count += 1;
     });
+    // Add purchase totals to member
+    yrPurchases.forEach(e => {
+      const u = users.find(u => u.id === e.userId);
+      const name = u?.name || "Unknown";
+      if (!byMember[name]) byMember[name] = { labor: 0, materials: 0, hours: 0, count: 0, purchases: 0 };
+      byMember[name].purchases += e.total || 0;
+      byMember[name].count += 1;
+    });
 
     // By Month
     const byMonth = {};
     yrEntries.forEach(e => {
       const mo = e.date.slice(0, 7);
-      if (!byMonth[mo]) byMonth[mo] = { labor: 0, materials: 0, hours: 0, count: 0 };
+      if (!byMonth[mo]) byMonth[mo] = { labor: 0, materials: 0, hours: 0, count: 0, purchases: 0 };
       const h = calcHours(e.startTime, e.endTime);
       const r = getUserRate(users, settings, e.userId);
       byMonth[mo].labor += calcLabor(h, r);
@@ -2236,44 +2245,52 @@ const ReportsPage = ({ entries, purchaseEntries, users, settings, currentUser, m
       byMonth[mo].hours += h;
       byMonth[mo].count += 1;
     });
+    yrPurchases.forEach(e => {
+      const mo = e.date.slice(0, 7);
+      if (!byMonth[mo]) byMonth[mo] = { labor: 0, materials: 0, hours: 0, count: 0, purchases: 0 };
+      byMonth[mo].purchases += e.total || 0;
+      byMonth[mo].count += 1;
+    });
 
-    let totalLabor = 0, totalMat = 0, totalHrs = 0;
+    let totalLabor = 0, totalMat = 0, totalHrs = 0, totalPurchases = 0;
     yrEntries.forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); totalLabor += calcLabor(h, r); totalMat += calcMaterialsTotal(e.materials); totalHrs += h; });
+    yrPurchases.forEach(e => { totalPurchases += e.total || 0; });
 
     // Build CSV with multiple sections
     const lines = [];
     lines.push(settings.hoaName + " — Fiscal Year Report " + year);
     lines.push("Generated: " + new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }));
     lines.push("Default Hourly Rate: $" + settings.defaultHourlyRate);
-    lines.push("Entries Included: " + yrEntries.length + " (Approved + Paid)");
+    lines.push("Work Entries: " + yrEntries.length + " | Purchase Entries: " + yrPurchases.length + " (Approved + Paid)");
     lines.push("");
     lines.push("═══ SUMMARY ═══");
     lines.push("Total Labor,$" + totalLabor.toFixed(2));
     lines.push("Total Materials,$" + totalMat.toFixed(2));
-    lines.push("Grand Total,$" + (totalLabor + totalMat).toFixed(2));
+    lines.push("Total Purchases,$" + totalPurchases.toFixed(2));
+    lines.push("Grand Total,$" + (totalLabor + totalMat + totalPurchases).toFixed(2));
     lines.push("Total Hours," + totalHrs.toFixed(2));
     lines.push("");
-    lines.push("═══ BY CATEGORY (Chart of Accounts) ═══");
+    lines.push("═══ BY CATEGORY (Chart of Accounts — Work Entries) ═══");
     lines.push("Category,Entries,Hours,Labor,Materials,Total");
     Object.entries(byCat).filter(([_, d]) => d.count > 0).sort((a, b) => (b[1].labor + b[1].materials) - (a[1].labor + a[1].materials)).forEach(([cat, d]) => {
       lines.push('"' + cat + '",' + d.count + "," + d.hours.toFixed(2) + "," + d.labor.toFixed(2) + "," + d.materials.toFixed(2) + "," + (d.labor + d.materials).toFixed(2));
     });
     lines.push("");
     lines.push("═══ BY MEMBER ═══");
-    lines.push("Member,Entries,Hours,Labor,Materials,Total");
-    Object.entries(byMember).sort((a, b) => (b[1].labor + b[1].materials) - (a[1].labor + a[1].materials)).forEach(([name, d]) => {
-      lines.push('"' + name + '",' + d.count + "," + d.hours.toFixed(2) + "," + d.labor.toFixed(2) + "," + d.materials.toFixed(2) + "," + (d.labor + d.materials).toFixed(2));
+    lines.push("Member,Entries,Hours,Labor,Materials,Purchases,Total");
+    Object.entries(byMember).sort((a, b) => (b[1].labor + b[1].materials + (b[1].purchases || 0)) - (a[1].labor + a[1].materials + (a[1].purchases || 0))).forEach(([name, d]) => {
+      lines.push('"' + name + '",' + d.count + "," + d.hours.toFixed(2) + "," + d.labor.toFixed(2) + "," + d.materials.toFixed(2) + "," + (d.purchases || 0).toFixed(2) + "," + (d.labor + d.materials + (d.purchases || 0)).toFixed(2));
     });
     lines.push("");
     lines.push("═══ BY MONTH ═══");
-    lines.push("Month,Entries,Hours,Labor,Materials,Total");
+    lines.push("Month,Entries,Hours,Labor,Materials,Purchases,Total");
     Object.keys(byMonth).sort().forEach(mo => {
       const d = byMonth[mo];
       const monthLabel = new Date(mo + "-01").toLocaleDateString("en-US", { year: "numeric", month: "long" });
-      lines.push(monthLabel + "," + d.count + "," + d.hours.toFixed(2) + "," + d.labor.toFixed(2) + "," + d.materials.toFixed(2) + "," + (d.labor + d.materials).toFixed(2));
+      lines.push(monthLabel + "," + d.count + "," + d.hours.toFixed(2) + "," + d.labor.toFixed(2) + "," + d.materials.toFixed(2) + "," + (d.purchases || 0).toFixed(2) + "," + (d.labor + d.materials + (d.purchases || 0)).toFixed(2));
     });
     lines.push("");
-    lines.push("═══ ITEMIZED ENTRIES ═══");
+    lines.push("═══ ITEMIZED WORK ENTRIES ═══");
     lines.push("Date,Member,Category,Description,Hours,Rate,Labor,Materials,Total,Status");
     yrEntries.sort((a, b) => a.date.localeCompare(b.date)).forEach(e => {
       const u = users.find(u => u.id === e.userId);
@@ -2283,6 +2300,15 @@ const ReportsPage = ({ entries, purchaseEntries, users, settings, currentUser, m
       const m = calcMaterialsTotal(e.materials);
       lines.push(e.date + ',"' + (u?.name || "") + '","' + e.category + '","' + e.description.replace(/"/g, '""') + '",' + h.toFixed(2) + "," + r.toFixed(2) + "," + l.toFixed(2) + "," + m.toFixed(2) + "," + (l + m).toFixed(2) + "," + e.status);
     });
+    if (yrPurchases.length > 0) {
+      lines.push("");
+      lines.push("═══ ITEMIZED PURCHASE ENTRIES ═══");
+      lines.push("Date,Member,Category,Store,Description,Total,Status");
+      yrPurchases.sort((a, b) => a.date.localeCompare(b.date)).forEach(e => {
+        const u = users.find(u => u.id === e.userId);
+        lines.push(e.date + ',"' + (u?.name || "") + '","' + e.category + '","' + (e.storeName || "").replace(/"/g, '""') + '","' + (e.description || "").replace(/"/g, '""') + '",' + (e.total || 0).toFixed(2) + "," + e.status);
+      });
+    }
 
     const blob = new Blob([lines.join("\n")], { type: "text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = settings.hoaName.replace(/\s+/g, "_") + "_FiscalYear_" + year + ".csv"; a.click();
@@ -3536,7 +3562,7 @@ const NotificationPanel = ({ entries, purchaseEntries, users, settings, onView, 
   );
 };
 
-const SettingsPage = ({ settings, users, currentUser, allEntries, onSaveSettings, onAddUser, onRemoveUser, onUpdateRate }) => {
+const SettingsPage = ({ settings, users, currentUser, allEntries, allPurchases, onSaveSettings, onAddUser, onRemoveUser, onUpdateRate }) => {
   const [form, setForm] = useState({ ...settings });
   const [saved, setSaved] = useState(false);
   const [newName, setNewName] = useState("");
@@ -3641,9 +3667,12 @@ const SettingsPage = ({ settings, users, currentUser, allEntries, onSaveSettings
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {members.map(u => {
               const entryCount = (allEntries).filter(e => e.userId === u.id).length;
-              const approvedCount = (allEntries).filter(e => e.userId === u.id && (e.status === "Approved" || e.status === "Paid")).length;
-              const pendingCount  = (allEntries).filter(e => e.userId === u.id && e.status === "Submitted").length;
-              const hasHistory = entryCount > 0;
+              const purchCount = (allPurchases || []).filter(e => e.userId === u.id).length;
+              const approvedCount = (allEntries).filter(e => e.userId === u.id && (e.status === "Approved" || e.status === "Paid")).length
+                + (allPurchases || []).filter(e => e.userId === u.id && (e.status === "Approved" || e.status === "Paid")).length;
+              const pendingCount  = (allEntries).filter(e => e.userId === u.id && e.status === "Submitted").length
+                + (allPurchases || []).filter(e => e.userId === u.id && e.status === "Submitted").length;
+              const hasHistory = entryCount > 0 || purchCount > 0;
               return (
                 <div key={u.id} style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 10, padding: "14px 16px", background: BRAND.white }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
@@ -3660,7 +3689,7 @@ const SettingsPage = ({ settings, users, currentUser, allEntries, onSaveSettings
                       </div>
                       {hasHistory && (
                         <div style={{ display: "flex", gap: 12, fontSize: 12, color: BRAND.textLight, marginTop: 6, paddingLeft: 40 }}>
-                          <span>{entryCount} total entries</span>
+                          <span>{entryCount + purchCount} total{purchCount > 0 ? " (" + entryCount + " work, " + purchCount + " purchase)" : ""}</span>
                           {approvedCount > 0 && <span style={{ color: BRAND.success }}>✓ {approvedCount} approved/paid</span>}
                           {pendingCount  > 0 && <span style={{ color: BRAND.warning }}>⏳ {pendingCount} pending</span>}
                         </div>
@@ -3959,6 +3988,13 @@ export default function App() {
   // Sync auth errors from hook
   useEffect(() => { if (authError) setLoginError(authError); }, [authError]);
 
+  // Scroll lock for drawer and help modal
+  useEffect(() => {
+    if (drawerOpen || showHelp) { document.body.style.overflow = "hidden"; }
+    else { document.body.style.overflow = ""; }
+    return () => { document.body.style.overflow = ""; };
+  }, [drawerOpen, showHelp]);
+
   // ── PULL-TO-REFRESH state (must be before any early returns) ─────────────
   const [pullY, setPullY] = useState(0);
   const [pullRefreshing, setPullRefreshing] = useState(false);
@@ -4135,20 +4171,40 @@ export default function App() {
     showToast("Purchase submitted!", "success", fmt(formData.total) + " at " + formData.storeName + " — Treasurer will review shortly");
   };
   const doPurchaseDelete = async () => { if (editPurchase) { await deletePurchaseEntry(editPurchase.id); setEditPurchase(null); setPage("entries"); showToast("Purchase draft deleted", "success"); } };
-  const doPurchaseApprove = async (notes) => {
-    if (!viewPurchase) return;
-    const updated = await approvePurchaseEntry(viewPurchase.id, notes);
-    if (updated) { setViewPurchase(updated); showToast("Purchase approved", "success", fmt(updated.total) + " at " + updated.storeName); }
+  const doPurchaseApprove = async (idOrNotes, notesArg) => {
+    // Called as (notes) from detail view, or (id, notes) from review queue
+    // Detect: if second arg exists, first is ID. Otherwise check if first looks like a UUID.
+    const isIdCall = notesArg !== undefined || (typeof idOrNotes === "string" && idOrNotes.length > 20 && idOrNotes.includes("-"));
+    const id = isIdCall ? idOrNotes : viewPurchase?.id;
+    const notes = isIdCall ? (notesArg || "") : (idOrNotes || "");
+    if (!id) return;
+    const updated = await approvePurchaseEntry(id, notes);
+    if (updated) {
+      if (viewPurchase?.id === id) setViewPurchase(updated);
+      showToast("Purchase approved", "success", fmt(updated.total) + " at " + updated.storeName);
+    }
   };
-  const doPurchaseReject = async (notes) => {
-    if (!viewPurchase) return;
-    const updated = await rejectPurchaseEntry(viewPurchase.id, notes);
-    if (updated) { setViewPurchase(updated); showToast("Purchase returned for edits", "error"); }
+  const doPurchaseReject = async (idOrNotes, notesArg) => {
+    const isIdCall = notesArg !== undefined || (typeof idOrNotes === "string" && idOrNotes.length > 20 && idOrNotes.includes("-"));
+    const id = isIdCall ? idOrNotes : viewPurchase?.id;
+    const notes = isIdCall ? (notesArg || "") : (idOrNotes || "");
+    if (!id) return;
+    const updated = await rejectPurchaseEntry(id, notes);
+    if (updated) {
+      if (viewPurchase?.id === id) setViewPurchase(updated);
+      showToast("Purchase returned for edits", "error");
+    }
   };
-  const doPurchaseMarkPaid = async (paymentDetails) => {
-    if (!viewPurchase) return;
-    const updated = await markPurchasePaid(viewPurchase.id, paymentDetails);
-    if (updated) { setViewPurchase(updated); showToast("Purchase marked as paid", "success"); }
+  const doPurchaseMarkPaid = async (idOrDetails, detailsArg) => {
+    const isIdCall = detailsArg !== undefined || (typeof idOrDetails === "string" && idOrDetails.length > 20 && idOrDetails.includes("-"));
+    const id = isIdCall ? idOrDetails : viewPurchase?.id;
+    const details = isIdCall ? (detailsArg || {}) : (idOrDetails || {});
+    if (!id) return;
+    const updated = await markPurchasePaid(id, details);
+    if (updated) {
+      if (viewPurchase?.id === id) setViewPurchase(updated);
+      showToast("Purchase marked as paid", "success");
+    }
   };
   const doDecline = async (notes) => {
     if (!viewEntry) return;
@@ -5099,7 +5155,7 @@ export default function App() {
                         {submittedAgo && <span style={{ fontSize: 11, color: BRAND.textLight }}>submitted {submittedAgo}</span>}
                       </div>
                       <div style={{ fontSize: 14, color: BRAND.charcoal, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{isPurchase ? (e.storeName + " — " + e.description) : e.description}</div>
-                      <div style={{ fontSize: 13, color: BRAND.textLight }}>{relativeDate(e.date)}{h != null ? " · " + fmtHours(h) : ""}{isPurchase && e.lineItems?.length ? " · " + e.lineItems.length + " item" + (e.lineItems.length > 1 ? "s" : "") : ""}</div>
+                      <div style={{ fontSize: 13, color: BRAND.textLight }}>{relativeDate(e.date)}{h != null ? " · " + fmtHours(h) : ""}{isPurchase && e.items?.length ? " · " + e.items.length + " item" + (e.items.length > 1 ? "s" : "") : ""}</div>
                     </div>
                     <div style={{ textAlign: "right", flexShrink: 0 }}>
                       <div style={{ fontSize: 22, fontWeight: 800, color: isPurchase ? "#0E7490" : BRAND.brick }}>{fmt(total)}</div>
@@ -5208,7 +5264,7 @@ export default function App() {
     if (page === "payment") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <PaymentRunPage entries={entries} purchaseEntries={purchaseEntries} users={users} settings={settings} onMarkPaid={async (ids, paymentDetails) => { let count = 0; for (const id of ids) { const updated = await markPaid(id, paymentDetails); if (updated) count++; } if (count > 0) showToast(count + " entr" + (count === 1 ? "y" : "ies") + " marked as paid", "success"); }} onMarkPurchasePaid={doPurchaseMarkPaid} mob={mob} />; }
     if (page === "help") return <HelpPage currentUser={currentUser} settings={settings} mob={mob} onNav={nav} />;
     if (page === "reports") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <ReportsPage entries={entries} purchaseEntries={purchaseEntries} users={users} settings={settings} currentUser={currentUser} mob={mob} />; }
-    if (page === "settings") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <SettingsPage settings={settings} users={users} currentUser={currentUser} allEntries={entries} onSaveSettings={saveSettings} onAddUser={addUser} onRemoveUser={removeUser} onUpdateRate={updateUserRate} />; }
+    if (page === "settings") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <SettingsPage settings={settings} users={users} currentUser={currentUser} allEntries={entries} allPurchases={purchaseEntries} onSaveSettings={saveSettings} onAddUser={addUser} onRemoveUser={removeUser} onUpdateRate={updateUserRate} />; }
     if (page === "insights") return (
       <div className="fade-in">
         <h2 style={{ ...S.h2, marginBottom: 8 }}>Community Insights</h2>
@@ -5313,7 +5369,7 @@ export default function App() {
         {showNotifPanel && isTreasurer && <NotificationPanel entries={entries} purchaseEntries={purchaseEntries} users={users} settings={settings} onView={(e) => { setShowNotifPanel(false); setViewEntry(e); }} onViewPurchase={(e) => { setShowNotifPanel(false); setViewPurchase(e); }} onClose={() => setShowNotifPanel(false)} onReviewAll={() => { setShowNotifPanel(false); nav("review"); }} mob={mob} />}
         {/* Slide-out drawer */}
         {drawerOpen && (
-          <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.4)" }} onClick={() => setDrawerOpen(false)} aria-hidden="true">
+          <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.4)", touchAction: "none" }} onClick={() => setDrawerOpen(false)} aria-hidden="true">
             <div role="dialog" aria-label="Navigation menu" style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 280, background: BRAND.navy, padding: "20px 16px", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
                 <span style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 18, color: "#fff" }}>Menu</span>
