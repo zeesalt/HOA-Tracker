@@ -22,6 +22,9 @@ function mapEntry(row) {
     reviewedAt: row.reviewed_at || "",
     submittedAt: row.submitted_at || "",
     paidAt: row.paid_at || "",
+    auditLog: row.audit_log || [],
+    secondApproverId: row.second_approver_id || null,
+    secondApprovedAt: row.second_approved_at || "",
     createdAt: row.created_at,
   };
 }
@@ -42,6 +45,8 @@ function mapSettings(row) {
     defaultHourlyRate: Number(row.default_hourly_rate),
     currency: row.currency,
     inviteCode: row.invite_code || "",
+    annualBudget: Number(row.annual_budget) || 0,
+    dualApprovalThreshold: Number(row.dual_approval_threshold) || 0,
   };
 }
 
@@ -146,6 +151,12 @@ export function useSupabase() {
   }, []);
 
   // ── ENTRIES ────────────────────────────────────────────────────────────
+  // Helper: append to audit log
+  const appendAuditLog = (existingLog, action, details) => {
+    const user = currentUser || {};
+    return [...(existingLog || []), { action, by: user.id || "system", byName: user.name || "System", at: new Date().toISOString(), details }];
+  };
+
   const saveEntry = useCallback(async (formData, existingId) => {
     const row = {
       user_id: formData.userId,
@@ -165,6 +176,10 @@ export function useSupabase() {
     };
 
     if (existingId) {
+      // Fetch current entry for audit log
+      const { data: current } = await supabase.from("entries").select("audit_log, status").eq("id", existingId).single();
+      const action = formData.status === "Submitted" ? "Submitted for review" : formData.status === "Draft" ? "Draft saved" : "Entry updated";
+      row.audit_log = appendAuditLog(current?.audit_log, action, formData.status !== current?.status ? "Status: " + current?.status + " → " + formData.status : "Entry edited");
       const { data, error } = await supabase
         .from("entries").update(row).eq("id", existingId).select().single();
       if (error) { console.error("Update error:", error); return null; }
@@ -172,6 +187,7 @@ export function useSupabase() {
       setEntries(prev => prev.map(e => e.id === existingId ? mapped : e));
       return mapped;
     } else {
+      row.audit_log = appendAuditLog([], "Entry created", "Status: Draft");
       const { data, error } = await supabase
         .from("entries").insert(row).select().single();
       if (error) { console.error("Insert error:", error); return null; }
@@ -179,7 +195,7 @@ export function useSupabase() {
       setEntries(prev => [mapped, ...prev]);
       return mapped;
     }
-  }, []);
+  }, [currentUser]);
 
   const deleteEntry = useCallback(async (id) => {
     const { error } = await supabase.from("entries").delete().eq("id", id);
@@ -189,34 +205,66 @@ export function useSupabase() {
   }, []);
 
   const approveEntry = useCallback(async (id, reviewerNotes) => {
+    const { data: current } = await supabase.from("entries").select("audit_log").eq("id", id).single();
+    const log = appendAuditLog(current?.audit_log, "Approved", reviewerNotes ? "Notes: " + reviewerNotes : "No notes");
     const { data, error } = await supabase.from("entries").update({
-      status: "Approved", reviewer_notes: reviewerNotes || null, reviewed_at: new Date().toISOString(),
+      status: "Approved", reviewer_notes: reviewerNotes || null, reviewed_at: new Date().toISOString(), audit_log: log,
     }).eq("id", id).select().single();
     if (error) { console.error("Approve error:", error); return null; }
     const mapped = mapEntry(data);
     setEntries(prev => prev.map(e => e.id === id ? mapped : e));
     return mapped;
-  }, []);
+  }, [currentUser]);
+
+  // First approval when dual approval is required — sets to "Awaiting 2nd Approval"
+  const firstApprove = useCallback(async (id, reviewerNotes, thresholdInfo) => {
+    const { data: current } = await supabase.from("entries").select("audit_log").eq("id", id).single();
+    const log = appendAuditLog(current?.audit_log, "First approval", reviewerNotes ? "Notes: " + reviewerNotes + " | " + thresholdInfo : thresholdInfo);
+    const { data, error } = await supabase.from("entries").update({
+      status: "Awaiting 2nd Approval", reviewer_notes: reviewerNotes || null, reviewed_at: new Date().toISOString(), audit_log: log,
+    }).eq("id", id).select().single();
+    if (error) { console.error("FirstApprove error:", error); return null; }
+    const mapped = mapEntry(data);
+    setEntries(prev => prev.map(e => e.id === id ? mapped : e));
+    return mapped;
+  }, [currentUser]);
+
+  const secondApprove = useCallback(async (id) => {
+    const { data: current } = await supabase.from("entries").select("audit_log").eq("id", id).single();
+    const log = appendAuditLog(current?.audit_log, "Second approval granted", "Dual approval complete");
+    const { data, error } = await supabase.from("entries").update({
+      status: "Approved", second_approver_id: session?.user?.id, second_approved_at: new Date().toISOString(), audit_log: log,
+    }).eq("id", id).select().single();
+    if (error) { console.error("SecondApprove error:", error); return null; }
+    const mapped = mapEntry(data);
+    setEntries(prev => prev.map(e => e.id === id ? mapped : e));
+    return mapped;
+  }, [currentUser, session]);
 
   const rejectEntry = useCallback(async (id, reviewerNotes) => {
+    const { data: current } = await supabase.from("entries").select("audit_log").eq("id", id).single();
+    const log = appendAuditLog(current?.audit_log, "Rejected", reviewerNotes ? "Reason: " + reviewerNotes : "No reason given");
     const { data, error } = await supabase.from("entries").update({
-      status: "Rejected", reviewer_notes: reviewerNotes || null, reviewed_at: new Date().toISOString(),
+      status: "Rejected", reviewer_notes: reviewerNotes || null, reviewed_at: new Date().toISOString(), audit_log: log,
     }).eq("id", id).select().single();
     if (error) { console.error("Reject error:", error); return null; }
     const mapped = mapEntry(data);
     setEntries(prev => prev.map(e => e.id === id ? mapped : e));
     return mapped;
-  }, []);
+  }, [currentUser]);
 
-  const markPaid = useCallback(async (id) => {
+  const markPaid = useCallback(async (id, paymentDetails) => {
+    const { data: current } = await supabase.from("entries").select("audit_log").eq("id", id).single();
+    const detailStr = paymentDetails ? paymentDetails.method + (paymentDetails.reference ? " #" + paymentDetails.reference : "") : "No details";
+    const log = appendAuditLog(current?.audit_log, "Marked as Paid", detailStr);
     const { data, error } = await supabase.from("entries").update({
-      status: "Paid", paid_at: new Date().toISOString(),
+      status: "Paid", paid_at: new Date().toISOString(), audit_log: log,
     }).eq("id", id).select().single();
     if (error) { console.error("MarkPaid error:", error); return null; }
     const mapped = mapEntry(data);
     setEntries(prev => prev.map(e => e.id === id ? mapped : e));
     return mapped;
-  }, []);
+  }, [currentUser]);
 
   // ── SETTINGS ───────────────────────────────────────────────────────────
   const saveSettings = useCallback(async (newSettings) => {
@@ -225,6 +273,8 @@ export function useSupabase() {
       default_hourly_rate: newSettings.defaultHourlyRate,
       currency: newSettings.currency || "USD",
       invite_code: newSettings.inviteCode || null,
+      annual_budget: newSettings.annualBudget || 0,
+      dual_approval_threshold: newSettings.dualApprovalThreshold || 0,
     }).eq("id", 1);
     if (error) { console.error("Settings error:", error); return false; }
     setSettings(newSettings);
@@ -282,7 +332,7 @@ export function useSupabase() {
     // Auth
     login, logout, register,
     // Entries
-    saveEntry, deleteEntry, approveEntry, rejectEntry, markPaid,
+    saveEntry, deleteEntry, approveEntry, firstApprove, secondApprove, rejectEntry, markPaid,
     // Settings & Users
     saveSettings, addUser, removeUser, updateUserRate,
     // Misc

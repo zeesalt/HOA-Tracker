@@ -37,7 +37,7 @@ const CATEGORY_EMOJIS = {
   "General Maintenance": "🔨", "Snow Removal": "❄️", "Cleaning": "🧹",
   "Vendor Coordination": "📞", "Administrative Work": "📝", "Emergency Repairs": "🚨",
 };
-const STATUSES = { DRAFT: "Draft", SUBMITTED: "Submitted", APPROVED: "Approved", REJECTED: "Rejected", PAID: "Paid" };
+const STATUSES = { DRAFT: "Draft", SUBMITTED: "Submitted", APPROVED: "Approved", AWAITING_SECOND: "Awaiting 2nd Approval", REJECTED: "Rejected", PAID: "Paid" };
 const ROLES = { TREASURER: "Treasurer", MEMBER: "Member" };
 const DEFAULT_SETTINGS = { hoaName: "24 Mill Street", defaultHourlyRate: 40, userRates: {}, currency: "USD" };
 const MOBILE_BP = 768;
@@ -183,6 +183,7 @@ const StatusBadge = ({ status }) => {
     Draft: { bg: "#EDEBE8", text: BRAND.textMuted, border: "#D5D0C9" },
     Submitted: { bg: "#FFF0E0", text: BRAND.brick, border: "#E8C4A8" },
     Approved: { bg: "#E8F0E6", text: BRAND.green, border: "#B5CCAE" },
+    "Awaiting 2nd Approval": { bg: "#EEF2FF", text: "#4338CA", border: "#C7D2FE" },
     Rejected: { bg: "#FDEAEA", text: BRAND.error, border: "#F0BABA" },
     Paid: { bg: "#E8EDF5", text: "#3B5998", border: "#B8C8E0" },
   };
@@ -633,11 +634,14 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
 // ═══════════════════════════════════════════════════════════════════════════
 // ENTRY DETAIL
 // ═══════════════════════════════════════════════════════════════════════════
-const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onApprove, onReject, onMarkPaid, onDuplicate, mob }) => {
+const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onApprove, onReject, onMarkPaid, onDuplicate, onSecondApprove, mob }) => {
   const [reviewNotes, setReviewNotes] = useState(entry.reviewerNotes || "");
   const [showApproveConfirm, setShowApproveConfirm] = useState(false);
   const [showRejectConfirm, setShowRejectConfirm] = useState(false);
   const [showPaidConfirm, setShowPaidConfirm] = useState(false);
+  const [showAuditLog, setShowAuditLog] = useState(false);
+  const [payMethod, setPayMethod] = useState("Zelle");
+  const [payRef, setPayRef] = useState("");
   const isTreasurer = currentUser.role === ROLES.TREASURER;
   const user = users.find(u => u.id === entry.userId);
   const hours = calcHours(entry.startTime, entry.endTime);
@@ -648,6 +652,10 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
   const canEdit = (entry.userId === currentUser.id || isTreasurer) && [STATUSES.DRAFT, STATUSES.REJECTED].includes(entry.status);
   const canReview = isTreasurer && entry.status === STATUSES.SUBMITTED;
   const canMarkPaid = isTreasurer && entry.status === STATUSES.APPROVED;
+  const needsSecondApproval = entry.status === STATUSES.AWAITING_SECOND;
+  const canSecondApprove = isTreasurer && needsSecondApproval;
+  // Check if dual approval is required for this entry's amount
+  const dualRequired = settings.dualApprovalThreshold > 0 && grandTotal >= settings.dualApprovalThreshold;
 
   return (
     <div className="fade-in">
@@ -698,12 +706,30 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
       {canReview && (
         <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
           <button style={S.btnDanger} onClick={() => { if (!reviewNotes.trim()) { alert("Please add a note explaining the rejection."); return; } setShowRejectConfirm(true); }}><Icon name="x" size={16} /> Reject</button>
-          <button style={S.btnSuccess} onClick={() => setShowApproveConfirm(true)}><Icon name="check" size={16} /> Approve</button>
+          <button style={S.btnSuccess} onClick={() => setShowApproveConfirm(true)}><Icon name="check" size={16} /> {dualRequired ? "First Approval" : "Approve"}</button>
+          {dualRequired && <div style={{ fontSize: 11, color: "#4338CA", alignSelf: "center" }}>⚖️ Dual approval required ({fmt(settings.dualApprovalThreshold)}+ threshold)</div>}
+        </div>
+      )}
+      {canSecondApprove && (
+        <div style={{ ...S.card, background: "#EEF2FF", borderColor: "#C7D2FE", borderLeft: "4px solid #4338CA" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div><div style={{ fontWeight: 600, color: "#4338CA", marginBottom: 4 }}>⚖️ Awaiting Second Approval</div><div style={{ fontSize: 13, color: BRAND.textMuted }}>This entry ({fmt(grandTotal)}) exceeds the {fmt(settings.dualApprovalThreshold)} threshold. A second board member must approve.</div>
+              {entry.reviewedAt && <div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 4 }}>First approved on {formatDate(entry.reviewedAt.split("T")[0])}</div>}
+            </div>
+            <button style={{ ...S.btnSuccess, whiteSpace: "nowrap" }} onClick={() => onSecondApprove(entry.id)}><Icon name="check" size={16} /> Second Approve</button>
+          </div>
         </div>
       )}
       {canMarkPaid && (
-        <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
-          <button style={{ ...S.btnPrimary, background: "#3B5998" }} onClick={() => setShowPaidConfirm(true)}><Icon name="dollar" size={16} /> Mark as Paid</button>
+        <div style={{ ...S.card, borderColor: "#B8C8E0" }}>
+          <div style={S.sectionLabel}>Payment Details</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div><label style={S.label}>Payment Method</label><select style={S.select} value={payMethod} onChange={e => setPayMethod(e.target.value)}><option>Zelle</option><option>Venmo</option><option>Check</option><option>Bank Transfer</option><option>Cash</option><option>Other</option></select></div>
+            <div><label style={S.label}>Reference # (optional)</label><input style={S.input} value={payRef} onChange={e => setPayRef(e.target.value)} placeholder="Check #, transaction ID..." /></div>
+          </div>
+          <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+            <button style={{ ...S.btnPrimary, background: "#3B5998" }} onClick={() => setShowPaidConfirm(true)}><Icon name="dollar" size={16} /> Mark as Paid — {fmt(grandTotal)}</button>
+          </div>
         </div>
       )}
       {entry.status === STATUSES.PAID && entry.paidAt && (
@@ -711,9 +737,32 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
           <div style={{ fontSize: 13, fontWeight: 600, color: "#3B5998" }}>✓ Paid on {formatDate(entry.paidAt.split("T")[0])}</div>
         </div>
       )}
-      <ConfirmDialog open={showApproveConfirm} onClose={() => setShowApproveConfirm(false)} title="Approve?" message={"Approve " + fmt(grandTotal) + " for " + (user?.name || "member") + "?"} confirmText="Approve" onConfirm={() => onApprove(reviewNotes)} />
+      {/* Audit Trail */}
+      {entry.auditLog?.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <button style={{ ...S.btnGhost, fontSize: 12, color: BRAND.textLight }} onClick={() => setShowAuditLog(p => !p)}><Icon name="file" size={14} /> {showAuditLog ? "Hide" : "Show"} Audit Trail ({entry.auditLog.length})</button>
+          {showAuditLog && (
+            <div style={{ ...S.card, marginTop: 8, padding: 16 }}>
+              <div style={S.sectionLabel}>Audit Trail</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                {[...entry.auditLog].reverse().map((log, i) => (
+                  <div key={i} style={{ display: "flex", gap: 12, padding: "10px 0", borderBottom: i < entry.auditLog.length - 1 ? "1px solid " + BRAND.borderLight : "none" }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 4, background: log.action.includes("Reject") ? BRAND.error : log.action.includes("Approv") ? BRAND.success : log.action.includes("Paid") ? "#3B5998" : BRAND.textLight, flexShrink: 0, marginTop: 5 }} />
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.charcoal }}>{log.action}</div>
+                      <div style={{ fontSize: 12, color: BRAND.textMuted }}>{log.byName} · {new Date(log.at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</div>
+                      {log.details && <div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 2 }}>{log.details}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      <ConfirmDialog open={showApproveConfirm} onClose={() => setShowApproveConfirm(false)} title={dualRequired ? "First Approval" : "Approve?"} message={dualRequired ? "This entry (" + fmt(grandTotal) + ") exceeds the dual-approval threshold. A second board member will need to approve before it's final." : "Approve " + fmt(grandTotal) + " for " + (user?.name || "member") + "?"} confirmText={dualRequired ? "First Approve" : "Approve"} onConfirm={() => onApprove(reviewNotes)} />
       <ConfirmDialog open={showRejectConfirm} onClose={() => setShowRejectConfirm(false)} title="Reject?" message="Member can edit and resubmit." confirmText="Reject" danger onConfirm={() => onReject(reviewNotes)} />
-      <ConfirmDialog open={showPaidConfirm} onClose={() => setShowPaidConfirm(false)} title="Mark as Paid?" message={"Confirm payment of " + fmt(grandTotal) + " to " + (user?.name || "member") + "?"} confirmText="Mark Paid" onConfirm={onMarkPaid} />
+      <ConfirmDialog open={showPaidConfirm} onClose={() => setShowPaidConfirm(false)} title="Mark as Paid?" message={"Confirm payment of " + fmt(grandTotal) + " to " + (user?.name || "member") + " via " + payMethod + (payRef ? " (#" + payRef + ")" : "") + "?"} confirmText="Mark Paid" onConfirm={() => onMarkPaid({ method: payMethod, reference: payRef })} />
     </div>
   );
 };
@@ -774,9 +823,122 @@ const ReportsPage = ({ entries, users, settings, currentUser, mob }) => {
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = settings.hoaName.replace(/\s+/g, "_") + "_Report.csv"; a.click();
   };
 
+  // ── Fiscal Year Report (CPA-ready) ──────────────────────────────────────
+  const exportFiscalYear = (year) => {
+    const yrEntries = entries.filter(e => e.date.startsWith(String(year)) && (e.status === "Approved" || e.status === "Paid"));
+
+    // By Category
+    const byCat = {};
+    CATEGORIES.forEach(c => { byCat[c] = { labor: 0, materials: 0, hours: 0, count: 0 }; });
+    yrEntries.forEach(e => {
+      const h = calcHours(e.startTime, e.endTime);
+      const r = getUserRate(users, settings, e.userId);
+      if (!byCat[e.category]) byCat[e.category] = { labor: 0, materials: 0, hours: 0, count: 0 };
+      byCat[e.category].labor += calcLabor(h, r);
+      byCat[e.category].materials += calcMaterialsTotal(e.materials);
+      byCat[e.category].hours += h;
+      byCat[e.category].count += 1;
+    });
+
+    // By Member
+    const byMember = {};
+    yrEntries.forEach(e => {
+      const u = users.find(u => u.id === e.userId);
+      const name = u?.name || "Unknown";
+      if (!byMember[name]) byMember[name] = { labor: 0, materials: 0, hours: 0, count: 0 };
+      const h = calcHours(e.startTime, e.endTime);
+      const r = getUserRate(users, settings, e.userId);
+      byMember[name].labor += calcLabor(h, r);
+      byMember[name].materials += calcMaterialsTotal(e.materials);
+      byMember[name].hours += h;
+      byMember[name].count += 1;
+    });
+
+    // By Month
+    const byMonth = {};
+    yrEntries.forEach(e => {
+      const mo = e.date.slice(0, 7);
+      if (!byMonth[mo]) byMonth[mo] = { labor: 0, materials: 0, hours: 0, count: 0 };
+      const h = calcHours(e.startTime, e.endTime);
+      const r = getUserRate(users, settings, e.userId);
+      byMonth[mo].labor += calcLabor(h, r);
+      byMonth[mo].materials += calcMaterialsTotal(e.materials);
+      byMonth[mo].hours += h;
+      byMonth[mo].count += 1;
+    });
+
+    let totalLabor = 0, totalMat = 0, totalHrs = 0;
+    yrEntries.forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); totalLabor += calcLabor(h, r); totalMat += calcMaterialsTotal(e.materials); totalHrs += h; });
+
+    // Build CSV with multiple sections
+    const lines = [];
+    lines.push(settings.hoaName + " — Fiscal Year Report " + year);
+    lines.push("Generated: " + new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }));
+    lines.push("Default Hourly Rate: $" + settings.defaultHourlyRate);
+    lines.push("Entries Included: " + yrEntries.length + " (Approved + Paid)");
+    lines.push("");
+    lines.push("═══ SUMMARY ═══");
+    lines.push("Total Labor,$" + totalLabor.toFixed(2));
+    lines.push("Total Materials,$" + totalMat.toFixed(2));
+    lines.push("Grand Total,$" + (totalLabor + totalMat).toFixed(2));
+    lines.push("Total Hours," + totalHrs.toFixed(2));
+    lines.push("");
+    lines.push("═══ BY CATEGORY (Chart of Accounts) ═══");
+    lines.push("Category,Entries,Hours,Labor,Materials,Total");
+    Object.entries(byCat).filter(([_, d]) => d.count > 0).sort((a, b) => (b[1].labor + b[1].materials) - (a[1].labor + a[1].materials)).forEach(([cat, d]) => {
+      lines.push('"' + cat + '",' + d.count + "," + d.hours.toFixed(2) + "," + d.labor.toFixed(2) + "," + d.materials.toFixed(2) + "," + (d.labor + d.materials).toFixed(2));
+    });
+    lines.push("");
+    lines.push("═══ BY MEMBER ═══");
+    lines.push("Member,Entries,Hours,Labor,Materials,Total");
+    Object.entries(byMember).sort((a, b) => (b[1].labor + b[1].materials) - (a[1].labor + a[1].materials)).forEach(([name, d]) => {
+      lines.push('"' + name + '",' + d.count + "," + d.hours.toFixed(2) + "," + d.labor.toFixed(2) + "," + d.materials.toFixed(2) + "," + (d.labor + d.materials).toFixed(2));
+    });
+    lines.push("");
+    lines.push("═══ BY MONTH ═══");
+    lines.push("Month,Entries,Hours,Labor,Materials,Total");
+    Object.keys(byMonth).sort().forEach(mo => {
+      const d = byMonth[mo];
+      const monthLabel = new Date(mo + "-01").toLocaleDateString("en-US", { year: "numeric", month: "long" });
+      lines.push(monthLabel + "," + d.count + "," + d.hours.toFixed(2) + "," + d.labor.toFixed(2) + "," + d.materials.toFixed(2) + "," + (d.labor + d.materials).toFixed(2));
+    });
+    lines.push("");
+    lines.push("═══ ITEMIZED ENTRIES ═══");
+    lines.push("Date,Member,Category,Description,Hours,Rate,Labor,Materials,Total,Status");
+    yrEntries.sort((a, b) => a.date.localeCompare(b.date)).forEach(e => {
+      const u = users.find(u => u.id === e.userId);
+      const h = calcHours(e.startTime, e.endTime);
+      const r = getUserRate(users, settings, e.userId);
+      const l = calcLabor(h, r);
+      const m = calcMaterialsTotal(e.materials);
+      lines.push(e.date + ',"' + (u?.name || "") + '","' + e.category + '","' + e.description.replace(/"/g, '""') + '",' + h.toFixed(2) + "," + r.toFixed(2) + "," + l.toFixed(2) + "," + m.toFixed(2) + "," + (l + m).toFixed(2) + "," + e.status);
+    });
+
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = settings.hoaName.replace(/\s+/g, "_") + "_FiscalYear_" + year + ".csv"; a.click();
+  };
+
   return (
     <div className="fade-in">
       <h2 style={{ ...S.h2, marginBottom: 24 }}>Reports</h2>
+      {/* Fiscal Year Export */}
+      {isTreasurer && (
+        <div style={{ ...S.card, marginBottom: 20, background: "#FAFCFF", borderColor: "#C7D2FE" }}>
+          <div style={{ display: "flex", alignItems: mob ? "flex-start" : "center", justifyContent: "space-between", flexDirection: mob ? "column" : "row", gap: 12 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: 18 }}>📊</span>
+                <span style={{ fontSize: 15, fontWeight: 700, color: BRAND.navy }}>Fiscal Year Report</span>
+              </div>
+              <div style={{ fontSize: 13, color: BRAND.textMuted }}>CPA-ready export: totals by category, member, and month. Includes all approved + paid entries.</div>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={S.btnSecondary} onClick={() => exportFiscalYear(new Date().getFullYear())}><Icon name="download" size={16} /> {new Date().getFullYear()}</button>
+              <button style={{ ...S.btnGhost, fontSize: 13 }} onClick={() => exportFiscalYear(new Date().getFullYear() - 1)}>{new Date().getFullYear() - 1}</button>
+            </div>
+          </div>
+        </div>
+      )}
       <div style={S.card}>
         {/* Quick date presets */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
@@ -1155,6 +1317,11 @@ const SettingsPage = ({ settings, users, currentUser, onSaveSettings, onAddUser,
         <Field label="HOA Name"><input style={S.input} value={form.hoaName} onChange={e => set("hoaName", e.target.value)} /></Field>
         <Field label="Default Hourly Rate ($)"><input type="number" min="0" step="0.50" style={S.input} value={form.defaultHourlyRate} onChange={e => set("defaultHourlyRate", Number(e.target.value))} /></Field>
         <Field label="Invite Code"><div style={{ position: "relative" }}><input style={{ ...S.input, fontFamily: "monospace", letterSpacing: "0.1em", textTransform: "uppercase" }} value={form.inviteCode || ""} onChange={e => set("inviteCode", e.target.value.toUpperCase())} placeholder="e.g. MILL2024" /><div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 6 }}>New members need this code to register.</div></div></Field>
+        <div style={{ borderTop: "1px solid " + BRAND.borderLight, marginTop: 8, paddingTop: 16 }}>
+          <div style={S.sectionLabel}>Governance</div>
+          <Field label="Annual Reimbursement Budget ($)"><div><input type="number" min="0" step="500" style={S.input} value={form.annualBudget || ""} onChange={e => set("annualBudget", Number(e.target.value))} placeholder="0 = no limit" /><div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 6 }}>Set to 0 to disable. Shows a progress bar on the dashboard.</div></div></Field>
+          <Field label="Dual Approval Threshold ($)"><div><input type="number" min="0" step="50" style={S.input} value={form.dualApprovalThreshold || ""} onChange={e => set("dualApprovalThreshold", Number(e.target.value))} placeholder="0 = single approval" /><div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 6 }}>Entries ≥ this amount require two board members to approve. Set to 0 to disable.</div></div></Field>
+        </div>
         <button style={S.btnPrimary} onClick={handleSave}>{saved ? "✓ Saved" : "Save Settings"}</button>
       </div>
       <div style={{ ...S.card, maxWidth: 600, marginTop: 20 }}>
@@ -1203,7 +1370,7 @@ export default function App() {
   const {
     currentUser, users, entries, settings, loading, authError,
     login, logout: sbLogout, register,
-    saveEntry, deleteEntry, approveEntry, rejectEntry, markPaid,
+    saveEntry, deleteEntry, approveEntry, firstApprove, secondApprove, rejectEntry, markPaid,
     saveSettings, addUser, removeUser, updateUserRate,
     setAuthError, fetchCommunityStats,
   } = useSupabase();
@@ -1237,7 +1404,7 @@ export default function App() {
 
   const isTreasurer = currentUser?.role === ROLES.TREASURER;
   const myEntries = entries.filter(e => isTreasurer || e.userId === currentUser?.id).sort((a, b) => b.date.localeCompare(a.date));
-  const pendingCount = entries.filter(e => e.status === STATUSES.SUBMITTED).length;
+  const pendingCount = entries.filter(e => e.status === STATUSES.SUBMITTED || e.status === STATUSES.AWAITING_SECOND).length;
 
   // Helper: get rate for a user
   const getRate = (userId) => getUserRate(users, settings, userId);
@@ -1296,9 +1463,23 @@ export default function App() {
     setEditEntry(null); setNewEntry(false); setPage("entries");
   };
   const doDelete = async () => { if (editEntry) { await deleteEntry(editEntry.id); setEditEntry(null); setPage("entries"); } };
-  const doApprove = async (notes) => { if (viewEntry) { const updated = await approveEntry(viewEntry.id, notes); if (updated) setViewEntry(updated); } };
+  const doApprove = async (notes) => {
+    if (!viewEntry) return;
+    const h = calcHours(viewEntry.startTime, viewEntry.endTime);
+    const r = getRate(viewEntry.userId);
+    const total = calcLabor(h, r) + calcMaterialsTotal(viewEntry.materials);
+    const needsDual = settings.dualApprovalThreshold > 0 && total >= settings.dualApprovalThreshold;
+    if (needsDual) {
+      const updated = await firstApprove(viewEntry.id, notes, "Dual approval required (" + fmt(total) + " ≥ " + fmt(settings.dualApprovalThreshold) + ")");
+      if (updated) setViewEntry(updated);
+    } else {
+      const updated = await approveEntry(viewEntry.id, notes);
+      if (updated) setViewEntry(updated);
+    }
+  };
+  const doSecondApprove = async (id) => { const updated = await secondApprove(id); if (updated) setViewEntry(updated); };
   const doReject = async (notes) => { if (viewEntry) { const updated = await rejectEntry(viewEntry.id, notes); if (updated) setViewEntry(updated); } };
-  const doMarkPaid = async () => { if (viewEntry) { const updated = await markPaid(viewEntry.id); if (updated) setViewEntry(updated); } };
+  const doMarkPaid = async (paymentDetails) => { if (viewEntry) { const updated = await markPaid(viewEntry.id, paymentDetails); if (updated) setViewEntry(updated); } };
   // Quick approve/reject from review queue (without opening detail)
   const doApproveEntry = async (id, notes) => { await approveEntry(id, notes); };
   const doRejectEntry = async (id, notes) => { await rejectEntry(id, notes); };
@@ -1403,7 +1584,7 @@ export default function App() {
     );
     if (viewEntry) {
       const fresh = entries.find(e => e.id === viewEntry.id) || viewEntry;
-      return <EntryDetail entry={fresh} settings={settings} users={users} currentUser={currentUser} onBack={() => setViewEntry(null)} onEdit={() => { setEditEntry(fresh); setViewEntry(null); }} onApprove={doApprove} onReject={doReject} onMarkPaid={doMarkPaid} onDuplicate={(e) => { setViewEntry(null); setEditEntry(null); setNewEntry(true); setTimeout(() => setEditEntry({ ...e, id: null, status: STATUSES.DRAFT, date: todayStr(), startTime: nowTime(), endTime: "", preImages: [], postImages: [], reviewerNotes: "", reviewedAt: "", paidAt: "" }), 50); }} mob={mob} />;
+      return <EntryDetail entry={fresh} settings={settings} users={users} currentUser={currentUser} onBack={() => setViewEntry(null)} onEdit={() => { setEditEntry(fresh); setViewEntry(null); }} onApprove={doApprove} onReject={doReject} onMarkPaid={doMarkPaid} onSecondApprove={doSecondApprove} onDuplicate={(e) => { setViewEntry(null); setEditEntry(null); setNewEntry(true); setTimeout(() => setEditEntry({ ...e, id: null, status: STATUSES.DRAFT, date: todayStr(), startTime: nowTime(), endTime: "", preImages: [], postImages: [], reviewerNotes: "", reviewedAt: "", paidAt: "" }), 50); }} mob={mob} />;
     }
     if (page === "dashboard") {
       const recent = myEntries.slice(0, 5);
@@ -1432,6 +1613,36 @@ export default function App() {
               <button style={S.btnPrimary} onClick={() => setPage("review")}>Review Now</button>
             </div>
           )}
+          {/* Annual Budget Progress Bar */}
+          {isTreasurer && settings.annualBudget > 0 && (() => {
+            const yr = String(new Date().getFullYear());
+            let ytdSpent = 0;
+            entries.filter(e => (e.status === STATUSES.APPROVED || e.status === STATUSES.PAID) && e.date.startsWith(yr)).forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getRate(e.userId); ytdSpent += calcLabor(h, r) + calcMaterialsTotal(e.materials); });
+            const pct = Math.min((ytdSpent / settings.annualBudget) * 100, 100);
+            const isWarning = pct >= 80;
+            const isDanger = pct >= 100;
+            const barColor = isDanger ? BRAND.error : isWarning ? BRAND.warning : "#2E7D32";
+            return (
+              <div style={{ ...S.card, padding: "18px 24px", marginBottom: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 18 }}>💰</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: BRAND.navy }}>{yr} Reimbursement Budget</span>
+                  </div>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: barColor }}>{pct.toFixed(0)}% used</span>
+                </div>
+                <div style={{ height: 12, background: BRAND.bgSoft, borderRadius: 6, overflow: "hidden", marginBottom: 8 }}>
+                  <div style={{ height: "100%", borderRadius: 6, width: pct + "%", background: barColor, transition: "width 600ms ease-out" }} />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                  <span style={{ color: BRAND.textMuted }}>{fmt(ytdSpent)} spent</span>
+                  <span style={{ color: BRAND.textLight }}>{fmt(settings.annualBudget - ytdSpent)} remaining of {fmt(settings.annualBudget)}</span>
+                </div>
+                {isWarning && !isDanger && <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: BRAND.warning }}>⚠️ Budget is at {pct.toFixed(0)}% — approaching the annual limit.</div>}
+                {isDanger && <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: BRAND.error }}>🚨 Budget exceeded! Approved reimbursements surpass the annual budget.</div>}
+              </div>
+            );
+          })()}
           {/* Rejected entries banner for members */}
           {!isTreasurer && (() => { const rejected = myEntries.filter(e => e.status === STATUSES.REJECTED); return rejected.length > 0 ? (
             <div style={{ ...S.card, background: "#FFF5F5", borderColor: "#F0BABA", borderLeft: "4px solid " + BRAND.error, display: "flex", alignItems: mob ? "flex-start" : "center", justifyContent: "space-between", flexDirection: mob ? "column" : "row", gap: 10, marginBottom: mob ? 8 : 16 }}>
@@ -1522,7 +1733,7 @@ export default function App() {
     );
     if (page === "review") {
       if (!isTreasurer) { nav("dashboard"); return null; }
-      const pending = entries.filter(e => e.status === STATUSES.SUBMITTED).sort((a, b) => a.date.localeCompare(b.date));
+      const pending = entries.filter(e => e.status === STATUSES.SUBMITTED || e.status === STATUSES.AWAITING_SECOND).sort((a, b) => a.date.localeCompare(b.date));
       return (
         <div className="fade-in">
           <h2 style={{ ...S.h2, marginBottom: 8 }}>Review Queue</h2>
