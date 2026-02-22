@@ -1150,23 +1150,23 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
     if (!swiping && Math.abs(dy) > Math.abs(dx)) return; // vertical scroll — ignore
     setSwiping(true);
     e.preventDefault();
-    // clamp: block disallowed directions
+    // Start from current revealed position so swipe-back feels natural
+    const base = revealed === "left" ? -swipeMax : revealed === "right" ? swipeMax : 0;
     const lo = allowSwipeLeft  ? -swipeMax : 0;
     const hi = allowSwipeRight ? swipeMax  : 0;
-    setOffsetX(Math.max(lo, Math.min(hi, dx)));
+    setOffsetX(Math.max(lo, Math.min(hi, base + dx)));
   };
 
   const onTouchEnd = () => {
     if (!swiping) { touchStartX.current = null; return; }
-    if (offsetX < -SWIPE_THRESHOLD && allowSwipeLeft) {
-      setOffsetX(-swipeMax);
-      setRevealed("left");
-    } else if (offsetX > SWIPE_THRESHOLD && allowSwipeRight) {
-      setOffsetX(swipeMax);
-      setRevealed("right");
-    } else {
-      reset();
-    }
+    // If we've moved enough toward center from a revealed state → dismiss
+    const base = revealed === "left" ? -swipeMax : revealed === "right" ? swipeMax : 0;
+    const delta = offsetX - base;
+    if (revealed === "left"  && delta > SWIPE_THRESHOLD)  { reset(); }
+    else if (revealed === "right" && delta < -SWIPE_THRESHOLD) { reset(); }
+    else if (!revealed && offsetX < -SWIPE_THRESHOLD && allowSwipeLeft)  { setOffsetX(-swipeMax); setRevealed("left"); }
+    else if (!revealed && offsetX > SWIPE_THRESHOLD  && allowSwipeRight) { setOffsetX(swipeMax);  setRevealed("right"); }
+    else { setOffsetX(base); } // snap back to current state
     touchStartX.current = null;
   };
 
@@ -1198,9 +1198,9 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
         }}>
           {isTreasurer ? (
             <>
-              {canApprove  && <span style={{ color: "#fff", fontSize: 12, fontWeight: 700 }}>✅ Approve</span>}
-              {canDecline  && <span style={{ color: "#fff", fontSize: 12, fontWeight: 700 }}>❌ Decline</span>}
-              {canTreasDelete && <span style={{ color: "#fff", fontSize: 12, fontWeight: 700 }}>🗑 Delete</span>}
+              {canApprove     && <Icon name="check" size={22} style={{ color: "#fff" }} />}
+              {canDecline     && <Icon name="x"     size={22} style={{ color: "#fff" }} />}
+              {canTreasDelete && <Icon name="trash" size={20} style={{ color: "#fff" }} />}
             </>
           ) : (
             <span style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>{canEdit ? "✏️ Edit" : "👁 View"}</span>
@@ -1277,29 +1277,32 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
 
       {/* ── REVEALED: swipe-left (Treasurer) → Approve / Decline / Delete ── */}
       {revealed === "left" && isTreasurer && (
-        <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, display: "flex", alignItems: "center", gap: 6, paddingRight: 10, zIndex: 2 }}>
+        <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, display: "flex", alignItems: "stretch", zIndex: 2 }}>
           {canApprove && (
             <button
-              style={{ background: BRAND.success, color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+              aria-label="Approve"
+              style={{ background: BRAND.success, color: "#fff", border: "none", width: 64, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 22 }}
               onClick={(e) => { e.stopPropagation(); reset(); onApprove(entry); }}
             >
-              ✅ Approve
+              <Icon name="check" size={22} />
             </button>
           )}
           {canDecline && (
             <button
-              style={{ background: BRAND.brick, color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+              aria-label="Decline"
+              style={{ background: BRAND.brick, color: "#fff", border: "none", width: 64, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
               onClick={(e) => { e.stopPropagation(); reset(); onReject(entry); }}
             >
-              ❌ Decline
+              <Icon name="x" size={22} />
             </button>
           )}
           {canTreasDelete && (
             <button
-              style={{ background: "#7f1d1d", color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+              aria-label="Move to trash"
+              style={{ background: "#7f1d1d", color: "#fff", border: "none", width: 64, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 20 }}
               onClick={(e) => { e.stopPropagation(); reset(); onDelete(entry); }}
             >
-              🗑
+              <Icon name="trash" size={20} />
             </button>
           )}
         </div>
