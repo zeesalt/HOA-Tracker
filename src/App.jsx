@@ -1957,6 +1957,11 @@ export default function App() {
   // Sync auth errors from hook
   useEffect(() => { if (authError) setLoginError(authError); }, [authError]);
 
+  // ── PULL-TO-REFRESH state (must be before any early returns) ─────────────
+  const [pullY, setPullY] = useState(0);
+  const [pullRefreshing, setPullRefreshing] = useState(false);
+  const pullStartY = useRef(null);
+
   // When previewing, derive a fake currentUser from the chosen member — role overridden to Member
   const realIsTreasurer = currentUser?.role === ROLES.TREASURER;
   const previewUser = previewAsId ? users.find(u => u.id === previewAsId) : null;
@@ -2442,13 +2447,9 @@ export default function App() {
   };
 
   // ══════════════════════════════════════════════════════════════════════════
-  // PULL-TO-REFRESH (mobile)
+  // MAIN LAYOUT
   // ══════════════════════════════════════════════════════════════════════════
-  const [pullY, setPullY] = useState(0);
-  const [pullRefreshing, setPullRefreshing] = useState(false);
-  const pullStartY = useRef(null);
   const PULL_THRESHOLD = 72;
-
   const onPullStart = (e) => {
     if (window.scrollY === 0) pullStartY.current = e.touches[0].clientY;
   };
@@ -2467,10 +2468,6 @@ export default function App() {
     setPullY(0);
     pullStartY.current = null;
   };
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // MAIN LAYOUT
-  // ══════════════════════════════════════════════════════════════════════════
   const initials = (viewAs?.name || currentUser.name).split(" ").map(n => n[0]).join("");
   const isActive = (id) => page === id && !viewEntry && !editEntry && !newEntry;
   const members = users.filter(u => u.role === ROLES.MEMBER);
