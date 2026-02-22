@@ -1912,8 +1912,8 @@ const NotificationPanel = ({ entries, users, settings, onView, onClose, onReview
   };
   return (
     <>
-      <div style={{ position: "fixed", inset: 0, zIndex: 89 }} onClick={onClose} aria-hidden="true" />
-      <div role="dialog" aria-label="Notifications" style={{ position: "absolute", top: mob ? "100%" : 44, right: mob ? 16 : 0, width: mob ? "calc(100vw - 32px)" : 360, maxHeight: 420, background: BRAND.white, borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,0.15)", border: "1px solid " + BRAND.borderLight, zIndex: 90, overflow: "hidden", animation: "fadeIn 200ms ease-out" }}>
+      <div style={{ position: "fixed", inset: 0, zIndex: 94 }} onClick={onClose} aria-hidden="true" />
+      <div role="dialog" aria-label="Notifications" style={{ position: mob ? "fixed" : "absolute", top: mob ? 58 : 44, right: mob ? 8 : 0, left: mob ? 8 : "auto", width: mob ? "auto" : 360, maxHeight: mob ? "70vh" : 420, background: BRAND.white, borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,0.15)", border: "1px solid " + BRAND.borderLight, zIndex: 95, overflow: "hidden", animation: "fadeIn 200ms ease-out" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid " + BRAND.borderLight }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Icon name="bell" size={18} />
@@ -3046,7 +3046,10 @@ export default function App() {
   // ══════════════════════════════════════════════════════════════════════════
   const PULL_THRESHOLD = 72;
   const onPullStart = (e) => {
-    if (window.scrollY === 0) pullStartY.current = e.touches[0].clientY;
+    // Don't trigger pull if touch starts on the sticky header (first ~56px)
+    if (window.scrollY === 0 && e.touches[0].clientY > 56) {
+      pullStartY.current = e.touches[0].clientY;
+    }
   };
   const onPullMove = (e) => {
     if (pullStartY.current === null || pullRefreshing) return;
@@ -3120,7 +3123,7 @@ export default function App() {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             {isTreasurer && (
-              <button style={{ background: "none", border: "none", color: "#fff", padding: 6, cursor: "pointer", position: "relative", minWidth: 44, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowNotifPanel(p => !p)} aria-label={"Notifications" + (pendingCount > 0 ? ", " + pendingCount + " pending" : "")}>
+              <button style={{ background: "none", border: "none", color: "#fff", padding: 6, cursor: "pointer", position: "relative", minWidth: 44, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={(e) => { e.stopPropagation(); setShowNotifPanel(p => !p); }} aria-label={"Notifications" + (pendingCount > 0 ? ", " + pendingCount + " pending" : "")}>
                 <Icon name="bell" size={22} />
                 {pendingCount > 0 && <span aria-hidden="true" style={{ position: "absolute", top: 2, right: 2, background: "#EF4444", color: "#fff", fontSize: 9, fontWeight: 700, width: 16, height: 16, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid " + BRAND.navy }}>{pendingCount}</span>}
               </button>
@@ -3172,7 +3175,7 @@ export default function App() {
         {/* Content */}
         {/* Pull-to-refresh indicator */}
         {(pullY > 0 || pullRefreshing) && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: pullY, overflow: "hidden", transition: pullRefreshing ? "none" : "height 200ms ease", background: BRAND.bgSoft }}>
+          <div style={{ position: "fixed", top: 56, left: 0, right: 0, zIndex: 19, display: "flex", alignItems: "center", justifyContent: "center", height: Math.max(pullY, pullRefreshing ? 40 : 0), overflow: "hidden", transition: pullRefreshing ? "none" : "height 200ms ease", background: BRAND.bgSoft, borderBottom: "1px solid " + BRAND.borderLight }}>
             <div style={{ fontSize: 13, color: BRAND.textMuted, display: "flex", alignItems: "center", gap: 6 }}>
               {pullRefreshing ? "↻ Refreshing..." : pullY >= PULL_THRESHOLD ? "↑ Release to refresh" : "↓ Pull to refresh"}
             </div>
