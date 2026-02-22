@@ -720,11 +720,12 @@ const WorkflowStepper = ({ status, mob }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // ENTRY DETAIL
 // ═══════════════════════════════════════════════════════════════════════════
-const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onApprove, onReject, onMarkPaid, onDuplicate, onSecondApprove, mob }) => {
+const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onApprove, onReject, onMarkPaid, onDuplicate, onSecondApprove, onDelete, mob }) => {
   const [reviewNotes, setReviewNotes] = useState(entry.reviewerNotes || "");
   const [showApproveConfirm, setShowApproveConfirm] = useState(false);
   const [showRejectConfirm, setShowRejectConfirm] = useState(false);
   const [showPaidConfirm, setShowPaidConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showAuditLog, setShowAuditLog] = useState(false);
   const [payMethod, setPayMethod] = useState("Zelle");
   const [payRef, setPayRef] = useState("");
@@ -736,10 +737,11 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
   const matTotal = calcMaterialsTotal(entry.materials);
   const grandTotal = laborTotal + matTotal;
   const canEdit = (entry.userId === currentUser.id || isTreasurer) && [STATUSES.DRAFT, STATUSES.REJECTED].includes(entry.status);
-  const canReview = isTreasurer && entry.status === STATUSES.SUBMITTED;
+  const canReview = isTreasurer && [STATUSES.SUBMITTED, STATUSES.AWAITING_SECOND].includes(entry.status);
   const canMarkPaid = isTreasurer && entry.status === STATUSES.APPROVED;
   const needsSecondApproval = entry.status === STATUSES.AWAITING_SECOND;
   const canSecondApprove = isTreasurer && needsSecondApproval;
+  const canDelete = isTreasurer && ![STATUSES.APPROVED, STATUSES.PAID].includes(entry.status);
   // Check if dual approval is required for this entry's amount
   const dualRequired = settings.dualApprovalThreshold > 0 && grandTotal >= settings.dualApprovalThreshold;
 
@@ -782,19 +784,45 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
         <div><div style={{ fontSize: 12, color: BRAND.textLight, marginBottom: 4 }}>Materials</div><div style={{ fontSize: 20, fontWeight: 700, color: BRAND.navy }}>{fmt(matTotal)}</div></div>
         <div><div style={{ fontSize: 12, color: BRAND.textLight, marginBottom: 4 }}>Total</div><div style={{ fontSize: 24, fontWeight: 800, color: BRAND.brick }}>{fmt(grandTotal)}</div></div>
       </div>
-      {(entry.reviewerNotes || canReview) && (
-        <div style={{ ...S.card, borderColor: entry.status === STATUSES.REJECTED ? "#F0BABA" : BRAND.borderLight }}>
+      {/* Reviewer notes — shown to member (read-only) when set */}
+      {!isTreasurer && entry.reviewerNotes && (
+        <div style={{ ...S.card, borderColor: entry.status === STATUSES.REJECTED ? "#F0BABA" : BRAND.borderLight, borderLeft: "4px solid " + (entry.status === STATUSES.REJECTED ? BRAND.brick : BRAND.success) }}>
           <div style={S.sectionLabel}>Reviewer Notes</div>
-          {canReview ? <textarea style={S.textarea} value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} placeholder="Add notes..." />
-            : entry.reviewerNotes ? <div style={{ padding: 14, background: BRAND.bgSoft, borderRadius: 6, fontSize: 14 }}>{entry.reviewerNotes}</div>
-            : <div style={{ color: BRAND.textLight, fontSize: 14 }}>No notes yet.</div>}
+          <div style={{ padding: 14, background: BRAND.bgSoft, borderRadius: 6, fontSize: 14 }}>{entry.reviewerNotes}</div>
         </div>
       )}
-      {canReview && (
-        <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
-          <button style={S.btnDanger} onClick={() => { if (!reviewNotes.trim()) { alert("Please add a note explaining the rejection."); return; } setShowRejectConfirm(true); }}><Icon name="x" size={16} /> Reject</button>
-          <button style={S.btnSuccess} onClick={() => setShowApproveConfirm(true)}><Icon name="check" size={16} /> {dualRequired ? "First Approval" : "Approve"}</button>
-          {dualRequired && <div style={{ fontSize: 11, color: "#4338CA", alignSelf: "center" }}>⚖️ Dual approval required ({fmt(settings.dualApprovalThreshold)}+ threshold)</div>}
+      {/* ── Treasurer Action Bar ── always visible for Treasurer, adapts by status ── */}
+      {isTreasurer && (
+        <div style={{ ...S.card, background: "#F8F7F5", borderColor: BRAND.borderLight, padding: "16px 20px" }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: BRAND.textMuted, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.05em" }}>Treasurer Actions</div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            {canReview && (
+              <>
+                <button style={S.btnSuccess} onClick={() => setShowApproveConfirm(true)}><Icon name="check" size={16} /> {dualRequired ? "First Approval" : "Approve"}</button>
+                <button style={S.btnDanger} onClick={() => { if (!reviewNotes.trim()) { alert("Please add a note explaining why you're declining."); return; } setShowRejectConfirm(true); }}><Icon name="x" size={16} /> Decline</button>
+                {dualRequired && <div style={{ fontSize: 11, color: "#4338CA" }}>⚖️ Dual approval required ({fmt(settings.dualApprovalThreshold)}+)</div>}
+              </>
+            )}
+            {!canReview && !canMarkPaid && !canSecondApprove && (
+              <div style={{ fontSize: 13, color: BRAND.textMuted }}>
+                {entry.status === STATUSES.APPROVED ? "✅ Already approved — use Mark as Paid below when payment is sent." : entry.status === STATUSES.PAID ? "✓ This entry is fully paid and closed." : entry.status === STATUSES.DRAFT ? "This entry is still a draft — no action needed yet." : entry.status === STATUSES.REJECTED ? "This entry was declined and is back with the member for edits." : "No approval actions available for this status."}
+              </div>
+            )}
+            {canDelete && (
+              <button
+                style={{ ...S.btnGhost, marginLeft: "auto", color: BRAND.brick, borderColor: BRAND.brick, fontSize: 13 }}
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                🗑 Delete Entry
+              </button>
+            )}
+          </div>
+          {canReview && (
+            <div style={{ marginTop: 12 }}>
+              <label style={S.label}>Notes to member <span style={{ color: BRAND.textLight, fontWeight: 400 }}>(required for Decline, optional for Approve)</span></label>
+              <textarea style={{ ...S.textarea, minHeight: 64 }} value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} placeholder="Explain your decision..." />
+            </div>
+          )}
         </div>
       )}
       {canSecondApprove && (
@@ -848,8 +876,9 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
         </div>
       )}
       <ConfirmDialog open={showApproveConfirm} onClose={() => setShowApproveConfirm(false)} title={dualRequired ? "First Approval" : "Approve?"} message={dualRequired ? "This entry (" + fmt(grandTotal) + ") exceeds the dual-approval threshold. A second board member will need to approve before it's final." : "Approve " + fmt(grandTotal) + " for " + (user?.name || "member") + "?"} confirmText={dualRequired ? "First Approve" : "Approve"} onConfirm={() => onApprove(reviewNotes)} />
-      <ConfirmDialog open={showRejectConfirm} onClose={() => setShowRejectConfirm(false)} title="Reject?" message="Member can edit and resubmit." confirmText="Reject" danger onConfirm={() => onReject(reviewNotes)} />
+      <ConfirmDialog open={showRejectConfirm} onClose={() => setShowRejectConfirm(false)} title="Decline Entry?" message={"The entry will be returned to " + (user?.name || "the member") + " for edits. They will see your note."} confirmText="Decline" danger onConfirm={() => onReject(reviewNotes)} />
       <ConfirmDialog open={showPaidConfirm} onClose={() => setShowPaidConfirm(false)} title="Mark as Paid?" message={"Confirm payment of " + fmt(grandTotal) + " to " + (user?.name || "member") + " via " + payMethod + (payRef ? " (#" + payRef + ")" : "") + "?"} confirmText="Mark Paid" onConfirm={() => onMarkPaid({ method: payMethod, reference: payRef })} />
+      <ConfirmDialog open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Delete Entry?" message={"Permanently delete this " + entry.category + " entry by " + (user?.name || "member") + "? This cannot be undone."} confirmText="Delete" danger onConfirm={() => onDelete(entry)} />
     </div>
   );
 };
@@ -1889,7 +1918,7 @@ export default function App() {
     );}
     if (viewEntry) {
       const fresh = entries.find(e => e.id === viewEntry.id) || viewEntry;
-      return <EntryDetail entry={fresh} settings={settings} users={users} currentUser={currentUser} onBack={() => setViewEntry(null)} onEdit={() => { setEditEntry(fresh); setViewEntry(null); }} onApprove={doApprove} onReject={doReject} onMarkPaid={doMarkPaid} onSecondApprove={doSecondApprove} onDuplicate={(e) => { setViewEntry(null); setEditEntry(null); setNewEntry(true); setTimeout(() => setEditEntry({ ...e, id: null, status: STATUSES.DRAFT, date: todayStr(), startTime: nowTime(), endTime: "", preImages: [], postImages: [], reviewerNotes: "", reviewedAt: "", paidAt: "" }), 50); }} mob={mob} />;
+      return <EntryDetail entry={fresh} settings={settings} users={users} currentUser={currentUser} onBack={() => setViewEntry(null)} onEdit={() => { setEditEntry(fresh); setViewEntry(null); }} onApprove={doApprove} onReject={doReject} onMarkPaid={doMarkPaid} onSecondApprove={doSecondApprove} onDelete={async (e) => { await deleteEntry(e.id); setViewEntry(null); showToast("Entry deleted", "success"); }} onDuplicate={(e) => { setViewEntry(null); setEditEntry(null); setNewEntry(true); setTimeout(() => setEditEntry({ ...e, id: null, status: STATUSES.DRAFT, date: todayStr(), startTime: nowTime(), endTime: "", preImages: [], postImages: [], reviewerNotes: "", reviewedAt: "", paidAt: "" }), 50); }} mob={mob} />;
     }
     if (page === "dashboard") {
       const recent = myEntries.slice(0, 5);
