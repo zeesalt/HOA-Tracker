@@ -1728,7 +1728,8 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
 //              swipe RIGHT → Submit (Draft only)
 // ═══════════════════════════════════════════════════════════════════════════
 const SWIPE_THRESHOLD     = 60;   // px to commit reveal
-const SWIPE_MAX_MEMBER    = 80;   // px travel for single-button reveal
+const SWIPE_MAX_MEMBER    = 80;   // px travel for single-button reveal (View/Edit only)
+const SWIPE_MAX_MEMBER_2  = 144;  // px travel for two-button reveal (Edit + Delete: 80+64)
 const SWIPE_MAX_TREASURER = 196;  // px travel for three 64px buttons (3×64=192 + 4px buffer)
 
 const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSubmit, onApprove, onReject, onDelete }) => {
@@ -1749,7 +1750,8 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
   // Treasurer can delete any entry (Draft, Rejected, etc.) — not Approved/Paid
   const canTreasDelete = isTreasurer && ![STATUSES.APPROVED, STATUSES.PAID].includes(entry.status);
 
-  const swipeMax = isTreasurer ? SWIPE_MAX_TREASURER : SWIPE_MAX_MEMBER;
+  const canMemberDelete = !isTreasurer && canEdit && entry.status === STATUSES.DRAFT;
+  const swipeMax = isTreasurer ? SWIPE_MAX_TREASURER : (canMemberDelete ? SWIPE_MAX_MEMBER_2 : SWIPE_MAX_MEMBER);
   // Treasurer: only left swipe allowed
   const allowSwipeRight = !isTreasurer && canSubmit;
   const allowSwipeLeft  = isTreasurer ? (canApprove || canTreasDelete) : (canEdit || true); // members can always view
@@ -1942,9 +1944,20 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
         </div>
       )}
 
-      {/* ── REVEALED: swipe-left (Member) → Edit or View ── */}
+      {/* ── REVEALED: swipe-left (Member) → Edit/View + Delete (drafts) ── */}
       {revealed === "left" && !isTreasurer && (
         <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, display: "flex", alignItems: "stretch", zIndex: 2 }}>
+          {canEdit && entry.status === STATUSES.DRAFT && (
+            <button
+              aria-label="Delete draft"
+              style={{ background: "#7f1d1d", color: "#fff", border: "none", width: 64, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "transform 120ms ease" }}
+              onTouchStart={e => e.currentTarget.style.transform = "scale(0.88)"}
+              onTouchEnd={e => { e.currentTarget.style.transform = "scale(1)"; e.stopPropagation(); reset(); onDelete(entry); }}
+              onClick={(e) => { e.stopPropagation(); reset(); onDelete(entry); }}
+            >
+              <Icon name="trash" size={20} />
+            </button>
+          )}
           <button
             aria-label={canEdit ? "Edit entry" : "View entry"}
             style={{ background: canEdit ? BRAND.navy : "#4B5563", color: "#fff", border: "none", width: 80, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
@@ -1961,7 +1974,7 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
 // ═══════════════════════════════════════════════════════════════════════════
 // REPORTS PAGE
 // ═══════════════════════════════════════════════════════════════════════════
-const ReportsPage = ({ entries, users, settings, currentUser, mob }) => {
+const ReportsPage = ({ entries, purchaseEntries, users, settings, currentUser, mob }) => {
   const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().split("T")[0]; });
   const [dateTo, setDateTo] = useState(todayStr());
   const [filterUser, setFilterUser] = useState("all");
@@ -1977,6 +1990,20 @@ const ReportsPage = ({ entries, users, settings, currentUser, mob }) => {
     return true;
   }).sort((a, b) => a.date.localeCompare(b.date)), [entries, dateFrom, dateTo, filterUser, filterStatus, isTreasurer, currentUser.id]);
 
+  const filteredPurchases = useMemo(() => (purchaseEntries || []).filter(e => {
+    if (e.date < dateFrom || e.date > dateTo) return false;
+    if (filterStatus !== "all" && e.status !== filterStatus) return false;
+    if (!isTreasurer && e.userId !== currentUser.id) return false;
+    if (isTreasurer && filterUser !== "all" && e.userId !== filterUser) return false;
+    return true;
+  }).sort((a, b) => a.date.localeCompare(b.date)), [purchaseEntries, dateFrom, dateTo, filterUser, filterStatus, isTreasurer, currentUser.id]);
+
+  const purchaseTotals = useMemo(() => {
+    let total = 0;
+    filteredPurchases.forEach(e => { total += e.total || 0; });
+    return total;
+  }, [filteredPurchases]);
+
   const totals = useMemo(() => {
     let totalHours = 0, totalLabor = 0, totalMat = 0;
     filtered.forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); totalHours += h; totalLabor += calcLabor(h, r); totalMat += calcMaterialsTotal(e.materials); });
@@ -1984,9 +2011,10 @@ const ReportsPage = ({ entries, users, settings, currentUser, mob }) => {
   }, [filtered, settings]);
 
   const exportCSV = () => {
-    const header = "Date,Member,Category,Description,Hours,Rate,Labor,Materials,Total";
-    const rows = filtered.map(e => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const l = calcLabor(h, r); const m = calcMaterialsTotal(e.materials); return e.date + ',"' + (u?.name || "") + '","' + e.category + '","' + e.description.replace(/"/g, '""') + '",' + h.toFixed(2) + ',' + r.toFixed(2) + ',' + l.toFixed(2) + ',' + m.toFixed(2) + ',' + (l + m).toFixed(2); });
-    const csv = [header, ...rows].join("\n");
+    const header = "Type,Date,Member,Category,Description,Hours,Rate,Labor,Materials,Total";
+    const workRows = filtered.map(e => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const l = calcLabor(h, r); const m = calcMaterialsTotal(e.materials); return 'Work,' + e.date + ',"' + (u?.name || "") + '","' + e.category + '","' + e.description.replace(/"/g, '""') + '",' + h.toFixed(2) + ',' + r.toFixed(2) + ',' + l.toFixed(2) + ',' + m.toFixed(2) + ',' + (l + m).toFixed(2); });
+    const purchRows = filteredPurchases.map(e => { const u = users.find(u => u.id === e.userId); return 'Purchase,' + e.date + ',"' + (u?.name || "") + '","' + e.category + '","' + (e.storeName || "").replace(/"/g, '""') + " — " + (e.description || "").replace(/"/g, '""') + '",,,,' + (e.total || 0).toFixed(2) + ',' + (e.total || 0).toFixed(2); });
+    const csv = [header, ...workRows, ...purchRows].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = settings.hoaName.replace(/\s+/g, "_") + "_Report.csv"; a.click();
   };
@@ -2047,6 +2075,19 @@ const ReportsPage = ({ entries, users, settings, currentUser, mob }) => {
       </tr>`;
     }).join("");
 
+    const purchaseRows = filteredPurchases.map(e => {
+      const u = users.find(u => u.id === e.userId);
+      return `<tr>
+        <td>${formatDate(e.date)}</td>
+        <td>${u?.name || "—"}</td>
+        <td>${e.category}</td>
+        <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(e.storeName || "") + " — " + (e.description || "")}</td>
+        <td style="text-align:right;font-weight:700">${fmtC(e.total || 0)}</td>
+      </tr>`;
+    }).join("");
+
+    const combinedGrand = totals.grand + purchaseTotals;
+
     const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <title>${settings.hoaName} — Reimbursement Report</title>
@@ -2085,7 +2126,7 @@ const ReportsPage = ({ entries, users, settings, currentUser, mob }) => {
       ${memberLabel ? `<span><strong>Member:</strong> ${memberLabel}</span>` : ""}
       <span><strong>Rate:</strong> $${settings.defaultHourlyRate}/hr (default)</span>
       <span><strong>Generated:</strong> ${generatedOn}</span>
-      <span><strong>Total entries:</strong> ${filtered.length}</span>
+      <span><strong>Entries:</strong> ${filtered.length} work + ${filteredPurchases.length} purchase</span>
     </div>
   </div>
 
@@ -2121,9 +2162,22 @@ const ReportsPage = ({ entries, users, settings, currentUser, mob }) => {
     </tbody>
   </table>
 
+  ${filteredPurchases.length > 0 ? `
+  <h2>Purchase Entries</h2>
+  <table>
+    <thead><tr><th>Date</th><th>Member</th><th>Category</th><th>Store / Description</th><th style="text-align:right">Total</th></tr></thead>
+    <tbody>
+      ${purchaseRows}
+      <tr class="totals-row">
+        <td colspan="4">PURCHASE TOTAL</td>
+        <td style="text-align:right">${fmtC(purchaseTotals)}</td>
+      </tr>
+    </tbody>
+  </table>` : ""}
+
   <div class="grand-total">
-    <span class="label">Grand Total Reimbursement</span>
-    <span class="value">${fmtC(totals.grand)}</span>
+    <span class="label">Grand Total Reimbursement${filteredPurchases.length > 0 ? " (Work + Purchases)" : ""}</span>
+    <span class="value">${fmtC(combinedGrand)}</span>
   </div>
 
   <div class="footer">
@@ -2664,9 +2718,12 @@ const HelpPage = ({ currentUser, settings, mob, onNav }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // PAYMENT RUN PAGE
 // ═══════════════════════════════════════════════════════════════════════════
-const PaymentRunPage = ({ entries, users, settings, onMarkPaid, mob }) => {
-  const approvedUnpaid = entries.filter(e => e.status === STATUSES.APPROVED);
+const PaymentRunPage = ({ entries, purchaseEntries, users, settings, onMarkPaid, onMarkPurchasePaid, mob }) => {
+  const approvedWork = entries.filter(e => e.status === STATUSES.APPROVED).map(e => ({ ...e, _type: "work" }));
+  const approvedPurch = (purchaseEntries || []).filter(e => e.status === "Approved").map(e => ({ ...e, _type: "purchase" }));
+  const approvedUnpaid = [...approvedWork, ...approvedPurch];
   const fmt = (n) => "$" + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const getItemTotal = (e) => e._type === "purchase" ? (e.total || 0) : (calcLabor(calcHours(e.startTime, e.endTime), getUserRate(users, settings, e.userId)) + calcMaterialsTotal(e.materials));
 
   // Group by user
   const byUser = {};
@@ -2676,11 +2733,7 @@ const PaymentRunPage = ({ entries, users, settings, onMarkPaid, mob }) => {
   });
   const userGroups = Object.entries(byUser).map(([uid, ents]) => {
     const u = users.find(u => u.id === uid);
-    const total = ents.reduce((s, e) => {
-      const h = calcHours(e.startTime, e.endTime);
-      const r = getUserRate(users, settings, e.userId);
-      return s + calcLabor(h, r) + calcMaterialsTotal(e.materials);
-    }, 0);
+    const total = ents.reduce((s, e) => s + getItemTotal(e), 0);
     return { uid, user: u, entries: ents.sort((a, b) => b.date.localeCompare(a.date)), total };
   }).sort((a, b) => b.total - a.total);
 
@@ -2695,7 +2748,13 @@ const PaymentRunPage = ({ entries, users, settings, onMarkPaid, mob }) => {
 
   const handlePay = async (uid, ents, total) => {
     setPaying(p => ({ ...p, [uid]: true }));
-    await onMarkPaid(ents.map(e => e.id), { method: getMethod(uid), reference: getRef(uid) });
+    const workIds = ents.filter(e => e._type === "work").map(e => e.id);
+    const purchIds = ents.filter(e => e._type === "purchase").map(e => e.id);
+    const payDetails = { method: getMethod(uid), reference: getRef(uid) };
+    if (workIds.length > 0) await onMarkPaid(workIds, payDetails);
+    if (purchIds.length > 0) {
+      for (const id of purchIds) await onMarkPurchasePaid(id);
+    }
     setPaid(p => ({ ...p, [uid]: total }));
     setPaying(p => ({ ...p, [uid]: false }));
   };
@@ -2772,14 +2831,13 @@ const PaymentRunPage = ({ entries, users, settings, onMarkPaid, mob }) => {
                       <th style={{ padding: "8px 16px", textAlign: "right", fontWeight: 600, color: "#6B6560", fontSize: 11, textTransform: "uppercase" }}>Amount</th>
                     </tr></thead>
                     <tbody>{ents.map((e, i) => {
-                      const h = calcHours(e.startTime, e.endTime);
-                      const r = getUserRate(users, settings, e.userId);
-                      const t = calcLabor(h, r) + calcMaterialsTotal(e.materials);
+                      const t = getItemTotal(e);
+                      const isPurch = e._type === "purchase";
                       return (
                         <tr key={e.id} style={{ background: i % 2 ? "#F5F2ED" : "#fff", borderBottom: "1px solid #EDE9E3" }}>
                           <td style={{ padding: "10px 16px", color: "#222" }}>{formatDate(e.date)}</td>
-                          <td style={{ padding: "10px 12px" }}><CategoryBadge category={e.category} /></td>
-                          <td style={{ padding: "10px 12px", color: "#6B6560", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: mob ? "none" : "table-cell" }}>{e.description}</td>
+                          <td style={{ padding: "10px 12px" }}><CategoryBadge category={e.category} />{isPurch && <span style={{ fontSize: 9, fontWeight: 700, color: "#0E7490", background: "#ECFEFF", padding: "1px 5px", borderRadius: 6, marginLeft: 6 }}>P</span>}</td>
+                          <td style={{ padding: "10px 12px", color: "#6B6560", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: mob ? "none" : "table-cell" }}>{isPurch ? (e.storeName || "") + " — " + (e.description || "") : e.description}</td>
                           <td style={{ padding: "10px 16px", textAlign: "right", fontWeight: 600, color: "#1F2A38" }}>{fmt(t)}</td>
                         </tr>
                       );
@@ -3419,8 +3477,10 @@ const HelpModal = ({ onClose, isTreasurer, mob, hoaName }) => {
   );
 };
 
-const NotificationPanel = ({ entries, users, settings, onView, onClose, onReviewAll, mob }) => {
-  const pending = entries.filter(e => e.status === STATUSES.SUBMITTED).sort((a, b) => b.createdAt?.localeCompare(a.createdAt) || b.date.localeCompare(a.date));
+const NotificationPanel = ({ entries, purchaseEntries, users, settings, onView, onViewPurchase, onClose, onReviewAll, mob }) => {
+  const pendingWork = entries.filter(e => e.status === STATUSES.SUBMITTED).map(e => ({ ...e, _type: "work" }));
+  const pendingPurch = (purchaseEntries || []).filter(e => e.status === "Submitted").map(e => ({ ...e, _type: "purchase" }));
+  const pending = [...pendingWork, ...pendingPurch].sort((a, b) => (b.createdAt || b.date || "").localeCompare(a.createdAt || a.date || ""));
   return (
     <>
       <div style={{ position: "fixed", inset: 0, zIndex: 94 }} onClick={onClose} aria-hidden="true" />
@@ -3443,21 +3503,23 @@ const NotificationPanel = ({ entries, users, settings, onView, onClose, onReview
           ) : (
             pending.map((e, i) => {
               const u = users.find(u => u.id === e.userId);
-              const h = calcHours(e.startTime, e.endTime);
-              const r = getUserRate(users, settings, e.userId);
-              const total = calcLabor(h, r) + calcMaterialsTotal(e.materials);
+              const isPurchase = e._type === "purchase";
+              const h = isPurchase ? null : calcHours(e.startTime, e.endTime);
+              const total = isPurchase ? (e.total || 0) : (calcLabor(h, getUserRate(users, settings, e.userId)) + calcMaterialsTotal(e.materials));
+              const desc = isPurchase ? (e.storeName + " — " + (e.description || "")).slice(0, 60) : (e.description || "").slice(0, 60);
               return (
-                <div key={e.id} role="button" tabIndex={0} onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), onView(e))} aria-label={(u?.name || "Member") + ": " + e.category + ", " + fmt(total)} style={{ padding: "12px 16px", borderBottom: i < pending.length - 1 ? "1px solid " + BRAND.borderLight : "none", cursor: "pointer", background: BRAND.white, transition: "background 150ms" }} onClick={() => onView(e)} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.bgSoft} onMouseLeave={ev => ev.currentTarget.style.background = BRAND.white}>
+                <div key={e.id} role="button" tabIndex={0} onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), isPurchase ? onViewPurchase(e) : onView(e))} aria-label={(u?.name || "Member") + ": " + e.category + ", " + fmt(total)} style={{ padding: "12px 16px", borderBottom: i < pending.length - 1 ? "1px solid " + BRAND.borderLight : "none", cursor: "pointer", background: BRAND.white, transition: "background 150ms" }} onClick={() => isPurchase ? onViewPurchase(e) : onView(e)} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.bgSoft} onMouseLeave={ev => ev.currentTarget.style.background = BRAND.white}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: 14, background: BRAND.brick + "18", color: BRAND.brick, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{(u?.name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
+                      <div style={{ width: 28, height: 28, borderRadius: 14, background: (isPurchase ? "#0E7490" : BRAND.brick) + "18", color: isPurchase ? "#0E7490" : BRAND.brick, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{isPurchase ? "🛍" : (u?.name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
                       <span style={{ fontWeight: 600, fontSize: 13, color: BRAND.navy }}>{u?.name || "Member"}</span>
+                      {isPurchase && <span style={{ fontSize: 9, fontWeight: 700, color: "#0E7490", background: "#ECFEFF", padding: "1px 6px", borderRadius: 8 }}>PURCHASE</span>}
                     </div>
-                    <span style={{ fontSize: 11, color: BRAND.textLight, whiteSpace: "nowrap" }}>{timeAgo(e.createdAt)}</span>
+                    <span style={{ fontSize: 11, color: BRAND.textLight, whiteSpace: "nowrap" }}>{timeAgo(e.createdAt || e.submittedAt)}</span>
                   </div>
-                  <div style={{ marginLeft: 36, fontSize: 13, color: BRAND.charcoal, marginBottom: 4 }}><CategoryBadge category={e.category} /> <span style={{ marginLeft: 4 }}>{e.description.slice(0, 60)}{e.description.length > 60 ? "..." : ""}</span></div>
+                  <div style={{ marginLeft: 36, fontSize: 13, color: BRAND.charcoal, marginBottom: 4 }}><CategoryBadge category={e.category} /> <span style={{ marginLeft: 4 }}>{desc}{desc.length >= 60 ? "..." : ""}</span></div>
                   <div style={{ marginLeft: 36, display: "flex", gap: 12, fontSize: 12, color: BRAND.textLight }}>
-                    <span>{formatDate(e.date)}</span><span>{fmtHours(h)}</span><span style={{ fontWeight: 600, color: BRAND.brick }}>{fmt(total)}</span>
+                    <span>{formatDate(e.date)}</span>{h != null && <span>{fmtHours(h)}</span>}<span style={{ fontWeight: 600, color: isPurchase ? "#0E7490" : BRAND.brick }}>{fmt(total)}</span>
                   </div>
                 </div>
               );
@@ -3821,7 +3883,8 @@ export default function App() {
   const myEntries = useMemo(() =>
     entries.filter(e => isTreasurer || e.userId === viewAs?.id).sort((a, b) => b.date.localeCompare(a.date)),
   [entries, isTreasurer, viewAs?.id]);
-  const pendingCount = entries.filter(e => e.status === STATUSES.SUBMITTED || e.status === STATUSES.AWAITING_SECOND || e.status === STATUSES.NEEDS_INFO).length;
+  const pendingCount = entries.filter(e => e.status === STATUSES.SUBMITTED || e.status === STATUSES.AWAITING_SECOND || e.status === STATUSES.NEEDS_INFO).length
+    + purchaseEntries.filter(e => e.status === "Submitted").length;
 
   // Helper: get rate for a user
   const getRate = (userId) => getUserRate(users, settings, userId);
@@ -4233,7 +4296,8 @@ export default function App() {
               {!mob && (
                 <div style={{ display: "flex", gap: 8, position: "relative" }}>
                   <button style={S.btnPrimary} onClick={() => setNewEntryType(t => t ? null : "chooser")}><Icon name="plus" size={16} /> New Entry</button>
-                  {newEntryType === "chooser" && (
+                  {newEntryType === "chooser" && (<>
+                    <div style={{ position: "fixed", inset: 0, zIndex: 29 }} onClick={() => setNewEntryType(null)} />
                     <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 6, background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.12)", zIndex: 30, minWidth: 220, overflow: "hidden" }}>
                       <button style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", width: "100%", border: "none", background: "none", cursor: "pointer", fontFamily: BRAND.sans, fontSize: 14, color: BRAND.charcoal, textAlign: "left" }}
                         onMouseEnter={ev => ev.currentTarget.style.background = BRAND.bgSoft} onMouseLeave={ev => ev.currentTarget.style.background = "none"}
@@ -4247,7 +4311,7 @@ export default function App() {
                         <span style={{ fontSize: 20 }}>🛍️</span><div><div style={{ fontWeight: 600 }}>Purchase Entry</div><div style={{ fontSize: 12, color: BRAND.textLight }}>Log expenses & receipts</div></div>
                       </button>
                     </div>
-                  )}
+                  </>)}
                 </div>
               )}
             </div>
@@ -4448,7 +4512,7 @@ export default function App() {
                   <strong>2.</strong> Add materials and photos if applicable<br/>
                   <strong>3.</strong> Submit for review — the Treasurer will approve or request changes<br/>
                   <strong>4.</strong> Get reimbursed once approved</div>
-                <button style={S.btnPrimary} onClick={() => setNewEntry(true)}><Icon name="plus" size={16} /> Create Your First Entry</button>
+                <button style={S.btnPrimary} onClick={() => setNewEntryType("chooser")}><Icon name="plus" size={16} /> Create Your First Entry</button>
               </div>
             );
 
@@ -4543,7 +4607,7 @@ export default function App() {
                 <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: BRAND.navy, marginBottom: 6 }}>No entries yet</div>
                 <div style={{ fontSize: 13, color: BRAND.textLight, marginBottom: 16 }}>{isTreasurer ? "Entries will appear here once members submit work." : "Log your first work session to get started."}</div>
-                {!isTreasurer && <button style={S.btnPrimary} onClick={() => setNewEntry(true)}><Icon name="plus" size={15} /> Log Work</button>}
+                {!isTreasurer && <button style={S.btnPrimary} onClick={() => setNewEntryType("chooser")}><Icon name="plus" size={15} /> New Entry</button>}
               </div>
             )
             : mob ? recent.map(e => <EntryCard key={e.id + "-" + page} entry={e} users={users} settings={settings} currentUser={viewAs} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => doApproveEntry(e.id, "")} onReject={(e) => setViewEntry(e)} onDelete={(e) => doTrashFromList(e, "")} />)
@@ -4571,7 +4635,8 @@ export default function App() {
               <button style={S.btnPrimary} onClick={() => setNewEntryType(t => t ? null : "chooser")}>
                 <Icon name="plus" size={16} /> New Entry
               </button>
-              {newEntryType === "chooser" && (
+              {newEntryType === "chooser" && (<>
+                <div style={{ position: "fixed", inset: 0, zIndex: 29 }} onClick={() => setNewEntryType(null)} />
                 <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 6, background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.12)", zIndex: 30, minWidth: 220, overflow: "hidden" }}>
                   <button style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", width: "100%", border: "none", background: "none", cursor: "pointer", fontFamily: BRAND.sans, fontSize: 14, color: BRAND.charcoal, textAlign: "left" }}
                     onMouseEnter={ev => ev.currentTarget.style.background = BRAND.bgSoft} onMouseLeave={ev => ev.currentTarget.style.background = "none"}
@@ -4585,7 +4650,7 @@ export default function App() {
                     <span style={{ fontSize: 20 }}>🛍️</span><div><div style={{ fontWeight: 600 }}>Purchase Entry</div><div style={{ fontSize: 12, color: BRAND.textLight }}>Log expenses & receipts</div></div>
                   </button>
                 </div>
-              )}
+              </>)}
             </div>
           )}
         </div>
@@ -4782,7 +4847,7 @@ export default function App() {
                 <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
                 <div style={{ fontWeight: 600, color: BRAND.navy, marginBottom: 8, fontSize: 16 }}>No entries yet</div>
                 <div style={{ fontSize: 14, color: BRAND.textLight, marginBottom: 20 }}>{isTreasurer ? "Work entries from all members will appear here once submitted." : "Start by logging your first work session."}</div>
-                {!isTreasurer && <button style={S.btnPrimary} onClick={() => setNewEntry(true)}><Icon name="plus" size={16} /> Create First Entry</button>}
+                {!isTreasurer && <button style={S.btnPrimary} onClick={() => setNewEntryType("chooser")}><Icon name="plus" size={16} /> New Entry</button>}
               </div>
             );
             return (
@@ -4856,9 +4921,11 @@ export default function App() {
     );
     if (page === "review") {
       if (!isTreasurer || previewAsId) { nav("dashboard"); return null; }
-      const pending = entries.filter(e => e.status === STATUSES.SUBMITTED || e.status === STATUSES.AWAITING_SECOND || e.status === STATUSES.NEEDS_INFO).sort((a, b) => b.date.localeCompare(a.date));
-      // Only first-approval entries are bulk-selectable (not dual-approval ones)
-      const bulkEligible = pending.filter(e => e.status === STATUSES.SUBMITTED);
+      const pendingWork = entries.filter(e => e.status === STATUSES.SUBMITTED || e.status === STATUSES.AWAITING_SECOND || e.status === STATUSES.NEEDS_INFO).map(e => ({ ...e, _type: "work" }));
+      const pendingPurch = purchaseEntries.filter(e => e.status === "Submitted").map(e => ({ ...e, _type: "purchase" }));
+      const pending = [...pendingWork, ...pendingPurch].sort((a, b) => (b.submittedAt || b.date || "").localeCompare(a.submittedAt || a.date || ""));
+      // Only first-approval work entries are bulk-selectable (not dual-approval ones, not purchases)
+      const bulkEligible = pendingWork.filter(e => e.status === STATUSES.SUBMITTED);
       const allSelected = bulkEligible.length > 0 && bulkEligible.every(e => selectedIds.has(e.id));
       const someSelected = selectedIds.size > 0;
       const bulkTotal = [...selectedIds].reduce((acc, id) => {
@@ -4883,7 +4950,7 @@ export default function App() {
                       if (allSelected) setSelectedIds(new Set());
                       else setSelectedIds(new Set(bulkEligible.map(e => e.id)));
                     }} style={{ width: 16, height: 16, accentColor: BRAND.navy, cursor: "pointer" }} />
-                    Select all ({bulkEligible.length})
+                    Select all work ({bulkEligible.length})
                   </label>
                 )}
                 {someSelected && (
@@ -4894,7 +4961,6 @@ export default function App() {
                       setSelectedIds(new Set());
                       await doBulkApprove(ids);
                       pushUndo("Approved " + ids.length + " entries", async () => {
-                        // Undo: reject each back to Submitted with note
                         for (const id of ids) await rejectEntry(id, "Undone — moved back to Submitted for re-review");
                         showToast("Bulk approve undone", "info");
                       });
@@ -4917,16 +4983,16 @@ export default function App() {
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {pending.map(e => {
                 const u = users.find(u => u.id === e.userId);
-                const h = calcHours(e.startTime, e.endTime);
-                const r = getUserRate(users, settings, e.userId);
-                const total = calcLabor(h, r) + calcMaterialsTotal(e.materials);
+                const isPurchase = e._type === "purchase";
+                const total = isPurchase ? (e.total || 0) : (calcLabor(calcHours(e.startTime, e.endTime), getUserRate(users, settings, e.userId)) + calcMaterialsTotal(e.materials));
+                const h = isPurchase ? null : calcHours(e.startTime, e.endTime);
                 const isRejecting = rejectingId === e.id;
                 const isNeedsInfo = needsInfoId === e.id;
                 const isSelected = selectedIds.has(e.id);
-                const isBulkEligible = e.status === STATUSES.SUBMITTED;
+                const isBulkEligible = !isPurchase && e.status === STATUSES.SUBMITTED;
                 const submittedAgo = e.submittedAt ? timeAgo(e.submittedAt) : null;
                 return (
-                <div key={e.id} style={{ ...S.card, padding: "20px 24px", transition: "box-shadow 150ms, border-color 150ms", borderLeft: "4px solid " + (isSelected ? BRAND.navy : e.status === STATUSES.AWAITING_SECOND ? "#4338CA" : BRAND.brick), outline: isSelected ? "2px solid " + BRAND.navy + "30" : "none" }} onMouseEnter={ev => ev.currentTarget.style.boxShadow = "0 4px 16px rgba(31,42,56,0.08)"} onMouseLeave={ev => ev.currentTarget.style.boxShadow = "0 1px 3px rgba(31,42,56,0.04)"}>
+                <div key={e.id} style={{ ...S.card, padding: "20px 24px", transition: "box-shadow 150ms, border-color 150ms", borderLeft: "4px solid " + (isSelected ? BRAND.navy : isPurchase ? "#0E7490" : e.status === STATUSES.AWAITING_SECOND ? "#4338CA" : BRAND.brick), outline: isSelected ? "2px solid " + BRAND.navy + "30" : "none" }} onMouseEnter={ev => ev.currentTarget.style.boxShadow = "0 4px 16px rgba(31,42,56,0.08)"} onMouseLeave={ev => ev.currentTarget.style.boxShadow = "0 1px 3px rgba(31,42,56,0.04)"}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                     {isBulkEligible && (
                       <div style={{ paddingTop: 4, flexShrink: 0 }}>
@@ -4935,19 +5001,20 @@ export default function App() {
                         }} style={{ width: 16, height: 16, accentColor: BRAND.navy, cursor: "pointer" }} />
                       </div>
                     )}
-                    <div role="button" tabIndex={0} onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), setViewEntry(e))} style={{ flex: 1, cursor: "pointer", minWidth: 0 }} onClick={() => setViewEntry(e)}>
+                    <div role="button" tabIndex={0} onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), isPurchase ? setViewPurchase(e) : setViewEntry(e))} style={{ flex: 1, cursor: "pointer", minWidth: 0 }} onClick={() => isPurchase ? setViewPurchase(e) : setViewEntry(e)}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
                         <span style={{ fontWeight: 700, fontSize: 16, color: BRAND.navy }}>{u?.name}</span>
+                        {isPurchase && <span style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", background: "#ECFEFF", padding: "2px 8px", borderRadius: 10 }}>PURCHASE</span>}
                         <CategoryBadge category={e.category} />
-                        {e.status === STATUSES.AWAITING_SECOND && <span style={{ fontSize: 11, color: "#4338CA", fontWeight: 600 }}>⚖️ 2nd approval</span>}
+                        {!isPurchase && e.status === STATUSES.AWAITING_SECOND && <span style={{ fontSize: 11, color: "#4338CA", fontWeight: 600 }}>⚖️ 2nd approval</span>}
                         {submittedAgo && <span style={{ fontSize: 11, color: BRAND.textLight }}>submitted {submittedAgo}</span>}
                       </div>
-                      <div style={{ fontSize: 14, color: BRAND.charcoal, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</div>
-                      <div style={{ fontSize: 13, color: BRAND.textLight }}>{relativeDate(e.date)} · {fmtHours(h)}</div>
+                      <div style={{ fontSize: 14, color: BRAND.charcoal, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{isPurchase ? (e.storeName + " — " + e.description) : e.description}</div>
+                      <div style={{ fontSize: 13, color: BRAND.textLight }}>{relativeDate(e.date)}{h != null ? " · " + fmtHours(h) : ""}{isPurchase && e.lineItems?.length ? " · " + e.lineItems.length + " item" + (e.lineItems.length > 1 ? "s" : "") : ""}</div>
                     </div>
                     <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: BRAND.brick }}>{fmt(total)}</div>
-                      <div style={{ fontSize: 12, color: BRAND.textLight }}>reimbursement</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: isPurchase ? "#0E7490" : BRAND.brick }}>{fmt(total)}</div>
+                      <div style={{ fontSize: 12, color: BRAND.textLight }}>{isPurchase ? "purchase" : "reimbursement"}</div>
                     </div>
                   </div>
                   {isRejecting ? (
@@ -4956,10 +5023,13 @@ export default function App() {
                       <textarea autoFocus style={{ ...S.textarea, minHeight: 60, marginBottom: 8 }} value={rejectNote} onChange={ev => setRejectNote(ev.target.value)} placeholder="Tell them what needs to be fixed..." />
                       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                         <button style={{ ...S.btnGhost, fontSize: 13, padding: "6px 14px" }} onClick={() => { setRejectingId(null); setRejectNote(""); }}>Cancel</button>
-                        <button style={{ ...S.btnDanger, fontSize: 13, padding: "6px 14px", opacity: !rejectNote.trim() ? 0.5 : 1 }} disabled={!rejectNote.trim()} onClick={async () => { await doRejectEntry(e.id, rejectNote); pushUndo("Rejection sent", async () => { await restoreEntry(e.id, "Submitted"); showToast("Rejection undone — restored to queue", "info"); }); setRejectingId(null); setRejectNote(""); }}><Icon name="x" size={14} /> Send Rejection</button>
+                        <button style={{ ...S.btnDanger, fontSize: 13, padding: "6px 14px", opacity: !rejectNote.trim() ? 0.5 : 1 }} disabled={!rejectNote.trim()} onClick={async () => {
+                          if (isPurchase) { await doPurchaseReject(e.id, rejectNote); } else { await doRejectEntry(e.id, rejectNote); pushUndo("Rejection sent", async () => { await restoreEntry(e.id, "Submitted"); showToast("Rejection undone — restored to queue", "info"); }); }
+                          setRejectingId(null); setRejectNote("");
+                        }}><Icon name="x" size={14} /> Send Rejection</button>
                       </div>
                     </div>
-                  ) : isNeedsInfo ? (
+                  ) : isNeedsInfo && !isPurchase ? (
                     <div className="fade-in" style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid " + BRAND.borderLight }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.charcoal, marginBottom: 6 }}>What information do you need? <span style={{ color: BRAND.error }}>*</span></div>
                       <textarea autoFocus style={{ ...S.textarea, minHeight: 60, marginBottom: 8 }} value={needsInfoNote} onChange={ev => setNeedsInfoNote(ev.target.value)} placeholder="e.g. Please attach the receipt for materials..." />
@@ -4970,10 +5040,13 @@ export default function App() {
                     </div>
                   ) : (
                     <div style={{ display: "flex", gap: 8, marginTop: 12, paddingTop: 12, borderTop: "1px solid " + BRAND.borderLight, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                      <button style={{ ...S.btnGhost, fontSize: 13, padding: "6px 14px" }} onClick={() => setViewEntry(e)}>View Details</button>
-                      <button style={{ ...S.btnGhost, fontSize: 13, padding: "6px 14px", color: "#0284c7", borderColor: "#0284c7" + "40" }} onClick={(ev) => { ev.stopPropagation(); setNeedsInfoId(e.id); setNeedsInfoNote(""); }}>💬 Needs Info</button>
+                      <button style={{ ...S.btnGhost, fontSize: 13, padding: "6px 14px" }} onClick={() => isPurchase ? setViewPurchase(e) : setViewEntry(e)}>View Details</button>
+                      {!isPurchase && <button style={{ ...S.btnGhost, fontSize: 13, padding: "6px 14px", color: "#0284c7", borderColor: "#0284c7" + "40" }} onClick={(ev) => { ev.stopPropagation(); setNeedsInfoId(e.id); setNeedsInfoNote(""); }}>💬 Needs Info</button>}
                       <button style={{ ...S.btnDanger, fontSize: 13, padding: "6px 14px" }} onClick={(ev) => { ev.stopPropagation(); setRejectingId(e.id); setRejectNote(""); }}><Icon name="x" size={14} /> Reject</button>
-                      <button style={{ ...S.btnSuccess, fontSize: 13, padding: "6px 14px" }} onClick={async (ev) => { ev.stopPropagation(); await doApproveEntry(e.id, ""); pushUndo("Approved: " + (u?.name || ""), async () => { await rejectEntry(e.id, "Undone — returned for re-review"); showToast("Approval undone", "info"); }); }}><Icon name="check" size={14} /> Approve</button>
+                      <button style={{ ...S.btnSuccess, fontSize: 13, padding: "6px 14px" }} onClick={async (ev) => {
+                        ev.stopPropagation();
+                        if (isPurchase) { await doPurchaseApprove(e.id); } else { await doApproveEntry(e.id, ""); pushUndo("Approved: " + (u?.name || ""), async () => { await rejectEntry(e.id, "Undone — returned for re-review"); showToast("Approval undone", "info"); }); }
+                      }}><Icon name="check" size={14} /> Approve</button>
                     </div>
                   )}
                 </div>);
@@ -5043,9 +5116,9 @@ export default function App() {
         </div>
       );
     }
-    if (page === "payment") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <PaymentRunPage entries={entries} users={users} settings={settings} onMarkPaid={async (ids, paymentDetails) => { let count = 0; for (const id of ids) { const updated = await markPaid(id, paymentDetails); if (updated) count++; } if (count > 0) showToast(count + " entr" + (count === 1 ? "y" : "ies") + " marked as paid", "success"); }} mob={mob} />; }
+    if (page === "payment") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <PaymentRunPage entries={entries} purchaseEntries={purchaseEntries} users={users} settings={settings} onMarkPaid={async (ids, paymentDetails) => { let count = 0; for (const id of ids) { const updated = await markPaid(id, paymentDetails); if (updated) count++; } if (count > 0) showToast(count + " entr" + (count === 1 ? "y" : "ies") + " marked as paid", "success"); }} onMarkPurchasePaid={doPurchaseMarkPaid} mob={mob} />; }
     if (page === "help") return <HelpPage currentUser={currentUser} settings={settings} mob={mob} onNav={nav} />;
-    if (page === "reports") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <ReportsPage entries={entries} users={users} settings={settings} currentUser={currentUser} mob={mob} />; }
+    if (page === "reports") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <ReportsPage entries={entries} purchaseEntries={purchaseEntries} users={users} settings={settings} currentUser={currentUser} mob={mob} />; }
     if (page === "settings") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <SettingsPage settings={settings} users={users} currentUser={currentUser} allEntries={entries} onSaveSettings={saveSettings} onAddUser={addUser} onRemoveUser={removeUser} onUpdateRate={updateUserRate} />; }
     if (page === "insights") return (
       <div className="fade-in">
@@ -5148,7 +5221,7 @@ export default function App() {
           </div>
         </header>
         {/* Notification panel */}
-        {showNotifPanel && isTreasurer && <NotificationPanel entries={entries} users={users} settings={settings} onView={(e) => { setShowNotifPanel(false); setViewEntry(e); }} onClose={() => setShowNotifPanel(false)} onReviewAll={() => { setShowNotifPanel(false); nav("review"); }} mob={mob} />}
+        {showNotifPanel && isTreasurer && <NotificationPanel entries={entries} purchaseEntries={purchaseEntries} users={users} settings={settings} onView={(e) => { setShowNotifPanel(false); setViewEntry(e); }} onViewPurchase={(e) => { setShowNotifPanel(false); setViewPurchase(e); }} onClose={() => setShowNotifPanel(false)} onReviewAll={() => { setShowNotifPanel(false); nav("review"); }} mob={mob} />}
         {/* Slide-out drawer */}
         {drawerOpen && (
           <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.4)" }} onClick={() => setDrawerOpen(false)} aria-hidden="true">
@@ -5223,9 +5296,15 @@ export default function App() {
         {moreSheetOpen && (
           <div style={{ position: "fixed", inset: 0, zIndex: 80 }} onClick={() => setMoreSheetOpen(false)}>
             <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: BRAND.white, borderRadius: "20px 20px 0 0", padding: "0 0 calc(env(safe-area-inset-bottom) + 16px)", boxShadow: "0 -8px 40px rgba(0,0,0,0.18)" }} onClick={e => e.stopPropagation()}>
-              <div style={{ width: 40, height: 4, background: BRAND.borderLight, borderRadius: 2, margin: "12px auto 16px" }} />
+              {/* Drag handle — tappable to close */}
+              <div onClick={() => setMoreSheetOpen(false)} style={{ cursor: "pointer", padding: "12px 0 8px", display: "flex", justifyContent: "center" }}>
+                <div style={{ width: 40, height: 4, background: BRAND.borderLight, borderRadius: 2 }} />
+              </div>
               <div style={{ padding: "0 20px", marginBottom: 8 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: BRAND.textLight, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>Treasurer Tools</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: BRAND.textLight, letterSpacing: "0.08em", textTransform: "uppercase" }}>Treasurer Tools</div>
+                  <button onClick={() => setMoreSheetOpen(false)} aria-label="Close" style={{ background: "none", border: "none", color: BRAND.textMuted, cursor: "pointer", padding: 6, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", minWidth: 36, minHeight: 36 }}><Icon name="x" size={20} /></button>
+                </div>
                 {[
                   { id: "payment",  label: "Payment Run",          emoji: "💳", desc: "Batch pay approved entries" },
                   { id: "reports",  label: "Reports",              emoji: "📊", desc: "PDF/CSV export" },
@@ -5351,7 +5430,7 @@ export default function App() {
             )}
             <span style={{ fontSize: 14, fontWeight: 500, color: BRAND.charcoal }}>{currentUser.name}{realIsTreasurer && previewAsId ? <span style={{ fontSize: 11, color: "#92400E", background: "#FFF8E1", border: "1px solid #F59E0B", borderRadius: 4, padding: "1px 6px", marginLeft: 6 }}>👁 preview</span> : null}</span>
             <RoleBadge role={realIsTreasurer && !previewAsId ? currentUser.role : ROLES.MEMBER} />
-            {showNotifPanel && isTreasurer && <NotificationPanel entries={entries} users={users} settings={settings} onView={(e) => { setShowNotifPanel(false); setViewEntry(e); }} onClose={() => setShowNotifPanel(false)} onReviewAll={() => { setShowNotifPanel(false); nav("review"); }} mob={mob} />}
+            {showNotifPanel && isTreasurer && <NotificationPanel entries={entries} purchaseEntries={purchaseEntries} users={users} settings={settings} onView={(e) => { setShowNotifPanel(false); setViewEntry(e); }} onViewPurchase={(e) => { setShowNotifPanel(false); setViewPurchase(e); }} onClose={() => setShowNotifPanel(false)} onReviewAll={() => { setShowNotifPanel(false); nav("review"); }} mob={mob} />}
           </div>
         </header>
         {!online && <div role="alert" style={{ background: "#FFF3E0", borderBottom: "1px solid #FFB74D", padding: "10px 32px", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#E65100" }}><Icon name="wifiOff" size={16} /><span>You're offline. Viewing cached data — changes require an internet connection.</span></div>}
