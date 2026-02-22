@@ -37,7 +37,7 @@ const CATEGORY_EMOJIS = {
   "General Maintenance": "🔨", "Snow Removal": "❄️", "Cleaning": "🧹",
   "Vendor Coordination": "📞", "Administrative Work": "📝", "Emergency Repairs": "🚨",
 };
-const STATUSES = { DRAFT: "Draft", SUBMITTED: "Submitted", APPROVED: "Approved", AWAITING_SECOND: "Awaiting 2nd Approval", REJECTED: "Rejected", PAID: "Paid" };
+const STATUSES = { DRAFT: "Draft", SUBMITTED: "Submitted", APPROVED: "Approved", AWAITING_SECOND: "Awaiting 2nd Approval", REJECTED: "Rejected", PAID: "Paid", TRASH: "Trash" };
 const ROLES = { TREASURER: "Treasurer", MEMBER: "Member" };
 const DEFAULT_SETTINGS = { hoaName: "24 Mill Street", defaultHourlyRate: 40, userRates: {}, currency: "USD" };
 const MOBILE_BP = 768;
@@ -192,6 +192,7 @@ const StatusBadge = ({ status }) => {
   const map = {
     Draft: { bg: "#EDEBE8", text: BRAND.textMuted, border: "#D5D0C9" },
     Submitted: { bg: "#FFF0E0", text: BRAND.brick, border: "#E8C4A8" },
+    Trash: { bg: "#FFF1F1", text: "#7f1d1d", border: "#FCA5A520" },
     Approved: { bg: "#E8F0E6", text: BRAND.green, border: "#B5CCAE" },
     "Awaiting 2nd Approval": { bg: "#EEF2FF", text: "#4338CA", border: "#C7D2FE" },
     Rejected: { bg: "#FDEAEA", text: BRAND.error, border: "#F0BABA" },
@@ -720,13 +721,15 @@ const WorkflowStepper = ({ status, mob }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // ENTRY DETAIL
 // ═══════════════════════════════════════════════════════════════════════════
-const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onApprove, onReject, onMarkPaid, onDuplicate, onSecondApprove, onDelete, mob }) => {
+const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onApprove, onReject, onTrash, onRestore, onMarkPaid, onDuplicate, onSecondApprove, onDelete, mob }) => {
   const [reviewNotes, setReviewNotes] = useState(entry.reviewerNotes || "");
   const [showApproveConfirm, setShowApproveConfirm] = useState(false);
-  const [showRejectConfirm, setShowRejectConfirm] = useState(false);
   const [showPaidConfirm, setShowPaidConfirm] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showAuditLog, setShowAuditLog] = useState(false);
+  const [showDeclinePanel, setShowDeclinePanel] = useState(false);
+  const [showTrashPanel, setShowTrashPanel] = useState(false);
+  const [declineNote, setDeclineNote] = useState("");
+  const [trashNote, setTrashNote] = useState("");
   const [payMethod, setPayMethod] = useState("Zelle");
   const [payRef, setPayRef] = useState("");
   const isTreasurer = currentUser.role === ROLES.TREASURER;
@@ -741,7 +744,10 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
   const canMarkPaid = isTreasurer && entry.status === STATUSES.APPROVED;
   const needsSecondApproval = entry.status === STATUSES.AWAITING_SECOND;
   const canSecondApprove = isTreasurer && needsSecondApproval;
-  const canDelete = isTreasurer && ![STATUSES.APPROVED, STATUSES.PAID].includes(entry.status);
+  // Treasurer can trash or decline any entry that isn't already in Trash
+  const canTrash   = isTreasurer && entry.status !== STATUSES.TRASH;
+  const canDecline = isTreasurer && entry.status !== STATUSES.TRASH;
+  const canRestore = isTreasurer && entry.status === STATUSES.TRASH;
   // Check if dual approval is required for this entry's amount
   const dualRequired = settings.dualApprovalThreshold > 0 && grandTotal >= settings.dualApprovalThreshold;
 
@@ -791,36 +797,88 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
           <div style={{ padding: 14, background: BRAND.bgSoft, borderRadius: 6, fontSize: 14 }}>{entry.reviewerNotes}</div>
         </div>
       )}
-      {/* ── Treasurer Action Bar ── always visible for Treasurer, adapts by status ── */}
+      {/* ── Treasurer Action Bar ── */}
       {isTreasurer && (
         <div style={{ ...S.card, background: "#F8F7F5", borderColor: BRAND.borderLight, padding: "16px 20px" }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: BRAND.textMuted, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.05em" }}>Treasurer Actions</div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-            {canReview && (
-              <>
-                <button style={S.btnSuccess} onClick={() => setShowApproveConfirm(true)}><Icon name="check" size={16} /> {dualRequired ? "First Approval" : "Approve"}</button>
-                <button style={S.btnDanger} onClick={() => { if (!reviewNotes.trim()) { alert("Please add a note explaining why you're declining."); return; } setShowRejectConfirm(true); }}><Icon name="x" size={16} /> Decline</button>
-                {dualRequired && <div style={{ fontSize: 11, color: "#4338CA" }}>⚖️ Dual approval required ({fmt(settings.dualApprovalThreshold)}+)</div>}
-              </>
-            )}
-            {!canReview && !canMarkPaid && !canSecondApprove && (
-              <div style={{ fontSize: 13, color: BRAND.textMuted }}>
-                {entry.status === STATUSES.APPROVED ? "✅ Already approved — use Mark as Paid below when payment is sent." : entry.status === STATUSES.PAID ? "✓ This entry is fully paid and closed." : entry.status === STATUSES.DRAFT ? "This entry is still a draft — no action needed yet." : entry.status === STATUSES.REJECTED ? "This entry was declined and is back with the member for edits." : "No approval actions available for this status."}
+
+          {/* Restored from Trash */}
+          {canRestore && (
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", background: "#FFF8E1", border: "1px solid #F59E0B", borderRadius: 8 }}>
+              <span style={{ fontSize: 13, color: "#92400E" }}>🗑 This entry is in the Trash.</span>
+              <button style={{ ...S.btnGhost, fontSize: 13, marginLeft: "auto" }} onClick={() => onRestore(entry)}>↩ Restore</button>
+            </div>
+          )}
+
+          {/* Main action buttons */}
+          {!canRestore && (
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: (showDeclinePanel || showTrashPanel) ? 12 : 0 }}>
+              {canReview && (
+                <button style={S.btnSuccess} onClick={() => setShowApproveConfirm(true)}>
+                  <Icon name="check" size={16} /> {dualRequired ? "First Approval" : "Approve"}
+                </button>
+              )}
+              {canDecline && !showDeclinePanel && (
+                <button style={S.btnDanger} onClick={() => { setShowDeclinePanel(true); setShowTrashPanel(false); }}>
+                  <Icon name="x" size={16} /> Decline
+                </button>
+              )}
+              {canDecline && showDeclinePanel && (
+                <button style={{ ...S.btnGhost, fontSize: 13 }} onClick={() => setShowDeclinePanel(false)}>Cancel Decline</button>
+              )}
+              {dualRequired && <div style={{ fontSize: 11, color: "#4338CA" }}>⚖️ Dual approval required ({fmt(settings.dualApprovalThreshold)}+)</div>}
+              {canTrash && !showTrashPanel && (
+                <button style={{ ...S.btnGhost, marginLeft: "auto", color: "#7f1d1d", borderColor: "#7f1d1d40", fontSize: 13 }}
+                  onClick={() => { setShowTrashPanel(true); setShowDeclinePanel(false); }}>
+                  🗑 Move to Trash
+                </button>
+              )}
+              {canTrash && showTrashPanel && (
+                <button style={{ ...S.btnGhost, marginLeft: "auto", fontSize: 13 }} onClick={() => setShowTrashPanel(false)}>Cancel</button>
+              )}
+            </div>
+          )}
+
+          {/* Inline Decline panel */}
+          {showDeclinePanel && (
+            <div className="fade-in" style={{ borderTop: "1px solid " + BRAND.borderLight, paddingTop: 12 }}>
+              <label style={S.label}>Reason for declining <span style={{ color: BRAND.error, fontWeight: 700 }}>*</span></label>
+              <textarea style={{ ...S.textarea, minHeight: 72, borderColor: declineNote.trim() ? BRAND.border : BRAND.error + "80" }}
+                value={declineNote} onChange={e => setDeclineNote(e.target.value)}
+                placeholder="Explain what needs to be fixed. The member will see this note." autoFocus />
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+                <button style={{ ...S.btnGhost, fontSize: 13 }} onClick={() => { setShowDeclinePanel(false); setDeclineNote(""); }}>Cancel</button>
+                <button style={{ ...S.btnDanger, fontSize: 13, opacity: declineNote.trim() ? 1 : 0.5 }}
+                  disabled={!declineNote.trim()}
+                  onClick={() => { onReject(declineNote); setShowDeclinePanel(false); setDeclineNote(""); }}>
+                  <Icon name="x" size={14} /> Confirm Decline
+                </button>
               </div>
-            )}
-            {canDelete && (
-              <button
-                style={{ ...S.btnGhost, marginLeft: "auto", color: BRAND.brick, borderColor: BRAND.brick, fontSize: 13 }}
-                onClick={() => setShowDeleteConfirm(true)}
-              >
-                🗑 Delete Entry
-              </button>
-            )}
-          </div>
-          {canReview && (
+            </div>
+          )}
+
+          {/* Inline Trash panel */}
+          {showTrashPanel && (
+            <div className="fade-in" style={{ borderTop: "1px solid " + BRAND.borderLight, paddingTop: 12 }}>
+              <label style={S.label}>Reason <span style={{ color: BRAND.textLight, fontWeight: 400 }}>(optional)</span></label>
+              <textarea style={{ ...S.textarea, minHeight: 60 }}
+                value={trashNote} onChange={e => setTrashNote(e.target.value)}
+                placeholder="Why is this being trashed? (visible in audit log)" autoFocus />
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+                <button style={{ ...S.btnGhost, fontSize: 13 }} onClick={() => { setShowTrashPanel(false); setTrashNote(""); }}>Cancel</button>
+                <button style={{ background: "#7f1d1d", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                  onClick={() => { onTrash(entry, trashNote, "Moved to Trash"); setShowTrashPanel(false); setTrashNote(""); }}>
+                  🗑 Move to Trash
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Approve note (for Submitted) */}
+          {canReview && !showDeclinePanel && !showTrashPanel && (
             <div style={{ marginTop: 12 }}>
-              <label style={S.label}>Notes to member <span style={{ color: BRAND.textLight, fontWeight: 400 }}>(required for Decline, optional for Approve)</span></label>
-              <textarea style={{ ...S.textarea, minHeight: 64 }} value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} placeholder="Explain your decision..." />
+              <label style={S.label}>Approval note <span style={{ color: BRAND.textLight, fontWeight: 400 }}>(optional)</span></label>
+              <textarea style={{ ...S.textarea, minHeight: 56 }} value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} placeholder="Optional note for the member..." />
             </div>
           )}
         </div>
@@ -876,9 +934,7 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
         </div>
       )}
       <ConfirmDialog open={showApproveConfirm} onClose={() => setShowApproveConfirm(false)} title={dualRequired ? "First Approval" : "Approve?"} message={dualRequired ? "This entry (" + fmt(grandTotal) + ") exceeds the dual-approval threshold. A second board member will need to approve before it's final." : "Approve " + fmt(grandTotal) + " for " + (user?.name || "member") + "?"} confirmText={dualRequired ? "First Approve" : "Approve"} onConfirm={() => onApprove(reviewNotes)} />
-      <ConfirmDialog open={showRejectConfirm} onClose={() => setShowRejectConfirm(false)} title="Decline Entry?" message={"The entry will be returned to " + (user?.name || "the member") + " for edits. They will see your note."} confirmText="Decline" danger onConfirm={() => onReject(reviewNotes)} />
       <ConfirmDialog open={showPaidConfirm} onClose={() => setShowPaidConfirm(false)} title="Mark as Paid?" message={"Confirm payment of " + fmt(grandTotal) + " to " + (user?.name || "member") + " via " + payMethod + (payRef ? " (#" + payRef + ")" : "") + "?"} confirmText="Mark Paid" onConfirm={() => onMarkPaid({ method: payMethod, reference: payRef })} />
-      <ConfirmDialog open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Delete Entry?" message={"Permanently delete this " + entry.category + " entry by " + (user?.name || "member") + "? This cannot be undone."} confirmText="Delete" danger onConfirm={() => onDelete(entry)} />
     </div>
   );
 };
@@ -1690,7 +1746,7 @@ export default function App() {
   const {
     currentUser, users, entries, settings, loading, authError,
     login, logout: sbLogout, register,
-    saveEntry, deleteEntry, approveEntry, firstApprove, secondApprove, rejectEntry, markPaid,
+    saveEntry, deleteEntry, trashEntry, restoreEntry, approveEntry, firstApprove, secondApprove, rejectEntry, markPaid,
     saveSettings, addUser, removeUser, updateUserRate,
     setAuthError, fetchCommunityStats,
   } = useSupabase();
@@ -1811,6 +1867,27 @@ export default function App() {
   const doSecondApprove = async (id) => { const updated = await secondApprove(id); if (updated) setViewEntry(updated); };
   const doReject = async (notes) => { if (viewEntry) { const updated = await rejectEntry(viewEntry.id, notes); if (updated) setViewEntry(updated); } };
   const doMarkPaid = async (paymentDetails) => { if (viewEntry) { const updated = await markPaid(viewEntry.id, paymentDetails); if (updated) setViewEntry(updated); } };
+  const doDecline = async (notes) => {
+    if (!viewEntry) return;
+    const u = users.find(x => x.id === viewEntry.userId);
+    const updated = await rejectEntry(viewEntry.id, notes);
+    if (updated) { setViewEntry(updated); showToast("Entry declined", "error", (u?.name || "Member") + " will be notified"); }
+  };
+  const doTrash = async (entry, comment, action) => {
+    const u = users.find(x => x.id === entry.userId);
+    const updated = await trashEntry(entry.id, comment, action || "Moved to Trash");
+    if (updated) { setViewEntry(null); showToast("Moved to Trash", "success", (u?.name || "Member") + " — " + entry.category); }
+  };
+  const doRestore = async (entry) => {
+    // Restore to Draft (safe default regardless of previous status)
+    const updated = await restoreEntry(entry.id, STATUSES.DRAFT);
+    if (updated) { setViewEntry(updated); showToast("Entry restored to Draft", "success"); }
+  };
+  const doTrashFromList = async (entry, comment) => {
+    const u = users.find(x => x.id === entry.userId);
+    const updated = await trashEntry(entry.id, comment, "Moved to Trash");
+    if (updated) showToast("Moved to Trash", "success", (u?.name || "Member") + " — " + entry.category);
+  };
   // Quick approve/reject from review queue (without opening detail)
   const doApproveEntry = async (id, notes) => { await approveEntry(id, notes); const e = entries.find(x => x.id === id); const u = users.find(x => x.id === e?.userId); showToast("Entry approved", "success", u?.name + " — " + (e?.category || "")); };
   const doRejectEntry = async (id, notes) => { await rejectEntry(id, notes); const e = entries.find(x => x.id === id); const u = users.find(x => x.id === e?.userId); showToast("Entry returned for edits", "error", u?.name + " will be notified"); };
@@ -1884,6 +1961,7 @@ export default function App() {
   // ══════════════════════════════════════════════════════════════════════════
   // NAVIGATION
   // ══════════════════════════════════════════════════════════════════════════
+  const trashCount = entries.filter(e => e.status === STATUSES.TRASH).length;
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: "home" },
     { id: "entries", label: isTreasurer ? "All Entries" : "My Entries", icon: "file" },
@@ -1891,13 +1969,14 @@ export default function App() {
     ...(isTreasurer ? [{ id: "review", label: "Review Queue", icon: "inbox", badge: pendingCount }] : []),
     ...(isTreasurer ? [{ id: "reports", label: "Reports", icon: "chart" }] : []),
     ...(isTreasurer ? [{ id: "insights", label: "Community Insights", icon: "insights" }] : []),
+    ...(isTreasurer ? [{ id: "trash", label: "Trash", icon: "trash", badge: trashCount || 0 }] : []),
     ...(isTreasurer ? [{ id: "settings", label: "Settings", icon: "settings" }] : []),
   ];
   const bottomTabs = isTreasurer ? [
     { id: "dashboard", label: "Home", icon: "home", iconFilled: "homeFilled", color: "#2E7D32", tint: "#2E7D3218" },
     { id: "entries", label: "Entries", icon: "clipboard", iconFilled: "clipboardFilled", color: "#1565C0", tint: "#1565C018" },
     { id: "review", label: "Review", icon: "shieldCheck", iconFilled: "shieldCheckFilled", color: BRAND.brick, tint: BRAND.brick + "18", badge: pendingCount },
-    { id: "reports", label: "Reports", icon: "barChart", iconFilled: "barChartFilled", color: "#6A1B9A", tint: "#6A1B9A18" },
+    { id: "trash", label: "Trash", icon: "trash", iconFilled: "trash", color: "#7f1d1d", tint: "#7f1d1d18", badge: trashCount || 0 },
   ] : [
     { id: "dashboard", label: "Home", icon: "home", iconFilled: "homeFilled", color: "#2E7D32", tint: "#2E7D3218" },
     { id: "entries", label: "Entries", icon: "clipboard", iconFilled: "clipboardFilled", color: "#1565C0", tint: "#1565C018" },
@@ -1923,7 +2002,7 @@ export default function App() {
     );}
     if (viewEntry) {
       const fresh = entries.find(e => e.id === viewEntry.id) || viewEntry;
-      return <EntryDetail entry={fresh} settings={settings} users={users} currentUser={viewAs} onBack={() => setViewEntry(null)} onEdit={() => { setEditEntry(fresh); setViewEntry(null); }} onApprove={doApprove} onReject={doReject} onMarkPaid={doMarkPaid} onSecondApprove={doSecondApprove} onDelete={async (e) => { await deleteEntry(e.id); setViewEntry(null); showToast("Entry deleted", "success"); }} onDuplicate={(e) => { setViewEntry(null); setEditEntry(null); setNewEntry(true); setTimeout(() => setEditEntry({ ...e, id: null, status: STATUSES.DRAFT, date: todayStr(), startTime: nowTime(), endTime: "", preImages: [], postImages: [], reviewerNotes: "", reviewedAt: "", paidAt: "" }), 50); }} mob={mob} />;
+      return <EntryDetail entry={fresh} settings={settings} users={users} currentUser={viewAs} onBack={() => setViewEntry(null)} onEdit={() => { setEditEntry(fresh); setViewEntry(null); }} onApprove={doApprove} onReject={doDecline} onTrash={doTrash} onRestore={doRestore} onMarkPaid={doMarkPaid} onSecondApprove={doSecondApprove} onDelete={async (e) => { await deleteEntry(e.id); setViewEntry(null); showToast("Entry deleted", "success"); }} onDuplicate={(e) => { setViewEntry(null); setEditEntry(null); setNewEntry(true); setTimeout(() => setEditEntry({ ...e, id: null, status: STATUSES.DRAFT, date: todayStr(), startTime: nowTime(), endTime: "", preImages: [], postImages: [], reviewerNotes: "", reviewedAt: "", paidAt: "" }), 50); }} mob={mob} />;
     }
     if (page === "dashboard") {
       const recent = myEntries.slice(0, 5);
@@ -2005,7 +2084,7 @@ export default function App() {
           <div style={S.card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}><h3 style={S.h3}>Recent Entries</h3><button style={S.btnGhost} onClick={() => setPage("entries")}>View all →</button></div>
             {recent.length === 0 ? <div style={{ textAlign: "center", padding: 40, color: BRAND.textLight }}>No entries yet. Create your first work entry.</div>
-            : mob ? recent.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} currentUser={viewAs} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => doApproveEntry(e.id, "")} onReject={(e) => setViewEntry(e)} onDelete={async (e) => { if (window.confirm("Delete this entry? This cannot be undone.")) { await deleteEntry(e.id); showToast("Entry deleted", "success"); } }} />)
+            : mob ? recent.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} currentUser={viewAs} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => doApproveEntry(e.id, "")} onReject={(e) => setViewEntry(e)} onDelete={(e) => doTrashFromList(e, "")} />)
             : (
               <div style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 8, overflow: "hidden" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
@@ -2055,7 +2134,7 @@ export default function App() {
           if (filterCategory !== "all") filtered = filtered.filter(e => e.category === filterCategory);
           if (filterMember !== "all") filtered = filtered.filter(e => e.userId === filterMember);
           return filtered.length === 0 ? <div style={{ ...S.card, textAlign: "center", padding: 60, color: BRAND.textLight }}>{myEntries.length === 0 ? "No entries yet." : "No entries match your filters."}</div>
-          : mob ? filtered.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} currentUser={viewAs} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => doApproveEntry(e.id, "")} onReject={(e) => setViewEntry(e)} onDelete={async (e) => { if (window.confirm("Delete this entry? This cannot be undone.")) { await deleteEntry(e.id); showToast("Entry deleted", "success"); } }} />)
+          : mob ? filtered.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} currentUser={viewAs} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => doApproveEntry(e.id, "")} onReject={(e) => setViewEntry(e)} onDelete={(e) => doTrashFromList(e, "")} />)
           : (
             <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
@@ -2108,6 +2187,65 @@ export default function App() {
                     </div>
                   )}
                 </div>); })}
+            </div>
+          )}
+        </div>
+      );
+    }
+    if (page === "trash") {
+      if (!isTreasurer || previewAsId) { nav("dashboard"); return null; }
+      const trashed = entries.filter(e => e.status === STATUSES.TRASH).sort((a, b) => (b.reviewedAt || "").localeCompare(a.reviewedAt || ""));
+      return (
+        <div className="fade-in">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <h2 style={S.h2}>🗑 Trash</h2>
+            <span style={{ fontSize: 13, color: BRAND.textMuted }}>{trashed.length} {trashed.length === 1 ? "entry" : "entries"}</span>
+          </div>
+          <p style={{ margin: "0 0 20px", fontSize: 14, color: BRAND.textMuted }}>Declined or deleted entries. Restore any entry to Draft to reopen it.</p>
+          {trashed.length === 0 ? (
+            <div style={{ ...S.card, textAlign: "center", padding: 60 }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🗑</div>
+              <div style={{ fontWeight: 600, color: BRAND.navy, marginBottom: 8 }}>Trash is empty</div>
+              <div style={{ fontSize: 14, color: BRAND.textLight }}>Declined or trashed entries will appear here.</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {trashed.map(e => {
+                const u = users.find(u => u.id === e.userId);
+                const h = calcHours(e.startTime, e.endTime);
+                const r = getUserRate(users, settings, e.userId);
+                const total = calcLabor(h, r) + calcMaterialsTotal(e.materials);
+                const lastLog = e.auditLog?.length ? e.auditLog[e.auditLog.length - 1] : null;
+                return (
+                  <div key={e.id} style={{ ...S.card, padding: "18px 20px", borderLeft: "4px solid #7f1d1d", opacity: 0.9 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                          <CategoryBadge category={e.category} />
+                          <span style={{ fontSize: 12, color: BRAND.textLight, fontWeight: 500 }}>{u?.name}</span>
+                        </div>
+                        <div style={{ fontSize: 14, fontWeight: 500, color: BRAND.charcoal, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</div>
+                        <div style={{ fontSize: 12, color: BRAND.textLight }}>{formatDate(e.date)} · {fmtHours(h)}</div>
+                        {lastLog && (
+                          <div style={{ marginTop: 8, padding: "8px 12px", background: "#FFF1F1", borderRadius: 6, fontSize: 12 }}>
+                            <span style={{ fontWeight: 600, color: "#7f1d1d" }}>{lastLog.action}</span>
+                            {lastLog.details && <span style={{ color: BRAND.textMuted }}> — {lastLog.details.replace("Reason: ", "")}</span>}
+                            <span style={{ color: BRAND.textLight }}> · {lastLog.byName} · {new Date(lastLog.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ textAlign: "right", marginLeft: 16, flexShrink: 0 }}>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: "#7f1d1d", marginBottom: 8 }}>{fmt(total)}</div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button style={{ ...S.btnGhost, fontSize: 12, padding: "5px 10px" }} onClick={() => setViewEntry(e)}>View</button>
+                          <button style={{ ...S.btnGhost, fontSize: 12, padding: "5px 10px" }} onClick={async () => { const updated = await restoreEntry(e.id, STATUSES.DRAFT); if (updated) showToast("Restored to Draft", "success", e.category + " — " + u?.name); }}>↩ Restore</button>
+                          <button style={{ background: "#7f1d1d", color: "#fff", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontWeight: 600 }} onClick={async () => { if (window.confirm("Permanently delete this entry? This cannot be undone.")) { await deleteEntry(e.id); showToast("Permanently deleted", "success"); } }}>Delete</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

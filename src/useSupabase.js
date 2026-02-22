@@ -253,6 +253,34 @@ export function useSupabase() {
     return mapped;
   }, [currentUser]);
 
+  const trashEntry = useCallback(async (id, comment, action) => {
+    const { data: current } = await supabase.from("entries").select("audit_log").eq("id", id).single();
+    const log = appendAuditLog(current?.audit_log, action || "Moved to Trash", comment ? "Reason: " + comment : "No reason given");
+    const { data, error } = await supabase.from("entries").update({
+      status: "Trash",
+      reviewer_notes: comment || null,
+      reviewed_at: new Date().toISOString(),
+      audit_log: log,
+    }).eq("id", id).select().single();
+    if (error) { console.error("TrashEntry error:", error); return null; }
+    const mapped = mapEntry(data);
+    setEntries(prev => prev.map(e => e.id === id ? mapped : e));
+    return mapped;
+  }, [currentUser]);
+
+  const restoreEntry = useCallback(async (id, previousStatus) => {
+    const { data: current } = await supabase.from("entries").select("audit_log").eq("id", id).single();
+    const log = appendAuditLog(current?.audit_log, "Restored from Trash", "Restored to: " + previousStatus);
+    const { data, error } = await supabase.from("entries").update({
+      status: previousStatus || "Draft",
+      audit_log: log,
+    }).eq("id", id).select().single();
+    if (error) { console.error("RestoreEntry error:", error); return null; }
+    const mapped = mapEntry(data);
+    setEntries(prev => prev.map(e => e.id === id ? mapped : e));
+    return mapped;
+  }, [currentUser]);
+
   const markPaid = useCallback(async (id, paymentDetails) => {
     const { data: current } = await supabase.from("entries").select("audit_log").eq("id", id).single();
     const detailStr = paymentDetails ? paymentDetails.method + (paymentDetails.reference ? " #" + paymentDetails.reference : "") : "No details";
@@ -332,7 +360,7 @@ export function useSupabase() {
     // Auth
     login, logout, register,
     // Entries
-    saveEntry, deleteEntry, approveEntry, firstApprove, secondApprove, rejectEntry, markPaid,
+    saveEntry, deleteEntry, trashEntry, restoreEntry, approveEntry, firstApprove, secondApprove, rejectEntry, markPaid,
     // Settings & Users
     saveSettings, addUser, removeUser, updateUserRate,
     // Misc
