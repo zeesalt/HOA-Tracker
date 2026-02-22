@@ -227,6 +227,8 @@ export function useSupabase() {
       let msg = error.message;
       if (msg.includes("Signups not allowed") || msg.includes("not allowed")) {
         msg = "Registration is currently disabled. Your HOA Treasurer needs to enable email signups in Supabase Dashboard → Authentication → Providers → Email.";
+      } else if (msg.includes("already registered") || msg.includes("already been registered")) {
+        msg = "This email is already registered. Try signing in instead, or use 'Forgot Password' to reset your credentials.";
       }
       setAuthError(msg);
       return { error: msg };
