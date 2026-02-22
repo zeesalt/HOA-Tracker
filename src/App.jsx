@@ -1887,11 +1887,13 @@ const INSIGHTS_LOADING = [
   { emoji: "🗃️", text: "Raiding the filing cabinet..." },
 ];
 
-const CommunityInsights = ({ fetchStats, settings, mob, cachedStats, onStatsCached }) => {
+const CommunityInsights = ({ fetchStats, settings, mob, cachedStats, onStatsCached, entries = [], users = [] }) => {
   const [stats, setStats] = useState(cachedStats || null);
   const [loading, setLoading] = useState(!cachedStats);
   const [loadMsg] = useState(() => INSIGHTS_LOADING[Math.floor(Math.random() * INSIGHTS_LOADING.length)]);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [memberTableYear, setMemberTableYear] = useState(new Date().getFullYear().toString());
+  const [expandedUser, setExpandedUser] = useState(null);
 
   useEffect(() => {
     // If we have cached stats, skip loading entirely
@@ -2026,12 +2028,219 @@ const CommunityInsights = ({ fetchStats, settings, mob, cachedStats, onStatsCach
           </div>
         )}
       </div>
+
+      {/* ── Member Monthly Reimbursement Summary ── */}
+      {(() => {
+        const fmt2 = (n) => "$" + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const allYears = [...new Set(entries.map(e => e.date?.slice(0, 4)).filter(Boolean))].sort().reverse();
+        if (allYears.length === 0) return null;
+        const year = memberTableYear;
+        const yearEntries = entries.filter(e => e.date?.startsWith(year));
+        const months = [...new Set(yearEntries.map(e => e.date?.slice(0, 7)))].sort();
+        const statusOrder = [STATUSES.SUBMITTED, STATUSES.APPROVED, STATUSES.PAID, STATUSES.REJECTED, STATUSES.DRAFT];
+        const STATUS_COLORS = {
+          [STATUSES.APPROVED]: { bg: "#E8F0E6", text: BRAND.success,   border: "#B5CCAE" },
+          [STATUSES.PAID]:     { bg: "#E8EDF5", text: "#3B5998",        border: "#B8C8E0" },
+          [STATUSES.SUBMITTED]:{ bg: "#FFF0E0", text: BRAND.brick,      border: "#E8C4A8" },
+          [STATUSES.REJECTED]: { bg: "#FDEAEA", text: BRAND.error,      border: "#F0BABA" },
+          [STATUSES.DRAFT]:    { bg: "#EDEBE8", text: BRAND.textMuted,  border: "#D5D0C9" },
+        };
+        const calcTotal = (e) => {
+          const h = calcHours(e.startTime, e.endTime);
+          const r = getUserRate(users, settings, e.userId);
+          return calcLabor(h, r) + calcMaterialsTotal(e.materials);
+        };
+        // Build user → month → status → { total, count }
+        const tableData = {};
+        yearEntries.forEach(e => {
+          const month = e.date?.slice(0, 7);
+          if (!month) return;
+          const uid = e.userId;
+          if (!tableData[uid]) tableData[uid] = {};
+          if (!tableData[uid][month]) tableData[uid][month] = {};
+          if (!tableData[uid][month][e.status]) tableData[uid][month][e.status] = { total: 0, count: 0 };
+          tableData[uid][month][e.status].total += calcTotal(e);
+          tableData[uid][month][e.status].count += 1;
+        });
+        const userList = Object.keys(tableData).map(uid => {
+          const approvedTotal = Object.values(tableData[uid]).reduce((s, md) =>
+            s + [STATUSES.APPROVED, STATUSES.PAID].reduce((ms, st) => ms + (md[st]?.total || 0), 0), 0);
+          const allTotal = Object.values(tableData[uid]).reduce((s, md) =>
+            s + Object.values(md).reduce((ms, v) => ms + v.total, 0), 0);
+          return { uid, approvedTotal, allTotal };
+        }).sort((a, b) => b.approvedTotal - a.approvedTotal);
+        if (userList.length === 0) return null;
+        const mName = (m) => new Date(m + "-01").toLocaleDateString("en-US", { month: "short" });
+
+        return (
+          <div style={{ background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 12, padding: mob ? 16 : 24, marginTop: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
+              <div>
+                <h3 style={{ fontFamily: BRAND.serif, fontSize: 18, fontWeight: 600, color: BRAND.navy, margin: "0 0 4px" }}>Member Reimbursements — {year}</h3>
+                <p style={{ margin: 0, fontSize: 13, color: BRAND.textMuted }}>Monthly totals per member by entry status. Click a member to expand.</p>
+              </div>
+              {allYears.length > 1 && (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {allYears.map(y => (
+                    <button key={y} onClick={() => setMemberTableYear(y)} style={{ padding: "5px 14px", borderRadius: 20, border: "1px solid " + (memberTableYear === y ? BRAND.navy : BRAND.border), background: memberTableYear === y ? BRAND.navy : BRAND.white, color: memberTableYear === y ? "#fff" : BRAND.textMuted, fontWeight: memberTableYear === y ? 700 : 500, fontSize: 12, fontFamily: BRAND.sans, cursor: "pointer" }}>{y}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {userList.map(({ uid, approvedTotal, allTotal }) => {
+                const u = users.find(u => u.id === uid);
+                const userName = u?.name || "Unknown";
+                const isExpanded = expandedUser === uid;
+                const userMonthData = tableData[uid];
+                // Yearly totals by status
+                const yearlyByStatus = {};
+                Object.values(userMonthData).forEach(md => {
+                  Object.entries(md).forEach(([st, v]) => {
+                    yearlyByStatus[st] = (yearlyByStatus[st] || 0) + v.total;
+                  });
+                });
+                const visibleStatuses = statusOrder.filter(st => yearlyByStatus[st] > 0);
+                return (
+                  <div key={uid} style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 10, overflow: "hidden", transition: "box-shadow 200ms" }}>
+                    {/* Collapsible header */}
+                    <button
+                      onClick={() => setExpandedUser(isExpanded ? null : uid)}
+                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", background: isExpanded ? BRAND.bgSoft : BRAND.white, border: "none", cursor: "pointer", fontFamily: BRAND.sans, textAlign: "left", transition: "background 150ms" }}
+                    >
+                      <div style={{ width: 36, height: 36, borderRadius: 18, background: BRAND.navy, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
+                        {userName.charAt(0).toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: BRAND.charcoal }}>{userName}</div>
+                        <div style={{ fontSize: 12, color: BRAND.textMuted, marginTop: 2 }}>
+                          {Object.values(userMonthData).reduce((s, m) => s + Object.values(m).reduce((ms, v) => ms + v.count, 0), 0)} entries
+                          {approvedTotal > 0 && <span style={{ color: BRAND.success, fontWeight: 600 }}> · Approved/Paid: {fmt2(approvedTotal)}</span>}
+                        </div>
+                      </div>
+                      {/* Status pill summary — hide on very small screens when expanded */}
+                      {!mob && (
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                          {visibleStatuses.map(st => {
+                            const c = STATUS_COLORS[st] || {};
+                            return (
+                              <span key={st} style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 10, background: c.bg, color: c.text, border: "1px solid " + c.border, whiteSpace: "nowrap" }}>
+                                {st}: {fmt2(yearlyByStatus[st])}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <span style={{ color: BRAND.textLight, fontSize: 14, marginLeft: 4, display: "inline-block", transition: "transform 200ms", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }}>▾</span>
+                    </button>
+
+                    {/* Expanded breakdown */}
+                    {isExpanded && (
+                      <div className="fade-in" style={{ borderTop: "1px solid " + BRAND.borderLight }}>
+                        {mob ? (
+                          // Mobile: stacked month cards
+                          <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                            {months.filter(m => userMonthData[m]).map(m => (
+                              <div key={m} style={{ padding: "12px 14px", background: BRAND.bgSoft, borderRadius: 8 }}>
+                                <div style={{ fontWeight: 700, fontSize: 13, color: BRAND.navy, marginBottom: 8 }}>{mName(m)} {year}</div>
+                                {statusOrder.filter(st => userMonthData[m]?.[st]).map(st => {
+                                  const v = userMonthData[m][st];
+                                  const c = STATUS_COLORS[st] || {};
+                                  return (
+                                    <div key={st} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                                      <span style={{ fontSize: 12, padding: "2px 8px", borderRadius: 8, background: c.bg, color: c.text, border: "1px solid " + c.border }}>{st}</span>
+                                      <span style={{ fontSize: 13, fontWeight: 600, color: BRAND.charcoal }}>
+                                        {fmt2(v.total)} <span style={{ fontSize: 11, fontWeight: 400, color: BRAND.textLight }}>({v.count})</span>
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ))}
+                            {/* Mobile year totals */}
+                            <div style={{ padding: "12px 14px", background: BRAND.navy + "08", borderRadius: 8, borderTop: "2px solid " + BRAND.borderLight }}>
+                              <div style={{ fontWeight: 700, fontSize: 13, color: BRAND.charcoal, marginBottom: 6 }}>Year Total</div>
+                              {visibleStatuses.map(st => {
+                                const c = STATUS_COLORS[st] || {};
+                                return (
+                                  <div key={st} style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                                    <span style={{ fontSize: 12, padding: "2px 8px", borderRadius: 8, background: c.bg, color: c.text, border: "1px solid " + c.border }}>{st}</span>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: c.text }}>{fmt2(yearlyByStatus[st])}</span>
+                                  </div>
+                                );
+                              })}
+                              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTop: "1px solid " + BRAND.borderLight }}>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: BRAND.charcoal }}>All entries</span>
+                                <span style={{ fontSize: 14, fontWeight: 700, color: BRAND.navy }}>{fmt2(allTotal)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          // Desktop: full table
+                          <div style={{ overflowX: "auto" }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                              <thead>
+                                <tr style={{ background: BRAND.bgSoft }}>
+                                  <th style={{ padding: "10px 16px", textAlign: "left", fontWeight: 600, color: BRAND.textMuted, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>Month</th>
+                                  {visibleStatuses.map(st => (
+                                    <th key={st} style={{ padding: "10px 12px", textAlign: "right", fontWeight: 600, color: STATUS_COLORS[st]?.text || BRAND.textMuted, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>{st}</th>
+                                  ))}
+                                  <th style={{ padding: "10px 16px", textAlign: "right", fontWeight: 700, color: BRAND.charcoal, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>Month Total</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {months.filter(m => userMonthData[m]).map((m, i) => {
+                                  const monthTotal = Object.values(userMonthData[m]).reduce((s, v) => s + v.total, 0);
+                                  return (
+                                    <tr key={m} style={{ background: i % 2 === 0 ? BRAND.white : BRAND.bgSoft, borderBottom: "1px solid " + BRAND.borderLight }}>
+                                      <td style={{ padding: "10px 16px", fontWeight: 600, color: BRAND.navy }}>{mName(m)}</td>
+                                      {visibleStatuses.map(st => {
+                                        const v = userMonthData[m]?.[st];
+                                        const c = STATUS_COLORS[st] || {};
+                                        return (
+                                          <td key={st} style={{ padding: "10px 12px", textAlign: "right" }}>
+                                            {v ? (
+                                              <div>
+                                                <div style={{ fontWeight: 600, color: c.text || BRAND.charcoal }}>{fmt2(v.total)}</div>
+                                                <div style={{ fontSize: 11, color: BRAND.textLight }}>{v.count} entr{v.count === 1 ? "y" : "ies"}</div>
+                                              </div>
+                                            ) : <span style={{ color: BRAND.borderLight }}>—</span>}
+                                          </td>
+                                        );
+                                      })}
+                                      <td style={{ padding: "10px 16px", textAlign: "right", fontWeight: 700, color: BRAND.charcoal }}>{fmt2(monthTotal)}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                              <tfoot>
+                                <tr style={{ background: BRAND.navy + "08", borderTop: "2px solid " + BRAND.borderLight }}>
+                                  <td style={{ padding: "12px 16px", fontWeight: 700, color: BRAND.charcoal }}>Year Total</td>
+                                  {visibleStatuses.map(st => (
+                                    <td key={st} style={{ padding: "12px 12px", textAlign: "right", fontWeight: 700, color: STATUS_COLORS[st]?.text || BRAND.textMuted }}>
+                                      {yearlyByStatus[st] ? fmt2(yearlyByStatus[st]) : <span style={{ color: BRAND.borderLight }}>—</span>}
+                                    </td>
+                                  ))}
+                                  <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 700, color: BRAND.navy, fontSize: 14 }}>{fmt2(allTotal)}</td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// IN-APP NOTIFICATION PANEL
 // ═══════════════════════════════════════════════════════════════════════════
 const NotificationPanel = ({ entries, users, settings, onView, onClose, onReviewAll, mob }) => {
   const pending = entries.filter(e => e.status === STATUSES.SUBMITTED).sort((a, b) => b.createdAt?.localeCompare(a.createdAt) || b.date.localeCompare(a.date));
@@ -3260,7 +3469,7 @@ export default function App() {
       <div className="fade-in">
         <h2 style={{ ...S.h2, marginBottom: 8 }}>Community Insights</h2>
         <p style={{ margin: "0 0 24px", fontSize: 14, color: BRAND.textMuted }}>See how your HOA dollars are being put to work.</p>
-        <CommunityInsights fetchStats={fetchCommunityStats} settings={settings} mob={mob} cachedStats={cachedInsightsStats} onStatsCached={setCachedInsightsStats} />
+        <CommunityInsights fetchStats={fetchCommunityStats} settings={settings} mob={mob} cachedStats={cachedInsightsStats} onStatsCached={setCachedInsightsStats} entries={entries} users={users} />
       </div>
     );
     return null;
