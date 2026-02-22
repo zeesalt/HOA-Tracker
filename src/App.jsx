@@ -182,6 +182,7 @@ const Icon = ({ name, size = 18, filled = false }) => {
     dollar: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
     inbox: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
     menu: "M4 6h16M4 12h16M4 18h16",
+    help: "M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
     bell: "M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0",
     bellOff: "M13.73 21a2 2 0 01-3.46 0M18.63 13A17.89 17.89 0 0118 8M6.26 6.26A5.86 5.86 0 006 8c0 7-3 9-3 9h14M1 1l22 22",
     wifiOff: "M1 1l22 22M16.72 11.06A10.94 10.94 0 0119 12.55M5 12.55a10.94 10.94 0 015.17-2.39M10.71 5.05A16 16 0 0122.56 9M1.42 9a15.91 15.91 0 014.7-2.88M8.53 16.11a6 6 0 016.95 0M12 20h.01",
@@ -2044,6 +2045,278 @@ const INSIGHTS_LOADING = [
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
+// HELP PAGE
+// ═══════════════════════════════════════════════════════════════════════════
+const HelpPage = ({ currentUser, settings, mob, onNav }) => {
+  const isTreasurer = currentUser?.role === ROLES.TREASURER;
+  const [openSection, setOpenSection] = useState(null);
+  const toggle = (id) => setOpenSection(s => s === id ? null : id);
+
+  const hoaName = settings?.hoaName || "24 Mill Street";
+
+  const WORKFLOW = [
+    { emoji: "✏️", label: "Log Work", sub: "Create a draft", bg: "#EFF6FF", color: "#1565C0" },
+    { emoji: "📤", label: "Submit", sub: "Send for review", bg: "#FFF0E0", color: "#8E3B2E" },
+    { emoji: "✓",  label: "Approved", sub: "Treasurer signs off", bg: "#E8F0E6", color: "#2E7D32" },
+    { emoji: "💳", label: "Paid", sub: "Money sent to you", bg: "#E8EDF5", color: "#3B5998" },
+  ];
+
+  const MEMBER_SECTIONS = [
+    {
+      id: "log",
+      emoji: "📋",
+      title: "Logging Work",
+      items: [
+        { q: "How do I create a new entry?", a: "Tap the + button (bottom-right on mobile, top-right on desktop) to open a new entry form. Fill in the date, start and end times, category, and a description of what you did." },
+        { q: "Can I log work from a past date?", a: "Yes — the date field defaults to today but you can change it to any past date for retroactive logging." },
+        { q: "What categories can I use?", a: "Landscaping, Plumbing, Electrical, General Maintenance, Snow Removal, Cleaning, Vendor Coordination, Administrative Work, and Emergency Repairs." },
+        { q: "Do I need to fill in the end time?", a: "Yes — start and end time are required. They're used to calculate your total hours and labor amount automatically." },
+      ],
+    },
+    {
+      id: "materials",
+      emoji: "🧾",
+      title: "Materials & Receipts",
+      items: [
+        { q: "How do I add materials I purchased?", a: "In the entry form, scroll to the Materials section and tap \"Add Material\". Enter the item name, quantity, and unit cost. The total calculates automatically." },
+        { q: "Should I attach receipts?", a: "Yes — always attach receipts for material purchases. Entries with receipts are approved faster and reduce back-and-forth with the Treasurer." },
+        { q: "Where do I upload photos?", a: "In the entry form, scroll to the Photos section. You can upload before and after photos separately. Photos make it much easier for the Treasurer to approve your work." },
+      ],
+    },
+    {
+      id: "templates",
+      emoji: "⚡",
+      title: "Templates",
+      items: [
+        { q: "What is a template?", a: "A template saves a complete entry (category, description, times, location, materials) so you can reuse it with one tap. Great for recurring tasks like weekly lawn mowing or monthly inspections." },
+        { q: "How do I save a template?", a: "Fill out an entry form and tap \"Save as Template\" at the bottom. Give it a name. It'll appear in your Templates list next time you create an entry." },
+        { q: "How do I use a saved template?", a: "When creating a new entry, a blue banner at the top shows your templates. Tap \"Use a Template\", select one, and the form pre-fills. The date always resets to today." },
+        { q: "How many templates can I have?", a: "Up to 10. Templates are stored on your device — they won't carry over if you switch browsers or devices." },
+      ],
+    },
+    {
+      id: "status",
+      emoji: "🔄",
+      title: "Entry Status",
+      items: [
+        { q: "What does Draft mean?", a: "You've saved the entry but haven't submitted it yet. Only you can see drafts. You can edit or delete a draft at any time." },
+        { q: "What happens after I submit?", a: "The entry moves to Submitted (Pending Review). The Treasurer will review it and either approve it or send it back with notes." },
+        { q: "My entry was Rejected — what now?", a: "Read the Treasurer's note (shown on the entry), make the requested changes, and resubmit. The entry goes back into the review queue." },
+        { q: "What is Needs Info?", a: "The Treasurer has a question but hasn't declined the entry. Check the Discussion thread inside the entry for their message and reply there." },
+        { q: "What's the difference between Approved and Paid?", a: "Approved means the Treasurer has signed off. Paid means the money has actually been sent to you via the payment method on record." },
+      ],
+    },
+    {
+      id: "comments",
+      emoji: "💬",
+      title: "Discussion & Messages",
+      items: [
+        { q: "How do I message the Treasurer about an entry?", a: "Open the entry and scroll to the Discussion section. Type your message and press Send (or Enter). The Treasurer will see it and can reply in the same thread." },
+        { q: "How do I know if the Treasurer replied?", a: "A 💬 badge appears on the entry card showing the number of messages. Check entries with that badge for new replies." },
+        { q: "Can I message before submitting?", a: "No — the Discussion thread is only available on submitted entries (not drafts). Submit your entry first, then use Discussion for any follow-up." },
+      ],
+    },
+    {
+      id: "dashboard",
+      emoji: "📊",
+      title: "Your Dashboard",
+      items: [
+        { q: "What does my Dashboard show?", a: "Your year-to-date approved and paid totals, pending entries with how long they've been waiting (color-coded by age), and any rejected or Needs Info entries requiring your action." },
+        { q: "What does \"Owed to You\" mean?", a: "The total amount across all your Approved entries — work that's been signed off but not yet paid out." },
+        { q: "How is my hourly rate set?", a: "The Treasurer sets a default rate for all members. You may have a custom rate set for you individually — the rate is shown on your entry summary when you create one." },
+      ],
+    },
+  ];
+
+  const TREASURER_SECTIONS = [
+    {
+      id: "review",
+      emoji: "🔍",
+      title: "Reviewing Entries",
+      items: [
+        { q: "Where do I review entries?", a: "Go to Review Queue in the sidebar. All Submitted entries appear here, oldest first. You can also bulk-approve multiple entries at once." },
+        { q: "How do I approve an entry?", a: "Open the entry and click Approve (or use the quick-approve button in the Review Queue). You can add an optional note before approving." },
+        { q: "How do I decline an entry?", a: "Click Decline, enter a reason (required), and confirm. The entry returns to the member as Rejected and they'll see your note." },
+        { q: "What is Needs Info?", a: "Use this when you have a question but don't want to fully decline. The entry is flagged and the member is expected to respond via the Discussion thread." },
+        { q: "What is dual approval?", a: "Entries above the dual approval threshold (set in Settings) require a second board member to approve. The first approval marks it Awaiting Second; a second treasurer-role user must then approve." },
+      ],
+    },
+    {
+      id: "payment",
+      emoji: "💳",
+      title: "Payment Run",
+      items: [
+        { q: "What is a Payment Run?", a: "A dedicated page (sidebar: Payment Run) that groups all Approved-but-unpaid entries by member. You set the payment method and reference number once per member and mark all their entries paid simultaneously." },
+        { q: "Can I pay individual entries instead of a full batch?", a: "Yes — open any individual Approved entry and use the Payment Details section at the bottom to mark it paid with a custom method and reference." },
+        { q: "Is marking as Paid reversible?", a: "No — Paid is a terminal status. If you mark something paid in error, contact your administrator. All payment details are recorded in the audit log." },
+      ],
+    },
+    {
+      id: "reports",
+      emoji: "📄",
+      title: "Reports & Export",
+      items: [
+        { q: "How do I generate a report?", a: "Go to Reports in the sidebar. Choose a date range and member filter, then export as PDF or CSV. Reports only include Approved entries by default." },
+        { q: "What's included in a report?", a: "HOA name, date range, hourly rate, and an itemized table of entries with hours, labor, materials, and totals. Summarized totals at the bottom." },
+        { q: "Can I include all statuses in a report?", a: "Yes — the Reports page has a status filter so you can include Submitted or other statuses if needed." },
+      ],
+    },
+    {
+      id: "settings",
+      emoji: "⚙️",
+      title: "Settings",
+      items: [
+        { q: "How do I change the HOA name?", a: "Go to Settings → HOA Name. Changes apply immediately across the app and on all future reports." },
+        { q: "How do I change the hourly rate?", a: "Go to Settings → Default Hourly Rate. You can also set a per-member custom rate in the Members section of Settings." },
+        { q: "How do I add a new member?", a: "Go to Settings → Members → Add Member. Enter their name, email, and a temporary password. They'll sign in and can change their password after first login." },
+        { q: "What is the dual approval threshold?", a: "Set a dollar amount in Settings. Any entry above that amount requires two treasurer-role users to approve before it moves to Approved status." },
+      ],
+    },
+  ];
+
+  const sections = isTreasurer ? TREASURER_SECTIONS : MEMBER_SECTIONS;
+
+  const statusRef = [
+    { name: "Draft",     desc: "Saved, not submitted yet", bg: "#EDEBE8", border: "#D5D0C9", dot: "#9E9E9E", text: "#222" },
+    { name: "Submitted", desc: "Awaiting Treasurer review", bg: "#FFF0E0", border: "#E8C4A8", dot: "#8E3B2E", text: "#6D3620" },
+    { name: "Approved",  desc: "Signed off, payment pending", bg: "#E8F0E6", border: "#B5CCAE", dot: "#2E7D32", text: "#2F4F3E" },
+    { name: "Paid",      desc: "Payment sent", bg: "#E8EDF5", border: "#B8C8E0", dot: "#3B5998", text: "#2C4478" },
+    { name: "Rejected",  desc: "Edit and resubmit", bg: "#FDEAEA", border: "#F0BABA", dot: "#C62828", text: "#7f1d1d" },
+    { name: "Needs Info", desc: "Treasurer has a question", bg: "#FFF7ED", border: "#FED7AA", dot: "#C2410C", text: "#7C3910" },
+  ];
+
+  return (
+    <div className="fade-in">
+      {/* Header */}
+      <div style={{ marginBottom: 28 }}>
+        <h2 style={{ ...S.h2, marginBottom: 6 }}>Help</h2>
+        <p style={{ fontSize: 14, color: BRAND.textMuted, margin: 0 }}>
+          {isTreasurer ? "Treasurer guide for " : "Member guide for "}<strong style={{ color: BRAND.navy }}>{hoaName}</strong>
+        </p>
+      </div>
+
+      {/* Workflow strip — member only */}
+      {!isTreasurer && (
+        <div style={{ ...S.card, padding: mob ? "20px 16px" : "24px 28px", marginBottom: 24 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: BRAND.textLight, marginBottom: 18 }}>How reimbursement works</div>
+          <div style={{ display: "flex", alignItems: "center", flexWrap: mob ? "wrap" : "nowrap", gap: mob ? 12 : 0 }}>
+            {WORKFLOW.map((step, i) => (
+              <React.Fragment key={step.label}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: mob ? "0 0 calc(50% - 6px)" : 1, textAlign: "center" }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 24, background: step.bg, color: step.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, marginBottom: 8, fontWeight: 700 }}>{step.emoji}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.navy }}>{step.label}</div>
+                  <div style={{ fontSize: 11, color: BRAND.textMuted, marginTop: 2 }}>{step.sub}</div>
+                </div>
+                {!mob && i < WORKFLOW.length - 1 && (
+                  <div style={{ flex: 1, height: 2, background: BRAND.borderLight, margin: "0 8px", marginBottom: 24 }} />
+                )}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Quick actions */}
+      {!isTreasurer && (
+        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "repeat(3, 1fr)", gap: 12, marginBottom: 24 }}>
+          {[
+            { emoji: "✏️", label: "Log new work", action: () => onNav("entries") },
+            { emoji: "📋", label: "View my entries", action: () => onNav("entries") },
+            { emoji: "📊", label: "See my dashboard", action: () => onNav("dashboard") },
+          ].map(item => (
+            <button key={item.label} onClick={item.action} style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 10, cursor: "pointer", fontFamily: BRAND.sans, textAlign: "left", transition: "all 200ms" }}
+              onMouseEnter={e => { e.currentTarget.style.background = BRAND.bgSoft; e.currentTarget.style.transform = "translateY(-1px)"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = BRAND.white; e.currentTarget.style.transform = "translateY(0)"; }}>
+              <span style={{ fontSize: 22 }}>{item.emoji}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: BRAND.navy }}>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* FAQ accordion */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: BRAND.textLight, marginBottom: 14, paddingBottom: 10, borderBottom: "1px solid " + BRAND.borderLight }}>
+          Frequently asked questions
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {sections.map(section => (
+            <div key={section.id} style={{ background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 12, overflow: "hidden", boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
+              {/* Section header */}
+              <button
+                onClick={() => toggle(section.id)}
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "16px 20px", background: "none", border: "none", cursor: "pointer", fontFamily: BRAND.sans, textAlign: "left", borderBottom: openSection === section.id ? "1px solid " + BRAND.borderLight : "none", transition: "background 150ms" }}
+                onMouseEnter={e => e.currentTarget.style.background = BRAND.bgSoft}
+                onMouseLeave={e => e.currentTarget.style.background = "none"}
+              >
+                <span style={{ fontSize: 22, flexShrink: 0 }}>{section.emoji}</span>
+                <span style={{ flex: 1, fontWeight: 700, fontSize: 15, color: BRAND.navy }}>{section.title}</span>
+                <span style={{ fontSize: 18, color: BRAND.textLight, transform: openSection === section.id ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 250ms" }}>⌄</span>
+              </button>
+              {/* Q&A items */}
+              {openSection === section.id && (
+                <div className="fade-in">
+                  {section.items.map((item, i) => (
+                    <div key={i} style={{ padding: "16px 20px", borderBottom: i < section.items.length - 1 ? "1px solid " + BRAND.borderLight + "80" : "none" }}>
+                      <div style={{ fontWeight: 600, fontSize: 13.5, color: BRAND.charcoal, marginBottom: 6, display: "flex", gap: 8 }}>
+                        <span style={{ color: BRAND.brick, flexShrink: 0, marginTop: 1 }}>Q</span>
+                        <span>{item.q}</span>
+                      </div>
+                      <div style={{ fontSize: 13.5, color: BRAND.textMuted, lineHeight: 1.65, paddingLeft: 20 }}>{item.a}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Status reference */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: BRAND.textLight, marginBottom: 14, paddingBottom: 10, borderBottom: "1px solid " + BRAND.borderLight }}>
+          Entry status reference
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "repeat(2, 1fr)", gap: 10 }}>
+          {statusRef.map(s => (
+            <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 10, background: s.bg, border: "1px solid " + s.border }}>
+              <div style={{ width: 10, height: 10, borderRadius: 5, background: s.dot, flexShrink: 0 }} />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13, color: s.text }}>{s.name}</div>
+                <div style={{ fontSize: 12, color: s.text, opacity: 0.75, marginTop: 1 }}>{s.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Tips — member only */}
+      {!isTreasurer && (
+        <div style={{ ...S.card, background: BRAND.navy, border: "none", padding: mob ? 20 : 28, marginBottom: 16 }}>
+          <div style={{ fontFamily: BRAND.serif, fontSize: 20, fontStyle: "italic", fontWeight: 600, color: "#D4B97A", marginBottom: 18 }}>Tips for faster approvals</div>
+          {[
+            { icon: "📸", tip: <><strong style={{ color: "#fff" }}>Always attach a photo.</strong> Entries with before/after photos are approved much faster — the Treasurer sees the work without needing to ask.</> },
+            { icon: "🧾", tip: <><strong style={{ color: "#fff" }}>Add receipts for materials.</strong> Itemize each purchase individually. Lumping everything into one line will slow down review.</> },
+            { icon: "📝", tip: <><strong style={{ color: "#fff" }}>Write a clear description.</strong> "Mowed front lawn, edged walkway, cleared clippings" beats "lawn work" every time.</> },
+            { icon: "💬", tip: <><strong style={{ color: "#fff" }}>Use Discussion, not email.</strong> All questions from the Treasurer will come through the entry's Discussion thread — check the 💬 badge on your cards.</> },
+          ].map((t, i) => (
+            <div key={i} style={{ display: "flex", gap: 14, marginBottom: i < 3 ? 14 : 0 }}>
+              <span style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>{t.icon}</span>
+              <div style={{ fontSize: 13.5, color: "rgba(255,255,255,0.8)", lineHeight: 1.65 }}>{t.tip}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Contact footer */}
+      <div style={{ textAlign: "center", padding: "20px 16px", color: BRAND.textMuted, fontSize: 13 }}>
+        Have a question not answered here? Use the 💬 Discussion thread on any entry to message your Treasurer directly.
+      </div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // PAYMENT RUN PAGE
 // ═══════════════════════════════════════════════════════════════════════════
 const PaymentRunPage = ({ entries, users, settings, onMarkPaid, mob }) => {
@@ -2559,6 +2832,248 @@ const CommunityInsights = ({ fetchStats, settings, mob, cachedStats, onStatsCach
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// HELP MODAL
+// ═══════════════════════════════════════════════════════════════════════════
+const HELP_TABS = ["How it works", "Features", "Statuses", "Tips"];
+
+const HelpModal = ({ onClose, isTreasurer, mob, hoaName }) => {
+  const [tab, setTab] = useState(0);
+
+  // trap focus & close on Escape
+  useEffect(() => {
+    const handler = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", handler); document.body.style.overflow = ""; };
+  }, [onClose]);
+
+  const sectionLabel = (text) => (
+    <div style={{ fontFamily: BRAND.sans, fontSize: 10, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: BRAND.textLight, marginBottom: 16, paddingBottom: 8, borderBottom: "1px solid " + BRAND.borderLight }}>{text}</div>
+  );
+
+  const workflowSteps = [
+    { num: "01", label: "Log Work", sub: "Create a draft entry with date, time, category & description", icon: "✏️" },
+    { num: "02", label: "Submit", sub: "Send for Treasurer review with one tap", icon: "📤" },
+    { num: "03", label: "Approved", sub: "Treasurer reviews and approves the entry", icon: "✓" },
+    { num: "04", label: "Paid", sub: "Reimbursement is sent to you", icon: "💳" },
+  ];
+
+  const features = [
+    { icon: "📋", title: "Log Work Entries", desc: "Record any HOA work — landscaping, plumbing, snow removal, and more. Add date, times, category, and description.", color: BRAND.navy },
+    { icon: "🧾", title: "Materials & Receipts", desc: "List materials purchased with name, quantity, and cost. Attach before/after photos and receipt images.", color: "#2E7D32" },
+    { icon: "💬", title: "Discussion Threads", desc: "Each entry has a Discussion section. Message the Treasurer directly on the entry — no separate emails needed.", color: "#4338CA" },
+    { icon: "⚡", title: "Entry Templates", desc: "Save any entry as a template and reuse it in one tap. Category, description, and times all pre-fill automatically.", color: "#A07840" },
+    { icon: "📊", title: "Your Dashboard", desc: "See your YTD approved and paid totals, pending entries with wait times, and anything that needs attention.", color: BRAND.brick },
+    { icon: "🏠", title: "Community Insights", desc: "View HOA spending by category and see how your contributions fit the community picture.", color: "#6A1B9A" },
+  ];
+
+  const statuses = [
+    { label: "Draft", desc: "Saved, not yet submitted", bg: "#F5F5F5", border: "#DDD", text: "#555", dot: "#9E9E9E" },
+    { label: "Submitted", desc: "Awaiting Treasurer review", bg: "#FFF8ED", border: "#F0D4A8", text: "#7A5420", dot: "#F59E0B" },
+    { label: "Approved", desc: "Locked and queued for payment", bg: "#F0FDF4", border: "#A5D6A7", text: "#1B5E20", dot: "#4CAF50" },
+    { label: "Needs Info", desc: "Treasurer has a question — check Discussion", bg: "#EEF2FF", border: "#C7D2FE", text: "#3730A3", dot: "#6366F1" },
+    { label: "Declined", desc: "Read the note, fix the entry, resubmit", bg: "#FFF5F5", border: "#F0BABA", text: "#7f1d1d", dot: "#EF5350" },
+    { label: "Paid", desc: "Reimbursement complete", bg: "#E8EDF5", border: "#B8C8E0", text: "#3B5998", dot: "#3B5998" },
+  ];
+
+  const tips = [
+    { icon: "✨", title: "Smart pre-fill", text: "New entries auto-fill category and location from your last entry." },
+    { icon: "⏱", title: "Quick durations", text: "Tap 30m / 1hr / 2hr buttons to set end time instantly from your start time." },
+    { icon: "🔄", title: "Autosave", text: "Drafts save every 60 seconds automatically — you won't lose progress." },
+    { icon: "📱", title: "Swipe gestures", text: "On mobile, swipe left on any entry card for quick actions." },
+    { icon: "↩️", title: "After a decline", text: "The entry becomes editable again. Fix the issue and resubmit." },
+    { icon: "📷", title: "Attach photos", text: "Entries with photos get approved faster — the Treasurer can see the work." },
+    { icon: "📋", title: "Use templates", text: "Save recurring work as a template. Saves time every week." },
+    { icon: "💬", title: "Check your badges", text: "A 💬 badge on entry cards means the Treasurer left a message." },
+  ];
+
+  const treasurerFeatures = [
+    { icon: "🕐", title: "Review Queue", desc: "All submitted entries in one place. Approve or decline with optional reviewer notes." },
+    { icon: "💳", title: "Payment Run", desc: "Group all approved-but-unpaid entries by member, set payment method and reference, then mark all paid in one action." },
+    { icon: "📊", title: "Reports", desc: "Export approved entries as PDF or CSV for any date range — by individual member or consolidated." },
+    { icon: "✅", title: "Bulk Approve", desc: "Select multiple submitted entries in the review queue and approve them all at once." },
+    { icon: "🏘", title: "Community Insights", desc: "View spending by category, monthly trends, and per-member reimbursement breakdowns by year." },
+    { icon: "⚙️", title: "Settings", desc: "Configure HOA name, default hourly rate, annual budget, dual-approval threshold, and manage members." },
+  ];
+
+  const renderTab = () => {
+    switch (tab) {
+      case 0: return (
+        <div>
+          {sectionLabel("The reimbursement workflow")}
+          <div style={{ display: "flex", flexDirection: "column", gap: 0, marginBottom: 24, background: BRAND.navy, borderRadius: 12, overflow: "hidden" }}>
+            {workflowSteps.map((s, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 16, padding: "18px 20px", borderBottom: i < workflowSteps.length - 1 ? "1px solid rgba(255,255,255,0.08)" : "none" }}>
+                <div style={{ width: 36, height: 36, borderRadius: 18, background: "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{s.icon}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: BRAND.serif, fontSize: 16, fontWeight: 600, color: "#fff", lineHeight: 1.2 }}>{s.num}. {s.label}</div>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 3 }}>{s.sub}</div>
+                </div>
+                {i < workflowSteps.length - 1 && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>↓</div>}
+              </div>
+            ))}
+          </div>
+          <div style={{ background: BRAND.bgSoft, border: "1px solid " + BRAND.borderLight, borderRadius: 10, padding: "14px 16px", fontSize: 13, color: BRAND.textMuted, lineHeight: 1.6 }}>
+            💡 <strong style={{ color: BRAND.charcoal }}>If your entry is declined</strong>, the Treasurer will leave a note explaining what to fix. The entry becomes editable again automatically — update it and resubmit.
+          </div>
+        </div>
+      );
+
+      case 1: return (
+        <div>
+          {sectionLabel(isTreasurer ? "Member features" : "What you can do")}
+          <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 12, marginBottom: isTreasurer ? 24 : 0 }}>
+            {features.map((f, i) => (
+              <div key={i} style={{ background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 10, padding: "16px 16px", position: "relative", overflow: "hidden" }}>
+                <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: f.color, opacity: 0.5, borderRadius: "10px 10px 0 0" }} />
+                <div style={{ fontSize: 22, marginBottom: 8 }}>{f.icon}</div>
+                <div style={{ fontFamily: BRAND.serif, fontSize: 16, fontWeight: 600, color: BRAND.navy, marginBottom: 5 }}>{f.title}</div>
+                <div style={{ fontSize: 12, color: BRAND.textMuted, lineHeight: 1.6 }}>{f.desc}</div>
+              </div>
+            ))}
+          </div>
+          {isTreasurer && (
+            <>
+              {sectionLabel("Treasurer tools")}
+              <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 12 }}>
+                {treasurerFeatures.map((f, i) => (
+                  <div key={i} style={{ background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 10, padding: "16px 16px", position: "relative", overflow: "hidden" }}>
+                    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: BRAND.navy, opacity: 0.4, borderRadius: "10px 10px 0 0" }} />
+                    <div style={{ fontSize: 22, marginBottom: 8 }}>{f.icon}</div>
+                    <div style={{ fontFamily: BRAND.serif, fontSize: 16, fontWeight: 600, color: BRAND.navy, marginBottom: 5 }}>{f.title}</div>
+                    <div style={{ fontSize: 12, color: BRAND.textMuted, lineHeight: 1.6 }}>{f.desc}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      );
+
+      case 2: return (
+        <div>
+          {sectionLabel("What each status means")}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {statuses.map((s, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 14, padding: "14px 16px", background: s.bg, border: "1px solid " + s.border, borderRadius: 10 }}>
+                <div style={{ width: 10, height: 10, borderRadius: 5, background: s.dot, flexShrink: 0, marginTop: 5 }} />
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: s.text, marginBottom: 3 }}>{s.label}</div>
+                  <div style={{ fontSize: 12, color: s.text, opacity: 0.75, lineHeight: 1.5 }}>{s.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+
+      case 3: return (
+        <div>
+          {sectionLabel("Tips & shortcuts")}
+          <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 10 }}>
+            {tips.map((t, i) => (
+              <div key={i} style={{ background: BRAND.bgSoft, border: "1px solid " + BRAND.borderLight, borderRadius: 10, padding: "14px 16px", display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <span style={{ fontSize: 20, flexShrink: 0 }}>{t.icon}</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.charcoal, marginBottom: 4 }}>{t.title}</div>
+                  <div style={{ fontSize: 12, color: BRAND.textMuted, lineHeight: 1.6 }}>{t.text}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+
+      default: return null;
+    }
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Help — User Guide"
+      style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: mob ? "flex-end" : "center", justifyContent: "center", padding: mob ? 0 : 24 }}
+      onClick={onClose}
+    >
+      <div
+        className="fade-in"
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: BRAND.cream || BRAND.bg || "#F5F0E8",
+          borderRadius: mob ? "20px 20px 0 0" : 16,
+          width: "100%",
+          maxWidth: mob ? "100%" : 680,
+          maxHeight: mob ? "92vh" : "88vh",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.3)",
+        }}
+      >
+        {/* Modal header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 20px 16px", borderBottom: "1px solid " + BRAND.borderLight, background: BRAND.navy, flexShrink: 0 }}>
+          <div>
+            <div style={{ fontFamily: BRAND.serif, fontSize: 20, fontWeight: 600, color: "#fff" }}>Help Guide</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 2 }}>{hoaName}</div>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close help"
+            style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", width: 32, height: 32, borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, lineHeight: 1, fontFamily: BRAND.sans }}
+          >×</button>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: "flex", borderBottom: "1px solid " + BRAND.borderLight, background: BRAND.white, flexShrink: 0, overflowX: "auto" }}>
+          {HELP_TABS.map((t, i) => (
+            <button
+              key={i}
+              onClick={() => setTab(i)}
+              style={{
+                flex: mob ? "0 0 auto" : 1,
+                padding: "12px 16px",
+                border: "none",
+                background: "none",
+                cursor: "pointer",
+                fontSize: 13,
+                fontWeight: tab === i ? 600 : 400,
+                color: tab === i ? BRAND.navy : BRAND.textMuted,
+                borderBottom: tab === i ? "2px solid " + BRAND.navy : "2px solid transparent",
+                fontFamily: BRAND.sans,
+                whiteSpace: "nowrap",
+                transition: "all 150ms",
+              }}
+            >{t}</button>
+          ))}
+        </div>
+
+        {/* Scrollable content */}
+        <div style={{ flex: 1, overflowY: "auto", padding: mob ? "20px 16px" : "24px 24px", WebkitOverflowScrolling: "touch" }}>
+          {renderTab()}
+        </div>
+
+        {/* Footer */}
+        <div style={{ borderTop: "1px solid " + BRAND.borderLight, padding: "12px 20px", background: BRAND.white, flexShrink: 0, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontSize: 12, color: BRAND.textLight }}>
+            {tab > 0 && <button onClick={() => setTab(t => t - 1)} style={{ background: "none", border: "none", color: BRAND.textMuted, cursor: "pointer", fontSize: 12, fontFamily: BRAND.sans, padding: "4px 0" }}>← Previous</button>}
+          </div>
+          <div style={{ fontSize: 12, color: BRAND.textLight }}>
+            {tab + 1} / {HELP_TABS.length}
+          </div>
+          <div>
+            {tab < HELP_TABS.length - 1
+              ? <button onClick={() => setTab(t => t + 1)} style={{ ...{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid " + BRAND.borderLight, background: BRAND.white, cursor: "pointer", fontSize: 13, fontWeight: 600, color: BRAND.navy, fontFamily: BRAND.sans } }}>Next →</button>
+              : <button onClick={onClose} style={{ ...{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "none", background: BRAND.navy, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#fff", fontFamily: BRAND.sans } }}>Done ✓</button>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const NotificationPanel = ({ entries, users, settings, onView, onClose, onReviewAll, mob }) => {
   const pending = entries.filter(e => e.status === STATUSES.SUBMITTED).sort((a, b) => b.createdAt?.localeCompare(a.createdAt) || b.date.localeCompare(a.date));
   return (
@@ -2917,6 +3432,7 @@ export default function App() {
   const [cachedInsightsStats, setCachedInsightsStats] = useState(null); // cache between tab visits
   const [selectedIds, setSelectedIds] = useState(new Set()); // bulk selection in review queue
   const [moreSheetOpen, setMoreSheetOpen] = useState(false); // mobile "More" bottom sheet
+  const [showHelp, setShowHelp] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterMember, setFilterMember] = useState("all");
@@ -3244,12 +3760,14 @@ export default function App() {
     { id: "dashboard", label: "Dashboard", icon: "home" },
     { id: "entries", label: isTreasurer ? "All Entries" : "My Entries", icon: "file" },
     ...(!isTreasurer ? [{ id: "insights", label: "Community Insights", icon: "insights" }] : []),
+    ...(!isTreasurer ? [{ id: "help", label: "Help", icon: "help" }] : []),
     ...(isTreasurer ? [{ id: "review", label: "Review Queue", icon: "inbox", badge: pendingCount }] : []),
     ...(isTreasurer ? [{ id: "payment", label: "Payment Run", icon: "dollar" }] : []),
     ...(isTreasurer ? [{ id: "reports", label: "Reports", icon: "chart" }] : []),
     ...(isTreasurer ? [{ id: "insights", label: "Community Insights", icon: "insights" }] : []),
     ...(isTreasurer ? [{ id: "trash", label: "Trash", icon: "trash", badge: trashCount || 0 }] : []),
     ...(isTreasurer ? [{ id: "settings", label: "Settings", icon: "settings" }] : []),
+    ...(isTreasurer ? [{ id: "help", label: "Help", icon: "help" }] : []),
   ];
   const bottomTabs = isTreasurer ? [
     { id: "dashboard", label: "Home", icon: "home", iconFilled: "homeFilled", color: "#2E7D32", tint: "#2E7D3218" },
@@ -3260,6 +3778,7 @@ export default function App() {
     { id: "dashboard", label: "Home", icon: "home", iconFilled: "homeFilled", color: "#2E7D32", tint: "#2E7D3218" },
     { id: "entries", label: "Entries", icon: "clipboard", iconFilled: "clipboardFilled", color: "#1565C0", tint: "#1565C018" },
     { id: "insights", label: "Insights", icon: "insights", iconFilled: "insightsFilled", color: "#6A1B9A", tint: "#6A1B9A18" },
+    { id: "help", label: "Help", icon: "help", iconFilled: "help", color: "#B8860B", tint: "#B8860B18" },
   ];
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -3296,7 +3815,12 @@ export default function App() {
         <div className="fade-in">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
             <h2 style={S.h2}>Dashboard</h2>
-            {!mob && <button style={S.btnPrimary} onClick={() => setNewEntry(true)}><Icon name="plus" size={16} /> New Entry</button>}
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <button onClick={() => setShowHelp(true)} aria-label="Help — User Guide" style={{ background: "none", border: "1px solid " + BRAND.borderLight, color: BRAND.textMuted, padding: "6px 12px", cursor: "pointer", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: BRAND.sans, display: "flex", alignItems: "center", gap: 5, transition: "all 150ms" }} onMouseEnter={e => { e.currentTarget.style.background = BRAND.bgSoft; e.currentTarget.style.color = BRAND.navy; }} onMouseLeave={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = BRAND.textMuted; }}>
+                <span style={{ fontSize: 13, fontWeight: 700 }}>?</span> Help
+              </button>
+              {!mob && <button style={S.btnPrimary} onClick={() => setNewEntry(true)}><Icon name="plus" size={16} /> New Entry</button>}
+            </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "repeat(4, 1fr)", gap: mob ? 8 : 16, marginBottom: mob ? 16 : 28 }}>
             {isTreasurer ? (<>
@@ -3998,6 +4522,7 @@ export default function App() {
       );
     }
     if (page === "payment") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <PaymentRunPage entries={entries} users={users} settings={settings} onMarkPaid={async (ids, paymentDetails) => { let count = 0; for (const id of ids) { const updated = await markPaid(id, paymentDetails); if (updated) count++; } if (count > 0) showToast(count + " entr" + (count === 1 ? "y" : "ies") + " marked as paid", "success"); }} mob={mob} />; }
+    if (page === "help") return <HelpPage currentUser={currentUser} settings={settings} mob={mob} onNav={nav} />;
     if (page === "reports") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <ReportsPage entries={entries} users={users} settings={settings} currentUser={currentUser} mob={mob} />; }
     if (page === "settings") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <SettingsPage settings={settings} users={users} currentUser={currentUser} allEntries={entries} onSaveSettings={saveSettings} onAddUser={addUser} onRemoveUser={removeUser} onUpdateRate={updateUserRate} />; }
     if (page === "insights") return (
@@ -4171,6 +4696,7 @@ export default function App() {
                   { id: "insights", label: "Community Insights",   emoji: "✨", desc: "Spending trends" },
                   { id: "settings", label: "Settings",             emoji: "⚙️",  desc: "HOA name, rates, members" },
                   { id: "trash",    label: "Trash",                emoji: "🗑",  desc: trashCount > 0 ? trashCount + " item" + (trashCount > 1 ? "s" : "") : "Empty", badge: trashCount || 0 },
+                  { id: "help",     label: "Help",                 emoji: "❓", desc: "How to use the app" },
                 ].map(item => (
                   <button key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, width: "100%", padding: "14px 16px", borderRadius: 12, border: "none", background: "none", cursor: "pointer", fontFamily: BRAND.sans, marginBottom: 4, textAlign: "left" }}
                     onMouseEnter={ev => ev.currentTarget.style.background = BRAND.bgSoft}
@@ -4189,6 +4715,7 @@ export default function App() {
           </div>
         )}
         <ChangePasswordModal />
+        {showHelp && <HelpModal onClose={() => setShowHelp(false)} isTreasurer={isTreasurer} mob={mob} hoaName={settings?.hoaName || "24 Mill Street HOA"} />}
         {/* Toast notification */}
         {toast && (
           <div className="toast-enter" role="status" aria-live="polite" style={{ position: "fixed", bottom: 96, left: 16, right: 16, zIndex: 50, background: toast.type === "success" ? "#065F46" : toast.type === "error" ? "#991B1B" : BRAND.navy, color: "#fff", borderRadius: 12, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,0.25)" }}>
@@ -4295,6 +4822,7 @@ export default function App() {
         <PreviewBanner />
         <main id="main-content" style={S.content}><div key={page} className="page-enter">{renderPage()}</div></main>
         <ChangePasswordModal />
+        {showHelp && <HelpModal onClose={() => setShowHelp(false)} isTreasurer={isTreasurer} mob={mob} hoaName={settings?.hoaName || "24 Mill Street HOA"} />}
         {toast && (
           <div className="toast-enter" role="status" aria-live="polite" style={{ position: "fixed", bottom: 24, right: 24, zIndex: 50, background: toast.type === "success" ? "#065F46" : toast.type === "error" ? "#991B1B" : BRAND.navy, color: "#fff", borderRadius: 12, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", maxWidth: 420 }}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 20px" }}>
