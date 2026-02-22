@@ -19,7 +19,7 @@ const BRAND = {
   borderLight: "#EDE9E3",
   white: "#FFFFFF",
   textMuted: "#6B6560",
-  textLight: "#8A847D",
+  textLight: "#736D66",
   serif: "'Cormorant Garamond', Georgia, 'Times New Roman', serif",
   sans: "'Inter', system-ui, -apple-system, sans-serif",
 };
@@ -100,25 +100,25 @@ const Icon = ({ name, size = 18, filled = false }) => {
   // For filled tab icons, render with fill instead of stroke
   const filledIcons = {
     homeFilled: (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }} aria-hidden="true" focusable="false">
         <path d="M12.71 2.29a1 1 0 00-1.42 0l-9 9a1 1 0 00.71 1.71H4v7a2 2 0 002 2h3a1 1 0 001-1v-4h4v4a1 1 0 001 1h3a2 2 0 002-2v-7h.59a1 1 0 00.7-1.71l-9-9z" />
       </svg>
     ),
     clipboardFilled: (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }} aria-hidden="true" focusable="false">
         <path d="M10 3a1 1 0 00-1 1H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V6a2 2 0 00-2-2h-2a1 1 0 00-1-1h-4z" />
         <rect x="9" y="12" width="6" height="1.5" rx=".75" fill="#fff" />
         <rect x="9" y="15.5" width="4" height="1.5" rx=".75" fill="#fff" />
       </svg>
     ),
     shieldCheckFilled: (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }} aria-hidden="true" focusable="false">
         <path d="M12 2L3.5 6.5V11c0 5.25 3.63 10.17 8.5 11.38C16.87 21.17 20.5 16.25 20.5 11V6.5L12 2z" />
         <path d="M10 14.2l-2.1-2.1L6.5 13.5l3.5 3.5 7-7L15.6 8.6 10 14.2z" fill="#fff" />
       </svg>
     ),
     barChartFilled: (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }} aria-hidden="true" focusable="false">
         <rect x="4" y="4" width="16" height="16" rx="2" />
         <rect x="7" y="14" width="2" height="3" rx=".5" fill="#fff" />
         <rect x="11" y="11" width="2" height="6" rx=".5" fill="#fff" />
@@ -126,7 +126,7 @@ const Icon = ({ name, size = 18, filled = false }) => {
       </svg>
     ),
     insightsFilled: (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }} aria-hidden="true" focusable="false">
         <circle cx="12" cy="12" r="10" />
         <path d="M12 6v6l4 2" stroke="#fff" strokeWidth="2" strokeLinecap="round" fill="none" />
         <circle cx="12" cy="12" r="2" fill="#fff" />
@@ -167,7 +167,7 @@ const Icon = ({ name, size = 18, filled = false }) => {
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true" focusable="false">
       <path d={paths[name] || ""} />
     </svg>
   );
@@ -248,14 +248,14 @@ const S = {
   btnGhost: { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", background: "transparent", color: BRAND.textMuted, border: "none", borderRadius: 6, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: BRAND.sans },
 
   // Form elements
-  input: { width: "100%", padding: "10px 14px", border: "1px solid " + BRAND.border, borderRadius: 6, fontSize: 14, fontFamily: BRAND.sans, background: BRAND.white, color: BRAND.charcoal, outline: "none", boxSizing: "border-box" },
-  textarea: { width: "100%", padding: "10px 14px", border: "1px solid " + BRAND.border, borderRadius: 6, fontSize: 14, fontFamily: BRAND.sans, background: BRAND.white, color: BRAND.charcoal, outline: "none", resize: "vertical", minHeight: 80, boxSizing: "border-box" },
-  select: { width: "100%", padding: "10px 14px", border: "1px solid " + BRAND.border, borderRadius: 6, fontSize: 14, fontFamily: BRAND.sans, background: BRAND.white, color: BRAND.charcoal, outline: "none", cursor: "pointer", boxSizing: "border-box", appearance: "auto" },
-  label: { display: "block", fontSize: 13, fontWeight: 600, color: BRAND.textMuted, marginBottom: 6, fontFamily: BRAND.sans },
+  input: { width: "100%", padding: "10px 14px", border: "1px solid " + BRAND.border, borderRadius: 6, fontSize: 14, fontFamily: BRAND.sans, background: BRAND.white, color: BRAND.charcoal, boxSizing: "border-box" },
+  textarea: { width: "100%", padding: "10px 14px", border: "1px solid " + BRAND.border, borderRadius: 6, fontSize: 14, fontFamily: BRAND.sans, background: BRAND.white, color: BRAND.charcoal, resize: "vertical", minHeight: 80, boxSizing: "border-box" },
+  select: { width: "100%", padding: "10px 14px", border: "1px solid " + BRAND.border, borderRadius: 6, fontSize: 14, fontFamily: BRAND.sans, background: BRAND.white, color: BRAND.charcoal, cursor: "pointer", boxSizing: "border-box", appearance: "auto" },
+  label: { display: "block", fontSize: 14, fontWeight: 600, color: BRAND.textMuted, marginBottom: 6, fontFamily: BRAND.sans },
   field: { marginBottom: 20 },
 
   // Table
-  th: { textAlign: "left", padding: "12px 16px", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", color: BRAND.textMuted, borderBottom: "2px solid " + BRAND.borderLight, background: BRAND.bgSoft, fontFamily: BRAND.sans },
+  th: { textAlign: "left", padding: "12px 16px", fontWeight: 600, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", color: BRAND.textMuted, borderBottom: "2px solid " + BRAND.borderLight, background: BRAND.bgSoft, fontFamily: BRAND.sans },
   td: { padding: "14px 16px", borderBottom: "1px solid " + BRAND.borderLight, verticalAlign: "top", fontSize: 14 },
 
   // Nav
@@ -284,13 +284,32 @@ const Field = ({ label, required, children }) => (
 );
 
 const Modal = ({ open, onClose, title, children }) => {
+  const modalRef = useRef(null);
+  const prevFocusRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    prevFocusRef.current = document.activeElement;
+    const handleEsc = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handleEsc);
+    // Focus first focusable element
+    setTimeout(() => {
+      const focusable = modalRef.current?.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (focusable?.length) focusable[0].focus();
+    }, 50);
+    return () => {
+      document.removeEventListener("keydown", handleEsc);
+      if (prevFocusRef.current) prevFocusRef.current.focus();
+    };
+  }, [open, onClose]);
+
   if (!open) return null;
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(31,42,56,0.45)" }} onClick={onClose}>
-      <div className="fade-in" style={{ background: BRAND.white, borderRadius: 12, width: 520, maxWidth: "92vw", maxHeight: "88vh", overflow: "auto", boxShadow: "0 20px 60px rgba(31,42,56,0.2)" }} onClick={e => e.stopPropagation()}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(31,42,56,0.45)" }} onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div ref={modalRef} className="fade-in" style={{ background: BRAND.white, borderRadius: 12, width: 520, maxWidth: "92vw", maxHeight: "88vh", overflow: "auto", boxShadow: "0 20px 60px rgba(31,42,56,0.2)" }} onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px", borderBottom: "1px solid " + BRAND.borderLight }}>
-          <h3 style={{ ...S.h3, fontSize: 18 }}>{title}</h3>
-          <button onClick={onClose} style={{ ...S.btnGhost, padding: 6 }}><Icon name="x" size={20} /></button>
+          <h3 id="modal-title" style={{ ...S.h3, fontSize: 18 }}>{title}</h3>
+          <button onClick={onClose} style={{ ...S.btnGhost, padding: 6 }} aria-label="Close dialog"><Icon name="x" size={20} /></button>
         </div>
         <div style={{ padding: 24 }}>{children}</div>
       </div>
@@ -377,11 +396,11 @@ const ImageUploader = ({ images, onChange, label, color, icon, readOnly, mob }) 
         <div style={{ display: "grid", gridTemplateColumns: mob ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: 10, marginBottom: 12 }}>
           {images.map(img => (
             <div key={img.id} style={{ position: "relative", borderRadius: 10, overflow: "hidden", border: "1px solid " + BRAND.borderLight, background: BRAND.bgSoft }}>
-              <img src={img.dataUrl} alt="" style={{ width: "100%", height: 100, objectFit: "cover", display: "block", cursor: "pointer" }} onClick={() => setViewImg(img)} />
+              <img src={img.dataUrl} alt={img.caption || (label + " photo")} style={{ width: "100%", height: 100, objectFit: "cover", display: "block", cursor: "pointer" }} onClick={() => setViewImg(img)} />
               {!readOnly && (
                 <>
-                  <button onClick={() => removeImage(img.id)} style={{ position: "absolute", top: 4, right: 4, width: 22, height: 22, borderRadius: 11, background: "rgba(0,0,0,0.6)", color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>✕</button>
-                  <input style={{ width: "100%", border: "none", borderTop: "1px solid " + BRAND.borderLight, padding: "6px 8px", fontSize: 11, fontFamily: BRAND.sans, outline: "none", background: BRAND.white }} placeholder="Add caption..." value={img.caption || ""} onChange={e => updateCaption(img.id, e.target.value)} />
+                  <button aria-label={"Remove " + label + " photo"} onClick={() => removeImage(img.id)} style={{ position: "absolute", top: 2, right: 2, width: 28, height: 28, borderRadius: 14, background: "rgba(0,0,0,0.6)", color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>✕</button>
+                  <input aria-label={"Caption for " + label + " photo"} style={{ width: "100%", border: "none", borderTop: "1px solid " + BRAND.borderLight, padding: "6px 8px", fontSize: 13, fontFamily: BRAND.sans, background: BRAND.white }} placeholder="Add caption..." value={img.caption || ""} onChange={e => updateCaption(img.id, e.target.value)} />
                 </>
               )}
               {readOnly && img.caption && <div style={{ padding: "4px 8px", fontSize: 11, color: BRAND.textMuted, background: BRAND.white }}>{img.caption}</div>}
@@ -403,7 +422,7 @@ const ImageUploader = ({ images, onChange, label, color, icon, readOnly, mob }) 
       {/* Lightbox */}
       {viewImg && (
         <Modal open={true} onClose={() => setViewImg(null)} title={label}>
-          <img src={viewImg.dataUrl} alt="" style={{ width: "100%", borderRadius: 8, marginBottom: viewImg.caption ? 8 : 0 }} />
+          <img src={viewImg.dataUrl} alt={viewImg.caption || "Uploaded photo"} style={{ width: "100%", borderRadius: 8, marginBottom: viewImg.caption ? 8 : 0 }} />
           {viewImg.caption && <div style={{ fontSize: 13, color: BRAND.textMuted, textAlign: "center" }}>{viewImg.caption}</div>}
         </Modal>
       )}
@@ -428,7 +447,7 @@ const MaterialsEditor = ({ materials, onChange, readOnly, mob }) => {
               <span style={{ fontSize: 18 }}>🧱</span>
               <span style={{ fontSize: 13, fontWeight: 600, color: BRAND.navy }}>Item {i + 1}</span>
             </div>
-            {!readOnly && <button style={{ ...S.btnGhost, padding: 4, color: BRAND.error }} onClick={() => remove(i)}><Icon name="trash" size={16} /></button>}
+            {!readOnly && <button aria-label="Remove material item" style={{ ...S.btnGhost, padding: 4, color: BRAND.error }} onClick={() => remove(i)}><Icon name="trash" size={16} /></button>}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "2fr 1fr 1fr 1fr", gap: 10, marginBottom: 8 }}>
             <div>
@@ -543,13 +562,13 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
         <Field label="Member" required>
           <select style={{ ...S.select, ...errStyle("userId") }} value={form.userId} onChange={e => set("userId", e.target.value)}>
             {allMembers.map(u => <option key={u.id} value={u.id}>{u.name}{u.role === ROLES.TREASURER ? " (Treasurer)" : ""}</option>)}
-          </select>{errors.userId && <span style={{ color: BRAND.error, fontSize: 12 }}>{errors.userId}</span>}
+          </select>{errors.userId && <span role="alert" style={{ color: BRAND.error, fontSize: 13 }}>{errors.userId}</span>}
         </Field>
       )}
       <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr 1fr", gap: mob ? 12 : 16 }}>
-        <Field label="Date" required><input type="date" style={{ ...S.input, ...errStyle("date") }} value={form.date} onChange={e => set("date", e.target.value)} />{errors.date && <span style={{ color: BRAND.error, fontSize: 12 }}>{errors.date}</span>}</Field>
-        <Field label="Start Time" required><input type="time" style={{ ...S.input, ...errStyle("startTime") }} value={form.startTime} onChange={e => set("startTime", e.target.value)} />{errors.startTime && <span style={{ color: BRAND.error, fontSize: 12 }}>{errors.startTime}</span>}</Field>
-        <Field label="End Time" required><input type="time" style={{ ...S.input, ...errStyle("endTime") }} value={form.endTime} onChange={e => set("endTime", e.target.value)} />{errors.endTime && <span style={{ color: BRAND.error, fontSize: 12 }}>{errors.endTime}</span>}</Field>
+        <Field label="Date" required><input type="date" style={{ ...S.input, ...errStyle("date") }} value={form.date} onChange={e => set("date", e.target.value)} />{errors.date && <span role="alert" style={{ color: BRAND.error, fontSize: 13 }}>{errors.date}</span>}</Field>
+        <Field label="Start Time" required><input type="time" style={{ ...S.input, ...errStyle("startTime") }} value={form.startTime} onChange={e => set("startTime", e.target.value)} />{errors.startTime && <span role="alert" style={{ color: BRAND.error, fontSize: 13 }}>{errors.startTime}</span>}</Field>
+        <Field label="End Time" required><input type="time" style={{ ...S.input, ...errStyle("endTime") }} value={form.endTime} onChange={e => set("endTime", e.target.value)} />{errors.endTime && <span role="alert" style={{ color: BRAND.error, fontSize: 13 }}>{errors.endTime}</span>}</Field>
       </div>
       {/* Quick duration buttons */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: -8, marginBottom: 16 }}>
@@ -562,11 +581,11 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
         <select style={{ ...S.select, ...errStyle("category") }} value={form.category} onChange={e => set("category", e.target.value)}>
           <option value="">Select category...</option>
           {CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_EMOJIS[c] || "📋"} {c}</option>)}
-        </select>{errors.category && <span style={{ color: BRAND.error, fontSize: 12 }}>{errors.category}</span>}
+        </select>{errors.category && <span role="alert" style={{ color: BRAND.error, fontSize: 13 }}>{errors.category}</span>}
       </Field>
       <Field label="Task Description" required>
         <textarea style={{ ...S.textarea, ...errStyle("description") }} value={form.description} onChange={e => set("description", e.target.value)} placeholder="Describe the work performed..." />
-        {errors.description && <span style={{ color: BRAND.error, fontSize: 12 }}>{errors.description}</span>}
+        {errors.description && <span role="alert" style={{ color: BRAND.error, fontSize: 13 }}>{errors.description}</span>}
       </Field>
       <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: mob ? 12 : 16 }}>
         <Field label="Location"><input style={S.input} value={form.location} onChange={e => set("location", e.target.value)} placeholder="e.g. Unit 3B" /></Field>
@@ -609,8 +628,8 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
         <button onClick={async () => { const data = { ...form, status: STATUSES.DRAFT, userId: form.userId || currentUser.id }; setAutoSaveStatus("saving"); const result = await onSave(data, draftId, false); if (result && !draftId) setDraftId(result.id); setAutoSaveStatus("saved"); setTimeout(() => setAutoSaveStatus(""), 2000); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: mob ? "16px 8px" : "20px 12px", borderRadius: 14, border: "1px solid #DBEAFE", background: "#EFF6FF", cursor: "pointer", transition: "all 200ms", fontFamily: BRAND.sans, boxShadow: "0 2px 8px rgba(21,101,192,0.08)" }} onMouseEnter={ev => { ev.currentTarget.style.transform = "translateY(-2px)"; ev.currentTarget.style.boxShadow = "0 4px 16px rgba(21,101,192,0.18)"; }} onMouseLeave={ev => { ev.currentTarget.style.transform = "translateY(0)"; ev.currentTarget.style.boxShadow = "0 2px 8px rgba(21,101,192,0.08)"; }}>
           <div style={{ width: 44, height: 44, borderRadius: 22, background: "#1565C0", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}><Icon name="edit" size={22} /></div>
           <span style={{ fontSize: 13, fontWeight: 600, color: "#1565C0" }}>Save Draft</span>
-          {autoSaveStatus === "saving" && <span style={{ fontSize: 10, color: "#1565C0", opacity: 0.7 }}>Saving...</span>}
-          {autoSaveStatus === "saved" && <span style={{ fontSize: 10, color: BRAND.success }}>✓ Saved</span>}
+          {autoSaveStatus === "saving" && <span role="status" aria-live="polite" style={{ fontSize: 11, color: "#1565C0", opacity: 0.7 }}>Saving...</span>}
+          {autoSaveStatus === "saved" && <span role="status" aria-live="polite" style={{ fontSize: 11, color: BRAND.success }}>✓ Saved</span>}
         </button>
         {/* Submit for Review */}
         <button onClick={() => { if (validate()) setShowSubmitConfirm(true); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: mob ? "16px 8px" : "20px 12px", borderRadius: 14, border: "1px solid " + BRAND.brick + "30", background: BRAND.brick + "0A", cursor: "pointer", transition: "all 200ms", fontFamily: BRAND.sans, boxShadow: "0 2px 8px rgba(142,59,46,0.08)" }} onMouseEnter={ev => { ev.currentTarget.style.transform = "translateY(-3px)"; ev.currentTarget.style.boxShadow = "0 6px 20px rgba(142,59,46,0.22)"; }} onMouseLeave={ev => { ev.currentTarget.style.transform = "translateY(0)"; ev.currentTarget.style.boxShadow = "0 2px 8px rgba(142,59,46,0.08)"; }}>
@@ -777,15 +796,15 @@ const EntryCard = ({entry, users, settings, onClick}) => {
   const total = calcLabor(hrs, rate) + calcMaterialsTotal(entry.materials);
   const photoCount = (entry.preImages?.length || 0) + (entry.postImages?.length || 0);
   return (
-    <div style={{ ...S.card, cursor: "pointer", padding: "14px 16px" }} onClick={onClick}>
+    <div role="button" tabIndex={0} onKeyDown={e => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onClick())} aria-label={entry.category + ": " + entry.description + ", " + fmt(total) + ", " + entry.status} style={{ ...S.card, cursor: "pointer", padding: "14px 16px" }} onClick={onClick}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}><CategoryBadge category={entry.category} /><StatusBadge status={entry.status} />{photoCount > 0 && <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, color: BRAND.textLight, background: BRAND.bgSoft, padding: "2px 8px", borderRadius: 10 }}>📷 {photoCount}</span>}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}><CategoryBadge category={entry.category} /><StatusBadge status={entry.status} />{photoCount > 0 && <span aria-label={photoCount + " photos"} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 12, color: BRAND.textLight, background: BRAND.bgSoft, padding: "2px 8px", borderRadius: 10 }}>📷 {photoCount}</span>}</div>
           <div style={{ fontSize: 14, fontWeight: 500, color: BRAND.charcoal, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{entry.description}</div>
         </div>
         <div style={{ textAlign: "right", marginLeft: 12 }}><div style={{ fontSize: 16, fontWeight: 700, color: BRAND.navy }}>{fmt(total)}</div></div>
       </div>
-      <div style={{ fontSize: 12, color: BRAND.textLight }}>{formatDate(entry.date)} · {fmtHours(hrs)}{u ? " · " + u.name : ""}</div>
+      <div style={{ fontSize: 13, color: BRAND.textLight }}>{formatDate(entry.date)} · {fmtHours(hrs)}{u ? " · " + u.name : ""}</div>
     </div>
   );
 };
@@ -977,7 +996,8 @@ const ReportsPage = ({ entries, users, settings, currentUser, mob }) => {
             {filtered.length === 0 ? <div style={{ textAlign: "center", padding: 40, color: BRAND.textLight }}>No entries found for this period.</div> : (
               <div style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 8, overflow: "hidden" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-                  <thead><tr><th style={S.th}>Date</th>{isTreasurer && <th style={S.th}>Member</th>}<th style={S.th}>Category</th><th style={S.th}>Description</th><th style={{ ...S.th, textAlign: "right" }}>Hours</th><th style={{ ...S.th, textAlign: "right" }}>Total</th></tr></thead>
+                  <caption className="sr-only">Work entries report</caption>
+                  <thead><tr><th scope="col" style={S.th}>Date</th>{isTreasurer && <th scope="col" style={S.th}>Member</th>}<th scope="col" style={S.th}>Category</th><th scope="col" style={S.th}>Description</th><th scope="col" style={{ ...S.th, textAlign: "right" }}>Hours</th><th scope="col" style={{ ...S.th, textAlign: "right" }}>Total</th></tr></thead>
                   <tbody>{filtered.map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); return (
                     <tr key={e.id} style={{ background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white }}><td style={S.td}>{formatDate(e.date)}</td>{isTreasurer && <td style={S.td}>{u?.name}</td>}<td style={S.td}><CategoryBadge category={e.category} /></td><td style={{ ...S.td, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</td><td style={{ ...S.td, textAlign: "right" }}>{h.toFixed(2)}</td><td style={{ ...S.td, textAlign: "right", fontWeight: 700 }}>{fmt(calcLabor(h, r) + calcMaterialsTotal(e.materials))}</td></tr>
                   ); })}</tbody>
@@ -1045,7 +1065,7 @@ const PageLoader = ({ page }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 const RateInput = ({ initialValue, placeholder, onSave }) => {
   const [val, setVal] = useState(initialValue || "");
-  return <input type="number" min="0" step="0.50" style={{ ...S.input, padding: "6px 10px" }} value={val} onChange={e => setVal(e.target.value)} onBlur={() => onSave(Number(val) || null)} placeholder={placeholder} />;
+  return <input aria-label="Hourly rate" type="number" min="0" step="0.50" style={{ ...S.input, padding: "6px 10px" }} value={val} onChange={e => setVal(e.target.value)} onBlur={() => onSave(Number(val) || null)} placeholder={placeholder} />;
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1228,15 +1248,15 @@ const NotificationPanel = ({ entries, users, settings, onView, onClose, onReview
   };
   return (
     <>
-      <div style={{ position: "fixed", inset: 0, zIndex: 89 }} onClick={onClose} />
-      <div style={{ position: "absolute", top: mob ? "100%" : 44, right: mob ? 16 : 0, width: mob ? "calc(100vw - 32px)" : 360, maxHeight: 420, background: BRAND.white, borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,0.15)", border: "1px solid " + BRAND.borderLight, zIndex: 90, overflow: "hidden", animation: "fadeIn 200ms ease-out" }}>
+      <div style={{ position: "fixed", inset: 0, zIndex: 89 }} onClick={onClose} aria-hidden="true" />
+      <div role="dialog" aria-label="Notifications" style={{ position: "absolute", top: mob ? "100%" : 44, right: mob ? 16 : 0, width: mob ? "calc(100vw - 32px)" : 360, maxHeight: 420, background: BRAND.white, borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,0.15)", border: "1px solid " + BRAND.borderLight, zIndex: 90, overflow: "hidden", animation: "fadeIn 200ms ease-out" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid " + BRAND.borderLight }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Icon name="bell" size={18} />
             <span style={{ fontWeight: 700, fontSize: 15, color: BRAND.navy }}>Notifications</span>
-            {pending.length > 0 && <span style={{ background: "#EF4444", color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>{pending.length}</span>}
+            {pending.length > 0 && <span aria-label={pending.length + " pending"} style={{ background: "#EF4444", color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>{pending.length}</span>}
           </div>
-          <button style={{ background: "none", border: "none", color: BRAND.textLight, cursor: "pointer", padding: 4 }} onClick={onClose}><Icon name="x" size={18} /></button>
+          <button aria-label="Close notifications" style={{ background: "none", border: "none", color: BRAND.textLight, cursor: "pointer", padding: 8, minWidth: 36, minHeight: 36, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}><Icon name="x" size={18} /></button>
         </div>
         <div style={{ overflowY: "auto", maxHeight: 320 }}>
           {pending.length === 0 ? (
@@ -1252,7 +1272,7 @@ const NotificationPanel = ({ entries, users, settings, onView, onClose, onReview
               const r = getUserRate(users, settings, e.userId);
               const total = calcLabor(h, r) + calcMaterialsTotal(e.materials);
               return (
-                <div key={e.id} style={{ padding: "12px 16px", borderBottom: i < pending.length - 1 ? "1px solid " + BRAND.borderLight : "none", cursor: "pointer", background: BRAND.white, transition: "background 150ms" }} onClick={() => onView(e)} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.bgSoft} onMouseLeave={ev => ev.currentTarget.style.background = BRAND.white}>
+                <div key={e.id} role="button" tabIndex={0} onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), onView(e))} aria-label={(u?.name || "Member") + ": " + e.category + ", " + fmt(total)} style={{ padding: "12px 16px", borderBottom: i < pending.length - 1 ? "1px solid " + BRAND.borderLight : "none", cursor: "pointer", background: BRAND.white, transition: "background 150ms" }} onClick={() => onView(e)} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.bgSoft} onMouseLeave={ev => ev.currentTarget.style.background = BRAND.white}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <div style={{ width: 28, height: 28, borderRadius: 14, background: BRAND.brick + "18", color: BRAND.brick, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{(u?.name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
@@ -1342,13 +1362,13 @@ const SettingsPage = ({ settings, users, currentUser, onSaveSettings, onAddUser,
         {members.length === 0 ? <div style={{ textAlign: "center", padding: 24, color: BRAND.textLight, fontSize: 14 }}>No members yet.</div> : (
           <div style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 8, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-              <thead><tr><th style={S.th}>Name</th><th style={S.th}>Email</th><th style={{ ...S.th, width: 120 }}>Rate</th><th style={{ ...S.th, width: 50 }}></th></tr></thead>
+              <thead><tr><th scope="col" style={S.th}>Name</th><th scope="col" style={S.th}>Email</th><th scope="col" style={{ ...S.th, width: 120 }}>Rate</th><th scope="col" style={{ ...S.th, width: 50 }}></th></tr></thead>
               <tbody>{members.map(u => (
                 <tr key={u.id}>
                   <td style={{ ...S.td, fontWeight: 500 }}>{u.name}</td>
                   <td style={{ ...S.td, color: BRAND.textMuted }}>{u.email}</td>
                   <td style={S.td}><RateInput initialValue={u.hourlyRate} placeholder={"$" + form.defaultHourlyRate} onSave={val => onUpdateRate(u.id, val)} /></td>
-                  <td style={S.td}><button style={{ ...S.btnGhost, padding: 6, color: BRAND.error }} onClick={() => setDeleteTarget(u)}><Icon name="trash" size={16} /></button></td>
+                  <td style={S.td}><button aria-label={"Remove " + u.name} style={{ ...S.btnGhost, padding: 6, color: BRAND.error }} onClick={() => setDeleteTarget(u)}><Icon name="trash" size={16} /></button></td>
                 </tr>
               ))}</tbody>
             </table>
@@ -1502,7 +1522,7 @@ export default function App() {
   // LOGIN SCREEN
   // ══════════════════════════════════════════════════════════════════════════
   if (!currentUser) {
-    if (loading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans }}><div style={{ textAlign: "center" }}><img src="/logo.png" alt="" style={{ width: 120, height: 120, objectFit: "contain", margin: "0 auto 16px", display: "block", opacity: 0.5 }} /><div style={{ fontSize: 14, color: BRAND.textMuted }}>Loading...</div></div></div>;
+    if (loading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans }}><div style={{ textAlign: "center" }}><img src="/logo.png" alt="24 Mill Street" style={{ width: 120, height: 120, objectFit: "contain", margin: "0 auto 16px", display: "block", opacity: 0.5 }} /><div style={{ fontSize: 14, color: BRAND.textMuted }}>Loading...</div></div></div>;
     return (
       <div style={{ minHeight: "100dvh", display: "flex", alignItems: "safe center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans, padding: mob ? "24px 16px" : 0, overflow: "auto", WebkitOverflowScrolling: "touch" }}>
         <div className="fade-in" style={{ textAlign: "center", maxWidth: 420, width: "100%" }}>
@@ -1670,9 +1690,9 @@ export default function App() {
             : (
               <div style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 8, overflow: "hidden" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-                  <thead><tr><th style={S.th}>Date</th>{isTreasurer && <th style={S.th}>Member</th>}<th style={S.th}>Category</th><th style={S.th}>Description</th><th style={{ ...S.th, textAlign: "right" }}>Total</th><th style={S.th}>Status</th></tr></thead>
+                  <thead><tr><th scope="col" style={S.th}>Date</th>{isTreasurer && <th scope="col" style={S.th}>Member</th>}<th scope="col" style={S.th}>Category</th><th scope="col" style={S.th}>Description</th><th scope="col" style={{ ...S.th, textAlign: "right" }}>Total</th><th scope="col" style={S.th}>Status</th></tr></thead>
                   <tbody>{recent.map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); return (
-                    <tr key={e.id} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms" }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
+                    <tr key={e.id} tabIndex={0} role="row" onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), setViewEntry(e))} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms" }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
                       <td style={S.td}>{formatDate(e.date)}</td>{isTreasurer && <td style={S.td}>{u?.name}</td>}<td style={S.td}><CategoryBadge category={e.category} /></td><td style={{ ...S.td, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</td><td style={{ ...S.td, textAlign: "right", fontWeight: 600 }}>{fmt(total)}</td><td style={S.td}><StatusBadge status={e.status} /></td>
                     </tr>); })}</tbody>
                 </table>
@@ -1720,9 +1740,9 @@ export default function App() {
           : (
             <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-                <thead><tr><th style={S.th}>Date</th>{isTreasurer && <th style={S.th}>Member</th>}<th style={S.th}>Category</th><th style={S.th}>Description</th><th style={{ ...S.th, textAlign: "right" }}>Hours</th><th style={{ ...S.th, textAlign: "right" }}>Total</th><th style={S.th}>Status</th></tr></thead>
+                <thead><tr><th scope="col" style={S.th}>Date</th>{isTreasurer && <th scope="col" style={S.th}>Member</th>}<th scope="col" style={S.th}>Category</th><th scope="col" style={S.th}>Description</th><th scope="col" style={{ ...S.th, textAlign: "right" }}>Hours</th><th scope="col" style={{ ...S.th, textAlign: "right" }}>Total</th><th scope="col" style={S.th}>Status</th></tr></thead>
                 <tbody>{filtered.map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); return (
-                  <tr key={e.id} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms" }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
+                  <tr key={e.id} tabIndex={0} role="row" onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), setViewEntry(e))} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms" }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
                     <td style={S.td}>{formatDate(e.date)}</td>{isTreasurer && <td style={S.td}>{u?.name}</td>}<td style={S.td}><CategoryBadge category={e.category} /></td><td style={{ ...S.td, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</td><td style={{ ...S.td, textAlign: "right" }}>{fmtHours(h)}</td><td style={{ ...S.td, textAlign: "right", fontWeight: 600 }}>{fmt(total)}</td><td style={S.td}><StatusBadge status={e.status} /></td>
                   </tr>); })}</tbody>
               </table>
@@ -1742,7 +1762,7 @@ export default function App() {
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {pending.map(e => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); return (
                 <div key={e.id} style={{ ...S.card, padding: "20px 24px", transition: "box-shadow 150ms", borderLeft: "4px solid " + BRAND.brick }} onMouseEnter={ev => ev.currentTarget.style.boxShadow = "0 4px 16px rgba(31,42,56,0.08)"} onMouseLeave={ev => ev.currentTarget.style.boxShadow = "0 1px 3px rgba(31,42,56,0.04)"}>
-                  <div style={{ display: "flex", justifyContent: "space-between", cursor: "pointer" }} onClick={() => setViewEntry(e)}>
+                  <div role="button" tabIndex={0} onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), setViewEntry(e))} style={{ display: "flex", justifyContent: "space-between", cursor: "pointer" }} onClick={() => setViewEntry(e)}>
                     <div><div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}><span style={{ fontWeight: 700, fontSize: 16, color: BRAND.navy }}>{u?.name}</span><CategoryBadge category={e.category} /></div><div style={{ fontSize: 14, color: BRAND.charcoal, marginBottom: 4 }}>{e.description}</div><div style={{ fontSize: 13, color: BRAND.textLight }}>{formatDate(e.date)} · {fmtHours(h)}</div></div>
                     <div style={{ textAlign: "right" }}><div style={{ fontSize: 22, fontWeight: 800, color: BRAND.brick }}>{fmt(total)}</div><div style={{ fontSize: 12, color: BRAND.textLight }}>reimbursement</div></div>
                   </div>
@@ -1778,40 +1798,41 @@ export default function App() {
   if (mob) {
     return (
       <div style={{ minHeight: "100vh", fontFamily: BRAND.sans, background: BRAND.bgSoft, color: BRAND.charcoal, paddingBottom: 88 }}>
+        <a href="#main-content" className="skip-link">Skip to main content</a>
         {/* Mobile top bar */}
-        <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: BRAND.navy, position: "sticky", top: 0, zIndex: 20 }}>
+        <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: BRAND.navy, position: "sticky", top: 0, zIndex: 20 }} role="banner">
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <img src="/logo.png" alt="" style={{ width: 32, height: 32, borderRadius: 4, objectFit: "cover", background: BRAND.beige }} />
+            <img src="/logo.png" alt="24 Mill Street logo" style={{ width: 32, height: 32, borderRadius: 4, objectFit: "cover", background: BRAND.beige }} />
             <span style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 16, color: "#fff" }}>24 Mill</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             {isTreasurer && (
-              <button style={{ background: "none", border: "none", color: "#fff", padding: 6, cursor: "pointer", position: "relative" }} onClick={() => setShowNotifPanel(p => !p)}>
+              <button style={{ background: "none", border: "none", color: "#fff", padding: 6, cursor: "pointer", position: "relative", minWidth: 44, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowNotifPanel(p => !p)} aria-label={"Notifications" + (pendingCount > 0 ? ", " + pendingCount + " pending" : "")}>
                 <Icon name="bell" size={22} />
-                {pendingCount > 0 && <span style={{ position: "absolute", top: 2, right: 2, background: "#EF4444", color: "#fff", fontSize: 9, fontWeight: 700, width: 16, height: 16, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid " + BRAND.navy }}>{pendingCount}</span>}
+                {pendingCount > 0 && <span aria-hidden="true" style={{ position: "absolute", top: 2, right: 2, background: "#EF4444", color: "#fff", fontSize: 9, fontWeight: 700, width: 16, height: 16, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid " + BRAND.navy }}>{pendingCount}</span>}
               </button>
             )}
-            <button style={{ background: "none", border: "none", color: "#fff", padding: 4, cursor: "pointer" }} onClick={() => setDrawerOpen(true)}><Icon name="menu" size={24} /></button>
+            <button style={{ background: "none", border: "none", color: "#fff", padding: 4, cursor: "pointer", minWidth: 44, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setDrawerOpen(true)} aria-label="Open navigation menu"><Icon name="menu" size={24} /></button>
           </div>
         </header>
         {/* Notification panel */}
         {showNotifPanel && isTreasurer && <NotificationPanel entries={entries} users={users} settings={settings} onView={(e) => { setShowNotifPanel(false); setViewEntry(e); }} onClose={() => setShowNotifPanel(false)} onReviewAll={() => { setShowNotifPanel(false); nav("review"); }} mob={mob} />}
         {/* Slide-out drawer */}
         {drawerOpen && (
-          <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.4)" }} onClick={() => setDrawerOpen(false)}>
-            <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 280, background: BRAND.navy, padding: "20px 16px", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+          <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.4)" }} onClick={() => setDrawerOpen(false)} aria-hidden="true">
+            <div role="dialog" aria-label="Navigation menu" style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 280, background: BRAND.navy, padding: "20px 16px", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
                 <span style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 18, color: "#fff" }}>Menu</span>
-                <button style={{ background: "none", border: "none", color: "#9B978F", cursor: "pointer" }} onClick={() => setDrawerOpen(false)}><Icon name="x" size={24} /></button>
+                <button aria-label="Close menu" style={{ background: "none", border: "none", color: "#9B978F", cursor: "pointer", padding: 8, minWidth: 44, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setDrawerOpen(false)}><Icon name="x" size={24} /></button>
               </div>
               <div style={{ padding: "12px 8px", borderRadius: 8, background: "rgba(255,255,255,0.06)", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 6, background: isTreasurer ? BRAND.brick : BRAND.green, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#fff" }}>{initials}</div>
-                <div><div style={{ fontSize: 14, fontWeight: 600, color: "#fff" }}>{currentUser.name}</div><div style={{ fontSize: 12, color: "#7A766E" }}>{currentUser.role}</div></div>
+                <div aria-hidden="true" style={{ width: 36, height: 36, borderRadius: 6, background: isTreasurer ? BRAND.brick : BRAND.green, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#fff" }}>{initials}</div>
+                <div><div style={{ fontSize: 14, fontWeight: 600, color: "#fff" }}>{currentUser.name}</div><div style={{ fontSize: 13, color: "#7A766E" }}>{currentUser.role}</div></div>
               </div>
               {navItems.map(item => (
-                <button key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 12px", borderRadius: 6, fontSize: 15, fontWeight: isActive(item.id) ? 600 : 400, background: isActive(item.id) ? "rgba(255,255,255,0.1)" : "transparent", color: isActive(item.id) ? "#fff" : "#9B978F", cursor: "pointer", border: "none", width: "100%", textAlign: "left", fontFamily: BRAND.sans, marginBottom: 2 }} onClick={() => nav(item.id)}>
+                <button key={item.id} aria-current={isActive(item.id) ? "page" : undefined} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 12px", borderRadius: 6, fontSize: 15, fontWeight: isActive(item.id) ? 600 : 400, background: isActive(item.id) ? "rgba(255,255,255,0.1)" : "transparent", color: isActive(item.id) ? "#fff" : "#9B978F", cursor: "pointer", border: "none", width: "100%", textAlign: "left", fontFamily: BRAND.sans, marginBottom: 2 }} onClick={() => nav(item.id)}>
                   <Icon name={item.icon} size={20} /><span style={{ flex: 1 }}>{item.label}</span>
-                  {item.badge > 0 && <span style={{ background: BRAND.brick, color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>{item.badge}</span>}
+                  {item.badge > 0 && <span aria-label={item.badge + " pending"} style={{ background: BRAND.brick, color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>{item.badge}</span>}
                 </button>
               ))}
               <div style={{ flex: 1 }} />
@@ -1820,26 +1841,26 @@ export default function App() {
           </div>
         )}
         {/* Offline banner */}
-        {!online && <div style={{ background: "#FFF3E0", borderBottom: "1px solid #FFB74D", padding: "8px 16px", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#E65100" }}><Icon name="wifiOff" size={16} /><span>You're offline. Viewing cached data.</span></div>}
+        {!online && <div role="alert" style={{ background: "#FFF3E0", borderBottom: "1px solid #FFB74D", padding: "8px 16px", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#E65100" }}><Icon name="wifiOff" size={16} /><span>You're offline. Viewing cached data.</span></div>}
         {/* Content */}
-        <div style={{ padding: "16px 16px" }}>{renderPage()}</div>
+        <main id="main-content" style={{ padding: "16px 16px" }}>{renderPage()}</main>
         {/* FAB */}
         {!newEntry && !editEntry && !viewEntry && (page === "dashboard" || page === "entries") && (
-          <button style={{ position: "fixed", bottom: 96, right: 20, width: 56, height: 56, borderRadius: 28, background: BRAND.brick, color: "#fff", border: "none", boxShadow: "0 4px 16px rgba(142,59,46,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 15 }} onClick={() => setNewEntry(true)}>
+          <button aria-label="Create new work entry" style={{ position: "fixed", bottom: 96, right: 20, width: 56, height: 56, borderRadius: 28, background: BRAND.brick, color: "#fff", border: "none", boxShadow: "0 4px 16px rgba(142,59,46,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 15 }} onClick={() => setNewEntry(true)}>
             <Icon name="plus" size={24} />
           </button>
         )}
         {/* Bottom tab bar */}
-        <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: BRAND.white, borderTop: "1px solid " + BRAND.border, display: "flex", zIndex: 20, paddingBottom: "env(safe-area-inset-bottom)", boxShadow: "0 -2px 16px rgba(0,0,0,0.08)" }}>
+        <nav aria-label="Main navigation" style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: BRAND.white, borderTop: "1px solid " + BRAND.border, display: "flex", zIndex: 20, paddingBottom: "env(safe-area-inset-bottom)", boxShadow: "0 -2px 16px rgba(0,0,0,0.08)" }}>
           {bottomTabs.map(t => {
             const active = isActive(t.id);
             return (
-            <button key={t.id} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "14px 4px 12px", background: "none", border: "none", cursor: "pointer", color: active ? t.color : BRAND.textLight, fontFamily: BRAND.sans, fontSize: 11, fontWeight: active ? 700 : 500, position: "relative", transition: "color 200ms" }} onClick={() => nav(t.id)}>
+            <button key={t.id} aria-label={t.label + (t.badge > 0 ? ", " + t.badge + " pending" : "")} aria-current={active ? "page" : undefined} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "14px 4px 12px", background: "none", border: "none", cursor: "pointer", color: active ? t.color : BRAND.textLight, fontFamily: BRAND.sans, fontSize: 11, fontWeight: active ? 700 : 500, position: "relative", transition: "color 200ms" }} onClick={() => nav(t.id)}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 56, height: 36, borderRadius: 18, background: active ? t.tint : "transparent", transition: "background 250ms" }}>
                 <Icon name={active ? t.iconFilled : t.icon} size={28} />
               </div>
-              <span style={{ transition: "color 200ms" }}>{t.label}</span>
-              {t.badge > 0 && <span style={{ position: "absolute", top: 6, right: "50%", marginRight: -26, background: BRAND.brick, color: "#fff", fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 10, minWidth: 18, textAlign: "center", boxShadow: "0 1px 4px rgba(142,59,46,0.3)" }}>{t.badge}</span>}
+              <span aria-hidden="true" style={{ transition: "color 200ms" }}>{t.label}</span>
+              {t.badge > 0 && <span aria-hidden="true" style={{ position: "absolute", top: 6, right: "50%", marginRight: -26, background: BRAND.brick, color: "#fff", fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 10, minWidth: 18, textAlign: "center", boxShadow: "0 1px 4px rgba(142,59,46,0.3)" }}>{t.badge}</span>}
             </button>
           );})}
         </nav>
@@ -1850,43 +1871,44 @@ export default function App() {
   // ── DESKTOP LAYOUT ─────────────────────────────────────────────────────
   return (
     <div style={S.app}>
-      <aside style={S.sidebar}>
+      <a href="#main-content" className="skip-link">Skip to main content</a>
+      <aside style={S.sidebar} aria-label="Sidebar navigation">
         <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <img src="/logo.png" alt="" style={{ width: 40, height: 40, borderRadius: 6, objectFit: "cover", background: BRAND.beige }} />
+            <img src="/logo.png" alt="24 Mill Street logo" style={{ width: 40, height: 40, borderRadius: 6, objectFit: "cover", background: BRAND.beige }} />
             <div>
               <div style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 17, color: "#FFFFFF", lineHeight: 1.2 }}>24 Mill</div>
-              <div style={{ fontSize: 11, color: "#7A766E", letterSpacing: "0.02em" }}>Log Your Work</div>
+              <div style={{ fontSize: 12, color: "#7A766E", letterSpacing: "0.02em" }}>Log Your Work</div>
             </div>
           </div>
         </div>
-        <nav style={{ padding: "12px 12px", flex: 1 }}>
+        <nav aria-label="Main navigation" style={{ padding: "12px 12px", flex: 1 }}>
           {navItems.map(item => (
-            <button key={item.id} style={S.navItem(isActive(item.id))} onClick={() => nav(item.id)}>
+            <button key={item.id} aria-current={isActive(item.id) ? "page" : undefined} style={S.navItem(isActive(item.id))} onClick={() => nav(item.id)}>
               <Icon name={item.icon} size={18} /><span style={{ flex: 1 }}>{item.label}</span>
-              {item.badge > 0 && <span style={{ background: BRAND.brick, color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>{item.badge}</span>}
+              {item.badge > 0 && <span aria-label={item.badge + " pending"} style={{ background: BRAND.brick, color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>{item.badge}</span>}
             </button>
           ))}
         </nav>
         <div style={{ padding: "16px 12px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ padding: "10px 12px", borderRadius: 8, background: "rgba(255,255,255,0.06)", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 6, background: isTreasurer ? BRAND.brick : BRAND.green, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff" }}>{initials}</div>
+            <div aria-hidden="true" style={{ width: 32, height: 32, borderRadius: 6, background: isTreasurer ? BRAND.brick : BRAND.green, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff" }}>{initials}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>{currentUser.name}</div>
-              <div style={{ fontSize: 11, color: "#7A766E", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser.role}</div>
+              <div style={{ fontSize: 12, color: "#7A766E", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser.role}</div>
             </div>
           </div>
           <button style={{ ...S.navItem(false), padding: "8px 12px", fontSize: 13 }} onClick={handleLogout}><Icon name="logout" size={16} /> Sign Out</button>
         </div>
       </aside>
-      <main style={S.main}>
-        <header style={S.header}>
+      <div style={S.main}>
+        <header style={S.header} role="banner">
           <span style={{ fontSize: 14, color: BRAND.textMuted }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</span>
           <div style={{ display: "flex", alignItems: "center", gap: 12, position: "relative" }}>
             {isTreasurer && (
-              <button style={{ background: "none", border: "none", color: BRAND.charcoal, padding: 6, cursor: "pointer", position: "relative", borderRadius: 8 }} onClick={() => setShowNotifPanel(p => !p)}>
+              <button aria-label={"Notifications" + (pendingCount > 0 ? ", " + pendingCount + " pending" : "")} style={{ background: "none", border: "none", color: BRAND.charcoal, padding: 6, cursor: "pointer", position: "relative", borderRadius: 8, minWidth: 36, minHeight: 36, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowNotifPanel(p => !p)}>
                 <Icon name="bell" size={20} />
-                {pendingCount > 0 && <span style={{ position: "absolute", top: 2, right: 2, background: "#EF4444", color: "#fff", fontSize: 9, fontWeight: 700, width: 16, height: 16, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>{pendingCount}</span>}
+                {pendingCount > 0 && <span aria-hidden="true" style={{ position: "absolute", top: 2, right: 2, background: "#EF4444", color: "#fff", fontSize: 9, fontWeight: 700, width: 16, height: 16, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>{pendingCount}</span>}
               </button>
             )}
             <span style={{ fontSize: 14, fontWeight: 500, color: BRAND.charcoal }}>{currentUser.name}</span>
@@ -1894,9 +1916,9 @@ export default function App() {
             {showNotifPanel && isTreasurer && <NotificationPanel entries={entries} users={users} settings={settings} onView={(e) => { setShowNotifPanel(false); setViewEntry(e); }} onClose={() => setShowNotifPanel(false)} onReviewAll={() => { setShowNotifPanel(false); nav("review"); }} mob={mob} />}
           </div>
         </header>
-        {!online && <div style={{ background: "#FFF3E0", borderBottom: "1px solid #FFB74D", padding: "10px 32px", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#E65100" }}><Icon name="wifiOff" size={16} /><span>You're offline. Viewing cached data — changes require an internet connection.</span></div>}
-        <div style={S.content}>{renderPage()}</div>
-      </main>
+        {!online && <div role="alert" style={{ background: "#FFF3E0", borderBottom: "1px solid #FFB74D", padding: "10px 32px", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#E65100" }}><Icon name="wifiOff" size={16} /><span>You're offline. Viewing cached data — changes require an internet connection.</span></div>}
+        <main id="main-content" style={S.content}>{renderPage()}</main>
+      </div>
     </div>
   );
 }
