@@ -45,6 +45,7 @@ function mapSettings(row) {
     defaultHourlyRate: Number(row.default_hourly_rate),
     currency: row.currency,
     inviteCode: row.invite_code || "",
+    inviteExpiresAt: row.invite_expires_at || null,
     annualBudget: Number(row.annual_budget) || 0,
     dualApprovalThreshold: Number(row.dual_approval_threshold) || 0,
   };
@@ -55,7 +56,7 @@ export function useSupabase() {
   const [currentUser, setCurrentUser] = useState(null);
   const [users, setUsers] = useState([]);
   const [entries, setEntries] = useState([]);
-  const [settings, setSettings] = useState({ hoaName: "24 Mill Street", defaultHourlyRate: 40, currency: "USD", inviteCode: "" });
+  const [settings, setSettings] = useState({ hoaName: "24 Mill Street", defaultHourlyRate: 40, currency: "USD", inviteCode: "", inviteExpiresAt: null });
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState("");
 
@@ -104,6 +105,27 @@ export function useSupabase() {
     }
     setLoading(false);
   }
+
+  // ── REAL-TIME ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!session?.user) return;
+    const channel = supabase
+      .channel("entries-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "entries" }, (payload) => {
+        if (payload.eventType === "INSERT") {
+          setEntries(prev => {
+            if (prev.find(e => e.id === payload.new.id)) return prev;
+            return [mapEntry(payload.new), ...prev];
+          });
+        } else if (payload.eventType === "UPDATE") {
+          setEntries(prev => prev.map(e => e.id === payload.new.id ? mapEntry(payload.new) : e));
+        } else if (payload.eventType === "DELETE") {
+          setEntries(prev => prev.filter(e => e.id !== payload.old.id));
+        }
+      })
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [session?.user?.id]);
 
   // ── LOGIN / LOGOUT ─────────────────────────────────────────────────────
   const login = useCallback(async (email, password) => {
@@ -182,7 +204,7 @@ export function useSupabase() {
       row.audit_log = appendAuditLog(current?.audit_log, action, formData.status !== current?.status ? "Status: " + current?.status + " → " + formData.status : "Entry edited");
       const { data, error } = await supabase
         .from("entries").update(row).eq("id", existingId).select().single();
-      if (error) { console.error("Update error:", error); return null; }
+      if (error) { console.error("Update error:", error); return { error: error.message }; }
       const mapped = mapEntry(data);
       setEntries(prev => prev.map(e => e.id === existingId ? mapped : e));
       return mapped;
@@ -190,7 +212,7 @@ export function useSupabase() {
       row.audit_log = appendAuditLog([], "Entry created", "Status: " + formData.status);
       const { data, error } = await supabase
         .from("entries").insert(row).select().single();
-      if (error) { console.error("Insert error:", error); return null; }
+      if (error) { console.error("Insert error:", error); return { error: error.message }; }
       const mapped = mapEntry(data);
       setEntries(prev => [mapped, ...prev]);
       return mapped;
@@ -301,6 +323,7 @@ export function useSupabase() {
       default_hourly_rate: newSettings.defaultHourlyRate,
       currency: newSettings.currency || "USD",
       invite_code: newSettings.inviteCode || null,
+      invite_expires_at: newSettings.inviteExpiresAt || null,
       annual_budget: newSettings.annualBudget || 0,
       dual_approval_threshold: newSettings.dualApprovalThreshold || 0,
     }).eq("id", 1);

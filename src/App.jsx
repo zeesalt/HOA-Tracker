@@ -499,7 +499,7 @@ const MaterialsEditor = ({ materials, onChange, readOnly, mob }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // ENTRY FORM
 // ═══════════════════════════════════════════════════════════════════════════
-const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSubmit, onDelete, mob }) => {
+const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSubmit, onDelete, disableAutoSave, mob }) => {
   const isTreasurer = currentUser.role === ROLES.TREASURER;
   const [form, setForm] = useState({
     date: entry?.date || todayStr(), startTime: entry?.startTime || nowTime(), endTime: entry?.endTime || "",
@@ -535,7 +535,8 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
 
   // Auto-save draft every 3 seconds when form changes
   useEffect(() => {
-    // Don't auto-save if editing a submitted/approved/paid entry
+    // Don't auto-save in preview mode or if editing a submitted/approved/paid entry
+    if (disableAutoSave) return;
     if (entry && entry.status && entry.status !== STATUSES.DRAFT && entry.status !== STATUSES.REJECTED) return;
     // Don't auto-save if user is in the submit flow
     if (showSubmitConfirm || submitting) return;
@@ -1198,6 +1199,154 @@ const ReportsPage = ({ entries, users, settings, currentUser, mob }) => {
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = settings.hoaName.replace(/\s+/g, "_") + "_Report.csv"; a.click();
   };
 
+  // ── PDF Export ──────────────────────────────────────────────────────────
+  const exportPDF = () => {
+    const periodLabel = formatDate(dateFrom) + " – " + formatDate(dateTo);
+    const generatedOn = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    const statusLabel = filterStatus === "all" ? "All Statuses" : filterStatus;
+    const memberLabel = filterUser === "all" ? "All Members" : (users.find(u => u.id === filterUser)?.name || "");
+
+    // Group by member for individual sections
+    const byMember = {};
+    filtered.forEach(e => {
+      const uid = e.userId;
+      if (!byMember[uid]) byMember[uid] = [];
+      byMember[uid].push(e);
+    });
+
+    const fmtC = (n) => "$" + n.toFixed(2);
+    const fmtH = (n) => n.toFixed(2) + "h";
+
+    const entryRows = filtered.map(e => {
+      const u = users.find(u => u.id === e.userId);
+      const h = calcHours(e.startTime, e.endTime);
+      const r = getUserRate(users, settings, e.userId);
+      const labor = calcLabor(h, r);
+      const mat = calcMaterialsTotal(e.materials);
+      return `<tr>
+        <td>${formatDate(e.date)}</td>
+        <td>${u?.name || "—"}</td>
+        <td>${e.category}</td>
+        <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.description}</td>
+        <td style="text-align:right">${fmtH(h)}</td>
+        <td style="text-align:right">${fmtC(r)}/hr</td>
+        <td style="text-align:right">${fmtC(labor)}</td>
+        <td style="text-align:right">${fmtC(mat)}</td>
+        <td style="text-align:right;font-weight:700">${fmtC(labor + mat)}</td>
+      </tr>`;
+    }).join("");
+
+    // Per-member summary rows
+    const memberSummaryRows = Object.entries(byMember).map(([uid, ents]) => {
+      const u = users.find(u => u.id === uid);
+      let hrs = 0, labor = 0, mat = 0;
+      ents.forEach(e => {
+        const h = calcHours(e.startTime, e.endTime);
+        const r = getUserRate(users, settings, e.userId);
+        hrs += h; labor += calcLabor(h, r); mat += calcMaterialsTotal(e.materials);
+      });
+      return `<tr>
+        <td style="font-weight:600">${u?.name || "Unknown"}</td>
+        <td style="text-align:right">${ents.length}</td>
+        <td style="text-align:right">${fmtH(hrs)}</td>
+        <td style="text-align:right">${fmtC(labor)}</td>
+        <td style="text-align:right">${fmtC(mat)}</td>
+        <td style="text-align:right;font-weight:700">${fmtC(labor + mat)}</td>
+      </tr>`;
+    }).join("");
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>${settings.hoaName} — Reimbursement Report</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Georgia, serif; font-size: 12px; color: #1a1a1a; padding: 32px 40px; }
+  .header { border-bottom: 3px solid #2C3E50; padding-bottom: 16px; margin-bottom: 24px; }
+  .header h1 { font-size: 22px; color: #2C3E50; margin-bottom: 4px; }
+  .header .meta { font-size: 11px; color: #666; display: flex; gap: 24px; flex-wrap: wrap; margin-top: 8px; }
+  .header .meta span { font-family: Arial, sans-serif; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: #2C3E50; 
+       border-bottom: 1px solid #ddd; padding-bottom: 6px; margin: 20px 0 12px; }
+  table { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 11px; }
+  th { background: #2C3E50; color: #fff; padding: 6px 8px; text-align: left; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+  td { padding: 5px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+  tr:nth-child(even) td { background: #F8F9FA; }
+  .totals-row td { background: #EEF2F7 !important; font-weight: 700; border-top: 2px solid #2C3E50; font-size: 12px; }
+  .grand-total { background: #2C3E50; color: #fff; padding: 10px 16px; margin-top: 16px; 
+                 display: flex; justify-content: space-between; border-radius: 4px; font-family: Arial, sans-serif; }
+  .grand-total .label { font-size: 12px; font-weight: 600; }
+  .grand-total .value { font-size: 16px; font-weight: 700; }
+  .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #ddd; 
+            font-size: 10px; color: #999; font-family: Arial, sans-serif; display: flex; justify-content: space-between; }
+  @media print {
+    body { padding: 16px 20px; }
+    @page { margin: 16mm 12mm; size: landscape; }
+  }
+</style>
+</head><body>
+  <div class="header">
+    <h1>${settings.hoaName}</h1>
+    <div style="font-size:15px;color:#555;margin-top:2px;font-family:Arial,sans-serif">Reimbursement Report</div>
+    <div class="meta">
+      <span><strong>Period:</strong> ${periodLabel}</span>
+      <span><strong>Status filter:</strong> ${statusLabel}</span>
+      ${memberLabel ? `<span><strong>Member:</strong> ${memberLabel}</span>` : ""}
+      <span><strong>Rate:</strong> $${settings.defaultHourlyRate}/hr (default)</span>
+      <span><strong>Generated:</strong> ${generatedOn}</span>
+      <span><strong>Total entries:</strong> ${filtered.length}</span>
+    </div>
+  </div>
+
+  <h2>Summary by Member</h2>
+  <table>
+    <thead><tr><th>Member</th><th style="text-align:right">Entries</th><th style="text-align:right">Hours</th><th style="text-align:right">Labor</th><th style="text-align:right">Materials</th><th style="text-align:right">Total</th></tr></thead>
+    <tbody>
+      ${memberSummaryRows}
+      <tr class="totals-row">
+        <td>TOTAL</td>
+        <td style="text-align:right">${filtered.length}</td>
+        <td style="text-align:right">${fmtH(totals.totalHours)}</td>
+        <td style="text-align:right">${fmtC(totals.totalLabor)}</td>
+        <td style="text-align:right">${fmtC(totals.totalMat)}</td>
+        <td style="text-align:right">${fmtC(totals.grand)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Itemized Work Entries</h2>
+  <table>
+    <thead><tr><th>Date</th><th>Member</th><th>Category</th><th>Description</th><th style="text-align:right">Hours</th><th style="text-align:right">Rate</th><th style="text-align:right">Labor</th><th style="text-align:right">Materials</th><th style="text-align:right">Total</th></tr></thead>
+    <tbody>
+      ${entryRows}
+      <tr class="totals-row">
+        <td colspan="4">TOTALS</td>
+        <td style="text-align:right">${fmtH(totals.totalHours)}</td>
+        <td></td>
+        <td style="text-align:right">${fmtC(totals.totalLabor)}</td>
+        <td style="text-align:right">${fmtC(totals.totalMat)}</td>
+        <td style="text-align:right">${fmtC(totals.grand)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="grand-total">
+    <span class="label">Grand Total Reimbursement</span>
+    <span class="value">${fmtC(totals.grand)}</span>
+  </div>
+
+  <div class="footer">
+    <span>${settings.hoaName} — Confidential</span>
+    <span>Generated ${generatedOn} · ${periodLabel}</span>
+  </div>
+</body></html>`;
+
+    const win = window.open("", "_blank", "width=1100,height=800");
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 400);
+  };
+
   // ── Fiscal Year Report (CPA-ready) ──────────────────────────────────────
   const exportFiscalYear = (year) => {
     const yrEntries = entries.filter(e => e.date.startsWith(String(year)) && (e.status === "Approved" || e.status === "Paid"));
@@ -1347,7 +1496,10 @@ const ReportsPage = ({ entries, users, settings, currentUser, mob }) => {
           <div style={S.card}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
               <div><h3 style={{ ...S.h2, fontSize: 20 }}>{settings.hoaName}</h3><div style={{ fontSize: 13, color: BRAND.textMuted }}>{formatDate(dateFrom)} – {formatDate(dateTo)}</div></div>
-              <button style={S.btnSecondary} onClick={exportCSV}><Icon name="download" size={16} /> Export CSV</button>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button style={{ ...S.btnPrimary, fontSize: 13 }} onClick={exportPDF}><Icon name="file" size={15} /> Export PDF</button>
+                <button style={{ ...S.btnGhost, fontSize: 13 }} onClick={exportCSV}><Icon name="download" size={15} /> CSV</button>
+              </div>
             </div>
             {filtered.length === 0 ? <div style={{ textAlign: "center", padding: 40, color: BRAND.textLight }}>No entries found for this period.</div> : (
               <div style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 8, overflow: "hidden" }}>
@@ -1692,7 +1844,30 @@ const SettingsPage = ({ settings, users, currentUser, onSaveSettings, onAddUser,
         <div style={S.sectionLabel}>HOA Configuration</div>
         <Field label="HOA Name"><input style={S.input} value={form.hoaName} onChange={e => set("hoaName", e.target.value)} /></Field>
         <Field label="Default Hourly Rate ($)"><input type="number" min="0" step="0.50" style={S.input} value={form.defaultHourlyRate} onChange={e => set("defaultHourlyRate", Number(e.target.value))} /></Field>
-        <Field label="Invite Code"><div style={{ position: "relative" }}><input style={{ ...S.input, fontFamily: "monospace", letterSpacing: "0.1em", textTransform: "uppercase" }} value={form.inviteCode || ""} onChange={e => set("inviteCode", e.target.value.toUpperCase())} placeholder="e.g. MILL2024" /><div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 6 }}>New members need this code to register.</div></div></Field>
+        <div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Field label="Invite Code">
+              <input style={{ ...S.input, fontFamily: "monospace", letterSpacing: "0.1em", textTransform: "uppercase" }}
+                value={form.inviteCode || ""} onChange={e => set("inviteCode", e.target.value.toUpperCase())} placeholder="e.g. MILL2024" />
+            </Field>
+            <Field label="Code Expires">
+              <input type="datetime-local" style={S.input}
+                value={form.inviteExpiresAt ? form.inviteExpiresAt.slice(0, 16) : ""}
+                onChange={e => set("inviteExpiresAt", e.target.value ? new Date(e.target.value).toISOString() : null)} />
+            </Field>
+          </div>
+          <div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 6 }}>
+            New members need this code to register.
+            {form.inviteExpiresAt && (() => {
+              const exp = new Date(form.inviteExpiresAt);
+              const expired = exp < new Date();
+              return <span style={{ marginLeft: 8, color: expired ? BRAND.error : BRAND.success, fontWeight: 600 }}>
+                {expired ? "⚠ Expired " : "✓ Expires "}{exp.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              </span>;
+            })()}
+            {!form.inviteExpiresAt && <span style={{ marginLeft: 8, color: "#F59E0B" }}>No expiry set — code works indefinitely.</span>}
+          </div>
+        </div>
         <div style={{ borderTop: "1px solid " + BRAND.borderLight, marginTop: 8, paddingTop: 16 }}>
           <div style={S.sectionLabel}>Governance</div>
           <Field label="Annual Reimbursement Budget ($)"><div><input type="number" min="0" step="500" style={S.input} value={form.annualBudget || ""} onChange={e => set("annualBudget", Number(e.target.value))} placeholder="0 = no limit" /><div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 6 }}>Set to 0 to disable. Shows a progress bar on the dashboard.</div></div></Field>
@@ -1831,20 +2006,23 @@ export default function App() {
   const doSave = async (formData, existingId, silent) => {
     const id = existingId || (editEntry ? editEntry.id : null);
     if (id) {
-      const updated = await saveEntry(formData, id);
-      if (!silent && updated) { setViewEntry(updated); setEditEntry(null); setNewEntry(false); }
-      return updated;
+      const result = await saveEntry(formData, id);
+      if (result?.error) { if (!silent) showToast("Save failed", "error", result.error); return null; }
+      if (!silent && result) { setViewEntry(result); setEditEntry(null); setNewEntry(false); }
+      return result;
     } else {
-      const created = await saveEntry(formData, null);
-      if (!silent && created) { setNewEntry(false); setEditEntry(null); if (formData.status === STATUSES.SUBMITTED) setPage("entries"); else setViewEntry(created); }
-      return created;
+      const result = await saveEntry(formData, null);
+      if (result?.error) { if (!silent) showToast("Save failed", "error", result.error); return null; }
+      if (!silent && result) { setNewEntry(false); setEditEntry(null); if (formData.status === STATUSES.SUBMITTED) setPage("entries"); else setViewEntry(result); }
+      return result;
     }
   };
   const showToast = (message, type, detail) => { setToast({ message, type, detail }); setTimeout(() => setToast(null), 4000); };
   const doSubmit = async (formData, draftId) => {
     const id = draftId || (editEntry ? editEntry.id : null);
     const data = { ...formData, status: STATUSES.SUBMITTED };
-    await saveEntry(data, id);
+    const result = await saveEntry(data, id);
+    if (result?.error) { showToast("Submit failed", "error", result.error); return; }
     const total = calcLabor(calcHours(formData.startTime, formData.endTime), getRate(formData.userId || currentUser.id)) + calcMaterialsTotal(formData.materials);
     setEditEntry(null); setNewEntry(false); setPage("entries");
     showToast("Entry submitted!", "success", fmt(total) + " for " + formData.category + " — Treasurer will review shortly");
@@ -1998,7 +2176,7 @@ export default function App() {
       })();
       return (
       <div className="fade-in"><h2 style={{ ...S.h2, marginBottom: 24 }}>{editEntry ? "Edit Entry" : "New Work Entry"}</h2>
-        <div style={S.card}><EntryForm entry={smartEntry} settings={settings} users={users} currentUser={currentUser} onSave={doSave} onSubmit={previewAsId ? () => {} : doSubmit} onCancel={() => { setNewEntry(false); setEditEntry(null); }} onDelete={previewAsId ? () => {} : doDelete} mob={mob} /></div></div>
+        <div style={S.card}><EntryForm entry={smartEntry} settings={settings} users={users} currentUser={currentUser} onSave={doSave} onSubmit={previewAsId ? () => {} : doSubmit} onCancel={() => { setNewEntry(false); setEditEntry(null); }} onDelete={previewAsId ? () => {} : doDelete} disableAutoSave={!!previewAsId} mob={mob} /></div></div>
     );}
     if (viewEntry) {
       const fresh = entries.find(e => e.id === viewEntry.id) || viewEntry;
@@ -2084,7 +2262,7 @@ export default function App() {
           <div style={S.card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}><h3 style={S.h3}>Recent Entries</h3><button style={S.btnGhost} onClick={() => setPage("entries")}>View all →</button></div>
             {recent.length === 0 ? <div style={{ textAlign: "center", padding: 40, color: BRAND.textLight }}>No entries yet. Create your first work entry.</div>
-            : mob ? recent.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} currentUser={viewAs} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => doApproveEntry(e.id, "")} onReject={(e) => setViewEntry(e)} onDelete={(e) => doTrashFromList(e, "")} />)
+            : mob ? recent.map(e => <EntryCard key={e.id + "-" + page} entry={e} users={users} settings={settings} currentUser={viewAs} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => doApproveEntry(e.id, "")} onReject={(e) => setViewEntry(e)} onDelete={(e) => doTrashFromList(e, "")} />)
             : (
               <div style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 8, overflow: "hidden" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
@@ -2134,7 +2312,7 @@ export default function App() {
           if (filterCategory !== "all") filtered = filtered.filter(e => e.category === filterCategory);
           if (filterMember !== "all") filtered = filtered.filter(e => e.userId === filterMember);
           return filtered.length === 0 ? <div style={{ ...S.card, textAlign: "center", padding: 60, color: BRAND.textLight }}>{myEntries.length === 0 ? "No entries yet." : "No entries match your filters."}</div>
-          : mob ? filtered.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} currentUser={viewAs} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => doApproveEntry(e.id, "")} onReject={(e) => setViewEntry(e)} onDelete={(e) => doTrashFromList(e, "")} />)
+          : mob ? filtered.map(e => <EntryCard key={e.id + "-" + page} entry={e} users={users} settings={settings} currentUser={viewAs} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => doApproveEntry(e.id, "")} onReject={(e) => setViewEntry(e)} onDelete={(e) => doTrashFromList(e, "")} />)
           : (
             <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
@@ -2264,6 +2442,33 @@ export default function App() {
   };
 
   // ══════════════════════════════════════════════════════════════════════════
+  // PULL-TO-REFRESH (mobile)
+  // ══════════════════════════════════════════════════════════════════════════
+  const [pullY, setPullY] = useState(0);
+  const [pullRefreshing, setPullRefreshing] = useState(false);
+  const pullStartY = useRef(null);
+  const PULL_THRESHOLD = 72;
+
+  const onPullStart = (e) => {
+    if (window.scrollY === 0) pullStartY.current = e.touches[0].clientY;
+  };
+  const onPullMove = (e) => {
+    if (pullStartY.current === null || pullRefreshing) return;
+    const dy = e.touches[0].clientY - pullStartY.current;
+    if (dy > 0) setPullY(Math.min(dy * 0.4, PULL_THRESHOLD + 16));
+  };
+  const onPullEnd = async () => {
+    if (pullY >= PULL_THRESHOLD && !pullRefreshing) {
+      setPullRefreshing(true);
+      setPullY(PULL_THRESHOLD);
+      await refresh();
+      setPullRefreshing(false);
+    }
+    setPullY(0);
+    pullStartY.current = null;
+  };
+
+  // ══════════════════════════════════════════════════════════════════════════
   // MAIN LAYOUT
   // ══════════════════════════════════════════════════════════════════════════
   const initials = (viewAs?.name || currentUser.name).split(" ").map(n => n[0]).join("");
@@ -2280,7 +2485,7 @@ export default function App() {
 
   if (mob) {
     return (
-      <div style={{ minHeight: "100vh", fontFamily: BRAND.sans, background: BRAND.bgSoft, color: BRAND.charcoal, paddingBottom: 88 }}>
+      <div style={{ minHeight: "100vh", fontFamily: BRAND.sans, background: BRAND.bgSoft, color: BRAND.charcoal, paddingBottom: 88 }} onTouchStart={onPullStart} onTouchMove={onPullMove} onTouchEnd={onPullEnd}>
         <a href="#main-content" className="skip-link">Skip to main content</a>
         {/* Mobile top bar */}
         <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: BRAND.navy, position: "sticky", top: 0, zIndex: 20 }} role="banner">
@@ -2339,6 +2544,14 @@ export default function App() {
         {/* Offline banner */}
         {!online && <div role="alert" style={{ background: "#FFF3E0", borderBottom: "1px solid #FFB74D", padding: "8px 16px", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#E65100" }}><Icon name="wifiOff" size={16} /><span>You're offline. Viewing cached data.</span></div>}
         {/* Content */}
+        {/* Pull-to-refresh indicator */}
+        {(pullY > 0 || pullRefreshing) && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: pullY, overflow: "hidden", transition: pullRefreshing ? "none" : "height 200ms ease", background: BRAND.bgSoft }}>
+            <div style={{ fontSize: 13, color: BRAND.textMuted, display: "flex", alignItems: "center", gap: 6 }}>
+              {pullRefreshing ? "↻ Refreshing..." : pullY >= PULL_THRESHOLD ? "↑ Release to refresh" : "↓ Pull to refresh"}
+            </div>
+          </div>
+        )}
         <PreviewBanner />
         <main id="main-content" style={{ padding: "16px 16px" }}>{renderPage()}</main>
         {/* FAB */}
