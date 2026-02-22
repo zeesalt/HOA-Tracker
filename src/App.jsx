@@ -257,8 +257,8 @@ const S = {
   app: { display: "flex", minHeight: "100vh", fontFamily: BRAND.sans, background: BRAND.bgSoft, color: BRAND.charcoal },
   sidebar: { width: 260, background: BRAND.navy, color: "#CCC8C0", display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh", overflow: "auto" },
   main: { flex: 1, minWidth: 0, display: "flex", flexDirection: "column" },
-  header: { padding: "16px 32px", borderBottom: "1px solid " + BRAND.border, background: BRAND.white, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 10 },
-  content: { padding: "28px 32px", flex: 1 },
+  header: { padding: "16px 32px", borderBottom: "1px solid " + BRAND.border, background: BRAND.white, display: "flex", alignItems: "center", justifyContent: "space-between", position: "fixed", top: 0, left: 260, right: 0, zIndex: 10, boxSizing: "border-box" },
+  content: { padding: "28px 32px", flex: 1, marginTop: 57 },
 
   // Card — with navy top accent
   card: { background: BRAND.white, borderRadius: 8, border: "1px solid " + BRAND.borderLight, padding: 24, marginBottom: 16, boxShadow: "0 1px 3px rgba(31,42,56,0.04)" },
@@ -755,7 +755,7 @@ const WorkflowStepper = ({ status, mob }) => {
   const steps = rejected ? WORKFLOW_STEPS.slice(0, 2) : awaitingSecond ? [...WORKFLOW_STEPS.slice(0, 3)] : WORKFLOW_STEPS;
   const currentIdx = rejected ? 1 : awaitingSecond ? 2 : steps.findIndex(s => s.key === status);
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 24, width: "100%", overflow: "hidden" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 0, width: "100%", overflow: "hidden" }}>
       {steps.map((s, i) => {
         const done = i < currentIdx;
         const active = i === currentIdx;
@@ -817,7 +817,9 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
   return (
     <div className="fade-in">
       <button style={{ ...S.btnGhost, marginBottom: 20, padding: "6px 0" }} onClick={onBack}><Icon name="back" size={18} /> Back to entries</button>
-      <WorkflowStepper status={entry.status} mob={mob} />
+      <div style={{ position: "sticky", top: mob ? 56 : 57, zIndex: 9, background: BRAND.bgSoft, paddingTop: 16, paddingBottom: 4, marginBottom: 8, marginLeft: mob ? -16 : -32, marginRight: mob ? -16 : -32, paddingLeft: mob ? 16 : 32, paddingRight: mob ? 16 : 32, borderBottom: "1px solid " + BRAND.borderLight }}>
+        <WorkflowStepper status={entry.status} mob={mob} />
+      </div>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
@@ -3142,7 +3144,7 @@ export default function App() {
 
   // Preview mode banner — shown at top of content when Treasurer is previewing as Member
   const PreviewBanner = () => realIsTreasurer && previewAsId ? (
-    <div role="alert" style={{ background: "#FFF8E1", borderBottom: "2px solid #F59E0B", padding: "10px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, fontSize: 13, color: "#92400E", position: "sticky", top: 0, zIndex: 15 }}>
+    <div role="alert" style={{ background: "#FFF8E1", borderBottom: "2px solid #F59E0B", padding: "10px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, fontSize: 13, color: "#92400E", position: "sticky", top: mob ? 56 : 57, zIndex: 15 }}>
       <span>👁 Previewing as <strong>{viewAs?.name}</strong> — you're seeing Member view. Actions are disabled.</span>
       <button onClick={() => { setPreviewAsId(null); nav("dashboard"); }} style={{ background: "#F59E0B", color: "#fff", border: "none", borderRadius: 6, padding: "5px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>Exit Preview</button>
     </div>
@@ -3186,7 +3188,7 @@ export default function App() {
       <div style={{ minHeight: "100vh", fontFamily: BRAND.sans, background: BRAND.bgSoft, color: BRAND.charcoal, paddingBottom: 88 }} onTouchStart={onPullStart} onTouchMove={onPullMove} onTouchEnd={onPullEnd}>
         <a href="#main-content" className="skip-link">Skip to main content</a>
         {/* Mobile top bar */}
-        <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: BRAND.navy, position: "sticky", top: 0, zIndex: 20 }} role="banner">
+        <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: BRAND.navy, position: "fixed", top: 0, left: 0, right: 0, zIndex: 20 }} role="banner">
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <img src="/logo.png" alt="24 Mill Street logo" style={{ width: 32, height: 32, borderRadius: 4, objectFit: "cover", background: BRAND.beige }} />
             <span style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 16, color: "#fff" }}>24 Mill</span>
@@ -3252,7 +3254,7 @@ export default function App() {
           </div>
         )}
         <PreviewBanner />
-        <main id="main-content" style={{ padding: "16px 16px" }}>{renderPage()}</main>
+        <main id="main-content" style={{ padding: "16px 16px", paddingTop: 72 }}>{renderPage()}</main>
         {/* FAB */}
         {!newEntry && !editEntry && !viewEntry && (page === "dashboard" || page === "entries") && (
           <button aria-label="Create new work entry" style={{ position: "fixed", bottom: 160, right: 20, width: 56, height: 56, borderRadius: 28, background: BRAND.brick, color: "#fff", border: "none", boxShadow: "0 4px 16px rgba(142,59,46,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 15 }} onClick={() => setNewEntry(true)}>
