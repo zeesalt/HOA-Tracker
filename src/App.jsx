@@ -543,6 +543,33 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
   const [autoSaveStatus, setAutoSaveStatus] = useState(""); // "", "saving", "saved"
   const [submitting, setSubmitting] = useState(false);
   const draftIdRef = useRef(draftId);
+
+  // ── Templates ─────────────────────────────────────────────────────────
+  const TMPL_KEY = "hoa_templates_" + currentUser.id;
+  const [templates, setTemplates] = useState(() => { try { return JSON.parse(localStorage.getItem(TMPL_KEY) || "[]"); } catch { return []; } });
+  const [showTemplateSheet, setShowTemplateSheet] = useState(false);
+  const [templateNameInput, setTemplateNameInput] = useState("");
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+
+  const saveTemplate = () => {
+    if (!templateNameInput.trim()) return;
+    const t = { id: Date.now(), name: templateNameInput.trim(), category: form.category, description: form.description, location: form.location, startTime: form.startTime, endTime: form.endTime, notes: form.notes, mileage: form.mileage, materials: form.materials };
+    const updated = [...templates.filter(x => x.name !== t.name), t].slice(-10);
+    setTemplates(updated);
+    localStorage.setItem(TMPL_KEY, JSON.stringify(updated));
+    setTemplateNameInput("");
+    setShowSaveTemplate(false);
+  };
+  const applyTemplate = (t) => {
+    setForm(f => ({ ...f, category: t.category || f.category, description: t.description || f.description, location: t.location || f.location, startTime: t.startTime || f.startTime, endTime: t.endTime || f.endTime, notes: t.notes || f.notes, mileage: t.mileage || f.mileage, materials: t.materials?.length ? t.materials : f.materials }));
+    setFormDirty(true);
+    setShowTemplateSheet(false);
+  };
+  const deleteTemplate = (id) => {
+    const updated = templates.filter(t => t.id !== id);
+    setTemplates(updated);
+    localStorage.setItem(TMPL_KEY, JSON.stringify(updated));
+  };
   draftIdRef.current = draftId;
   const autoSaveAbortRef = useRef(false);
   const set = (k, v) => { setFormDirty(true); setForm(f => ({ ...f, [k]: v })); };
@@ -614,6 +641,14 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
 
   return (
     <div className="fade-in">
+      {/* Template quick-use banner */}
+      {templates.length > 0 && !showTemplateSheet && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
+          <span>📋</span>
+          <span style={{ flex: 1, color: "#1d4ed8" }}>You have {templates.length} saved template{templates.length > 1 ? "s" : ""}.</span>
+          <button style={{ ...S.btnGhost, fontSize: 12, padding: "5px 12px", color: "#1d4ed8", borderColor: "#BFDBFE" }} onClick={() => setShowTemplateSheet("use")}>Use a Template</button>
+        </div>
+      )}
       {isTreasurer && (
         <Field label="Member" required>
           <select style={{ ...S.select, ...errStyle("userId") }} value={form.userId} onChange={e => set("userId", e.target.value)}>
@@ -752,10 +787,54 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
         </button>
       </div>
 
-      {/* Delete + auto-save row */}
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 16 }}>
+      {/* Delete + template row */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
         {entry && entry.status === STATUSES.DRAFT && <button style={{ ...S.btnGhost, color: BRAND.error, fontSize: 13 }} onClick={() => setShowDeleteConfirm(true)}><Icon name="trash" size={14} /> Delete Draft</button>}
+        <div style={{ display: "flex", gap: 10, marginLeft: "auto" }}>
+          {templates.length > 0 && (
+            <button style={{ ...S.btnGhost, fontSize: 13 }} onClick={() => setShowTemplateSheet("use")}>📋 Templates ({templates.length})</button>
+          )}
+          <button style={{ ...S.btnGhost, fontSize: 13 }} onClick={() => { setTemplateNameInput(form.category ? form.category + " template" : ""); setShowTemplateSheet("save"); }}>💾 Save as Template</button>
+        </div>
       </div>
+
+      {/* Template sheet */}
+      {showTemplateSheet && (
+        <div style={{ ...S.card, background: "#F8F7F5", border: "1px solid " + BRAND.borderLight, marginTop: 4 }}>
+          {showTemplateSheet === "save" ? (
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: BRAND.navy, marginBottom: 12 }}>💾 Save as Template</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input style={{ ...S.input, flex: 1 }} value={templateNameInput} onChange={e => setTemplateNameInput(e.target.value)} placeholder="Template name (e.g. Weekly Mowing)" autoFocus onKeyDown={e => e.key === "Enter" && saveTemplate()} />
+                <button style={S.btnPrimary} onClick={saveTemplate} disabled={!templateNameInput.trim()}>Save</button>
+                <button style={S.btnGhost} onClick={() => setShowTemplateSheet(false)}>Cancel</button>
+              </div>
+              <div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 8 }}>Saves category, description, times, location, and materials. Date always resets to today when applied. Max 10 templates.</div>
+            </div>
+          ) : (
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: BRAND.navy, marginBottom: 12 }}>📋 Your Templates</div>
+              {templates.length === 0 ? (
+                <div style={{ fontSize: 13, color: BRAND.textLight }}>No templates yet. Fill out a form and save it as a template for quick reuse.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {templates.map(t => (
+                    <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: BRAND.white, borderRadius: 8, border: "1px solid " + BRAND.borderLight }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: BRAND.charcoal }}>{t.name}</div>
+                        <div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 2 }}>{t.category}{t.description ? " · " + t.description.slice(0, 40) + (t.description.length > 40 ? "…" : "") : ""}</div>
+                      </div>
+                      <button style={{ ...S.btnPrimary, fontSize: 12, padding: "6px 14px" }} onClick={() => applyTemplate(t)}>Use</button>
+                      <button style={{ ...S.btnGhost, fontSize: 12, padding: "6px 10px", color: BRAND.error, borderColor: BRAND.error + "40" }} onClick={() => deleteTemplate(t.id)}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button style={{ ...S.btnGhost, fontSize: 13, marginTop: 12 }} onClick={() => setShowTemplateSheet(false)}>Close</button>
+            </div>
+          )}
+        </div>
+      )}
       <ConfirmDialog open={showSubmitConfirm} onClose={() => setShowSubmitConfirm(false)} title="Submit Entry?" message={"Submit for review? Total: " + fmt(grandTotal)} confirmText="Submit" onConfirm={() => { autoSaveAbortRef.current = true; setSubmitting(true); onSubmit({ ...form, status: STATUSES.SUBMITTED }, draftIdRef.current); }} />
       <ConfirmDialog open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Delete Entry?" message="This draft will be permanently deleted." confirmText="Delete" danger onConfirm={onDelete} />
       <ConfirmDialog open={showCancelConfirm} onClose={() => setShowCancelConfirm(false)} title="Discard Changes?" message="You have unsaved changes. Are you sure you want to leave?" confirmText="Discard" danger onConfirm={onCancel} />
@@ -870,7 +949,7 @@ const WorkflowStepper = ({ status, mob }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // ENTRY DETAIL
 // ═══════════════════════════════════════════════════════════════════════════
-const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onApprove, onReject, onTrash, onRestore, onMarkPaid, onDuplicate, onSecondApprove, onDelete, mob }) => {
+const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onApprove, onReject, onTrash, onRestore, onMarkPaid, onDuplicate, onSecondApprove, onDelete, onComment, mob }) => {
   const [reviewNotes, setReviewNotes] = useState(entry.reviewerNotes || "");
   const [showApproveConfirm, setShowApproveConfirm] = useState(false);
   const [showPaidConfirm, setShowPaidConfirm] = useState(false);
@@ -884,6 +963,9 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
   const [approveRipple, setApproveRipple] = useState(false);
   const [declineShake, setDeclineShake] = useState(false);
   const [paidAnimating, setPaidAnimating] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [sendingComment, setSendingComment] = useState(false);
+  const commentEndRef = useRef(null);
 
   const fireApproveRipple = () => {
     setApproveRipple(true);
@@ -1109,6 +1191,75 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
       {entry.status === STATUSES.PAID && entry.paidAt && (
         <div style={{ ...S.card, background: "#E8EDF5", borderColor: "#B8C8E0" }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: "#3B5998" }}>✓ Paid on {formatDate(entry.paidAt.split("T")[0])}</div>
+        </div>
+      )}
+      {/* ── Discussion ── visible when entry is not Draft or Trash */}
+      {![STATUSES.DRAFT, STATUSES.TRASH].includes(entry.status) && (
+        <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
+          <div style={{ padding: "14px 20px", borderBottom: "1px solid " + BRAND.borderLight, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: BRAND.charcoal }}>💬 Discussion</span>
+            {entry.comments?.length > 0 && (
+              <span style={{ fontSize: 11, color: BRAND.textLight, background: BRAND.bgSoft, border: "1px solid " + BRAND.borderLight, borderRadius: 10, padding: "1px 7px" }}>{entry.comments.length}</span>
+            )}
+          </div>
+          <div style={{ padding: "0 20px" }}>
+            {/* Message thread */}
+            {(!entry.comments || entry.comments.length === 0) ? (
+              <div style={{ padding: "20px 0", textAlign: "center", color: BRAND.textLight, fontSize: 13 }}>No messages yet. Start a conversation about this entry.</div>
+            ) : (
+              <div style={{ paddingTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+                {entry.comments.map((c, i) => {
+                  const isMe = c.userId === currentUser.id;
+                  const isTreas = c.role === ROLES.TREASURER;
+                  return (
+                    <div key={c.id || i} className="fade-in" style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start" }}>
+                      <div style={{ maxWidth: "80%", padding: "10px 14px", borderRadius: isMe ? "12px 12px 2px 12px" : "12px 12px 12px 2px", background: isMe ? BRAND.navy : isTreas ? "#EEF2FF" : BRAND.bgSoft, color: isMe ? "#fff" : BRAND.charcoal, fontSize: 13, lineHeight: 1.5 }}>
+                        {c.message}
+                      </div>
+                      <div style={{ fontSize: 11, color: BRAND.textLight, marginTop: 3, display: "flex", gap: 6, alignItems: "center" }}>
+                        <span style={{ fontWeight: 600 }}>{c.userName}</span>
+                        {isTreas && !isMe && <span style={{ background: "#EEF2FF", color: "#4338CA", fontSize: 10, padding: "1px 5px", borderRadius: 4, fontWeight: 600 }}>Treasurer</span>}
+                        <span>{timeAgo(c.createdAt)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={commentEndRef} />
+              </div>
+            )}
+            {/* Input */}
+            <div style={{ padding: "14px 0", borderTop: entry.comments?.length ? "1px solid " + BRAND.borderLight : "none", marginTop: entry.comments?.length ? 8 : 0, display: "flex", gap: 8 }}>
+              <input
+                style={{ ...S.input, flex: 1, fontSize: 13 }}
+                value={commentText}
+                onChange={e => setCommentText(e.target.value)}
+                placeholder="Write a message…"
+                onKeyDown={async e => {
+                  if (e.key === "Enter" && !e.shiftKey && commentText.trim()) {
+                    e.preventDefault();
+                    setSendingComment(true);
+                    await onComment(entry.id, commentText);
+                    setCommentText("");
+                    setSendingComment(false);
+                    setTimeout(() => commentEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+                  }
+                }}
+              />
+              <button
+                style={{ ...S.btnPrimary, padding: "10px 16px", opacity: commentText.trim() && !sendingComment ? 1 : 0.5 }}
+                disabled={!commentText.trim() || sendingComment}
+                onClick={async () => {
+                  setSendingComment(true);
+                  await onComment(entry.id, commentText);
+                  setCommentText("");
+                  setSendingComment(false);
+                  setTimeout(() => commentEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+                }}
+              >
+                {sendingComment ? "…" : "Send"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
       {/* Audit Trail — visible to all users */}
@@ -1367,6 +1518,11 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
               {photoCount > 0 && (
                 <span aria-label={photoCount + " photos"} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 12, color: BRAND.textLight, background: BRAND.bgSoft, padding: "2px 8px", borderRadius: 10 }}>
                   📷 {photoCount}
+                </span>
+              )}
+              {entry.comments?.length > 0 && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 12, color: "#4338CA", background: "#EEF2FF", padding: "2px 8px", borderRadius: 10, fontWeight: 600 }}>
+                  💬 {entry.comments.length}
                 </span>
               )}
             </div>
@@ -1886,6 +2042,167 @@ const INSIGHTS_LOADING = [
   { emoji: "🧮", text: "Doing the HOA math..." },
   { emoji: "🗃️", text: "Raiding the filing cabinet..." },
 ];
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PAYMENT RUN PAGE
+// ═══════════════════════════════════════════════════════════════════════════
+const PaymentRunPage = ({ entries, users, settings, onMarkPaid, mob }) => {
+  const approvedUnpaid = entries.filter(e => e.status === STATUSES.APPROVED);
+  const fmt = (n) => "$" + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Group by user
+  const byUser = {};
+  approvedUnpaid.forEach(e => {
+    if (!byUser[e.userId]) byUser[e.userId] = [];
+    byUser[e.userId].push(e);
+  });
+  const userGroups = Object.entries(byUser).map(([uid, ents]) => {
+    const u = users.find(u => u.id === uid);
+    const total = ents.reduce((s, e) => {
+      const h = calcHours(e.startTime, e.endTime);
+      const r = getUserRate(users, settings, e.userId);
+      return s + calcLabor(h, r) + calcMaterialsTotal(e.materials);
+    }, 0);
+    return { uid, user: u, entries: ents.sort((a, b) => b.date.localeCompare(a.date)), total };
+  }).sort((a, b) => b.total - a.total);
+
+  const [expanded, setExpanded] = useState({});
+  const [payMethods, setPayMethods] = useState({});
+  const [payRefs, setPayRefs] = useState({});
+  const [paying, setPaying] = useState({});
+  const [paid, setPaid] = useState({});
+
+  const getMethod = (uid) => payMethods[uid] || "Zelle";
+  const getRef = (uid) => payRefs[uid] || "";
+
+  const handlePay = async (uid, ents, total) => {
+    setPaying(p => ({ ...p, [uid]: true }));
+    await onMarkPaid(ents.map(e => e.id), { method: getMethod(uid), reference: getRef(uid) });
+    setPaid(p => ({ ...p, [uid]: total }));
+    setPaying(p => ({ ...p, [uid]: false }));
+  };
+
+  if (userGroups.length === 0) return (
+    <div className="fade-in">
+      <h2 style={{ ...{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 26, fontWeight: 700, color: "#1F2A38", margin: "0 0 8px" }, marginBottom: 8 }}>Payment Run</h2>
+      <p style={{ margin: "0 0 32px", fontSize: 14, color: "#6B6560" }}>Review and batch-pay approved entries.</p>
+      <div style={{ textAlign: "center", padding: "60px 20px", background: "#fff", borderRadius: 12, border: "1px solid #EDE9E3" }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "#1F2A38", marginBottom: 8 }}>All caught up!</div>
+        <div style={{ fontSize: 14, color: "#6B6560" }}>No approved entries are waiting for payment.</div>
+      </div>
+    </div>
+  );
+
+  const grandTotal = userGroups.reduce((s, g) => s + (paid[g.uid] !== undefined ? 0 : g.total), 0);
+  const unpaidGroups = userGroups.filter(g => paid[g.uid] === undefined);
+
+  return (
+    <div className="fade-in">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <h2 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 26, fontWeight: 700, color: "#1F2A38", margin: "0 0 4px" }}>Payment Run</h2>
+          <p style={{ margin: 0, fontSize: 14, color: "#6B6560" }}>
+            {unpaidGroups.length} member{unpaidGroups.length !== 1 ? "s" : ""} · {unpaidGroups.reduce((s,g)=>s+g.entries.length,0)} entries · <strong style={{ color: "#1F2A38" }}>{fmt(grandTotal)} total owed</strong>
+          </p>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {userGroups.map(({ uid, user, entries: ents, total }) => {
+          const isPaid = paid[uid] !== undefined;
+          const isExpanded = expanded[uid];
+          const isPaying = paying[uid];
+
+          if (isPaid) return (
+            <div key={uid} className="fade-in" style={{ background: "#E8F5E9", border: "1px solid #A5D6A7", borderRadius: 12, padding: "16px 20px", display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 18, background: "#2E7D32", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, flexShrink: 0 }}>✓</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, color: "#1B5E20" }}>{user?.name || "Unknown"}</div>
+                <div style={{ fontSize: 13, color: "#2E7D32" }}>Paid {fmt(paid[uid])} via {getMethod(uid)}{getRef(uid) ? " · Ref: " + getRef(uid) : ""}</div>
+              </div>
+            </div>
+          );
+
+          return (
+            <div key={uid} style={{ background: "#fff", border: "1px solid #EDE9E3", borderRadius: 12, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+              {/* Member header */}
+              <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "18px 20px", borderBottom: isExpanded ? "1px solid #EDE9E3" : "none", background: "#FAFAF8" }}>
+                <div style={{ width: 40, height: 40, borderRadius: 20, background: "#1F2A38", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 16, flexShrink: 0 }}>
+                  {(user?.name || "?").charAt(0).toUpperCase()}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: "#222" }}>{user?.name || "Unknown"}</div>
+                  <div style={{ fontSize: 13, color: "#6B6560" }}>{ents.length} entr{ents.length === 1 ? "y" : "ies"}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: "#1F2A38" }}>{fmt(total)}</div>
+                  <button style={{ fontSize: 12, color: "#6B6560", background: "none", border: "none", cursor: "pointer", padding: "2px 0" }} onClick={() => setExpanded(p => ({ ...p, [uid]: !p[uid] }))}>
+                    {isExpanded ? "Hide entries ▲" : "View entries ▼"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Entry breakdown */}
+              {isExpanded && (
+                <div className="fade-in" style={{ borderBottom: "1px solid #EDE9E3" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead><tr style={{ background: "#F5F2ED" }}>
+                      <th style={{ padding: "8px 16px", textAlign: "left", fontWeight: 600, color: "#6B6560", fontSize: 11, textTransform: "uppercase" }}>Date</th>
+                      <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "#6B6560", fontSize: 11, textTransform: "uppercase" }}>Category</th>
+                      <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "#6B6560", fontSize: 11, textTransform: "uppercase", display: mob ? "none" : "table-cell" }}>Description</th>
+                      <th style={{ padding: "8px 16px", textAlign: "right", fontWeight: 600, color: "#6B6560", fontSize: 11, textTransform: "uppercase" }}>Amount</th>
+                    </tr></thead>
+                    <tbody>{ents.map((e, i) => {
+                      const h = calcHours(e.startTime, e.endTime);
+                      const r = getUserRate(users, settings, e.userId);
+                      const t = calcLabor(h, r) + calcMaterialsTotal(e.materials);
+                      return (
+                        <tr key={e.id} style={{ background: i % 2 ? "#F5F2ED" : "#fff", borderBottom: "1px solid #EDE9E3" }}>
+                          <td style={{ padding: "10px 16px", color: "#222" }}>{formatDate(e.date)}</td>
+                          <td style={{ padding: "10px 12px" }}><CategoryBadge category={e.category} /></td>
+                          <td style={{ padding: "10px 12px", color: "#6B6560", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: mob ? "none" : "table-cell" }}>{e.description}</td>
+                          <td style={{ padding: "10px 16px", textAlign: "right", fontWeight: 600, color: "#1F2A38" }}>{fmt(t)}</td>
+                        </tr>
+                      );
+                    })}</tbody>
+                    <tfoot><tr style={{ background: "#EDE9E3" }}>
+                      <td colSpan={mob ? 2 : 3} style={{ padding: "10px 16px", fontWeight: 700, color: "#1F2A38" }}>Total</td>
+                      <td style={{ padding: "10px 16px", textAlign: "right", fontWeight: 800, color: "#1F2A38", fontSize: 15 }}>{fmt(total)}</td>
+                    </tr></tfoot>
+                  </table>
+                </div>
+              )}
+
+              {/* Payment controls */}
+              <div style={{ padding: "16px 20px", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#6B6560", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Method</label>
+                  <select style={{ padding: "8px 12px", border: "1px solid #E0E0E0", borderRadius: 6, fontSize: 13, fontFamily: "'Inter', sans-serif", background: "#fff", cursor: "pointer" }}
+                    value={getMethod(uid)} onChange={e => setPayMethods(p => ({ ...p, [uid]: e.target.value }))}>
+                    {["Zelle", "Venmo", "Check", "Bank Transfer", "Cash", "Other"].map(m => <option key={m}>{m}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#6B6560", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Reference # (optional)</label>
+                  <input style={{ width: "100%", padding: "8px 12px", border: "1px solid #E0E0E0", borderRadius: 6, fontSize: 13, fontFamily: "'Inter', sans-serif", boxSizing: "border-box" }}
+                    value={getRef(uid)} onChange={e => setPayRefs(p => ({ ...p, [uid]: e.target.value }))} placeholder="Check #, transaction ID..." />
+                </div>
+                <button
+                  style={{ padding: "10px 22px", background: isPaying ? "#6B6560" : "#3B5998", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: isPaying ? "not-allowed" : "pointer", fontFamily: "'Inter', sans-serif", whiteSpace: "nowrap", transition: "all 200ms" }}
+                  onClick={() => handlePay(uid, ents, total)}
+                  disabled={isPaying}
+                >
+                  {isPaying ? "Processing…" : "💳 Mark All Paid — " + fmt(total)}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 const CommunityInsights = ({ fetchStats, settings, mob, cachedStats, onStatsCached, entries = [], users = [] }) => {
   const [stats, setStats] = useState(cachedStats || null);
@@ -2533,7 +2850,7 @@ export default function App() {
     currentUser, users, entries, settings, loading, authError,
     login, logout: sbLogout, register, resetPassword, changePassword,
     saveEntry, deleteEntry, trashEntry, restoreEntry, approveEntry, firstApprove, secondApprove, rejectEntry, markPaid,
-    needsInfoEntry, bulkApprove,
+    needsInfoEntry, bulkApprove, addComment,
     saveSettings, addUser, removeUser, updateUserRate,
     setAuthError, fetchCommunityStats, refresh,
   } = useSupabase();
@@ -2775,6 +3092,7 @@ export default function App() {
   const doSecondApprove = async (id) => { const updated = await secondApprove(id); if (updated) setViewEntry(updated); };
   const doReject = async (notes) => { if (viewEntry) { const updated = await rejectEntry(viewEntry.id, notes); if (updated) setViewEntry(updated); } };
   const doMarkPaid = async (paymentDetails) => { if (viewEntry) { const updated = await markPaid(viewEntry.id, paymentDetails); if (updated) setViewEntry(updated); } };
+  const doComment = async (entryId, message) => { const updated = await addComment(entryId, message); if (updated && viewEntry?.id === entryId) setViewEntry(updated); return updated; };
   const doDecline = async (notes) => {
     if (!viewEntry) return;
     const u = users.find(x => x.id === viewEntry.userId);
@@ -2927,6 +3245,7 @@ export default function App() {
     { id: "entries", label: isTreasurer ? "All Entries" : "My Entries", icon: "file" },
     ...(!isTreasurer ? [{ id: "insights", label: "Community Insights", icon: "insights" }] : []),
     ...(isTreasurer ? [{ id: "review", label: "Review Queue", icon: "inbox", badge: pendingCount }] : []),
+    ...(isTreasurer ? [{ id: "payment", label: "Payment Run", icon: "dollar" }] : []),
     ...(isTreasurer ? [{ id: "reports", label: "Reports", icon: "chart" }] : []),
     ...(isTreasurer ? [{ id: "insights", label: "Community Insights", icon: "insights" }] : []),
     ...(isTreasurer ? [{ id: "trash", label: "Trash", icon: "trash", badge: trashCount || 0 }] : []),
@@ -2969,7 +3288,7 @@ export default function App() {
     );}
     if (viewEntry) {
       const fresh = entries.find(e => e.id === viewEntry.id) || viewEntry;
-      return <EntryDetail entry={fresh} settings={settings} users={users} currentUser={viewAs} onBack={() => setViewEntry(null)} onEdit={() => { setEditEntry(fresh); setViewEntry(null); }} onApprove={doApprove} onReject={doDecline} onTrash={doTrash} onRestore={doRestore} onMarkPaid={doMarkPaid} onSecondApprove={doSecondApprove} onDelete={async (e) => { await deleteEntry(e.id); setViewEntry(null); showToast("Entry deleted", "success"); }} onDuplicate={(e) => { setViewEntry(null); setEditEntry(null); setNewEntry(true); setTimeout(() => setEditEntry({ ...e, id: null, status: STATUSES.DRAFT, date: todayStr(), startTime: nowTime(), endTime: "", preImages: [], postImages: [], reviewerNotes: "", reviewedAt: "", paidAt: "" }), 50); }} mob={mob} />;
+      return <EntryDetail entry={fresh} settings={settings} users={users} currentUser={viewAs} onBack={() => setViewEntry(null)} onEdit={() => { setEditEntry(fresh); setViewEntry(null); }} onApprove={doApprove} onReject={doDecline} onTrash={doTrash} onRestore={doRestore} onMarkPaid={doMarkPaid} onComment={doComment} onSecondApprove={doSecondApprove} onDelete={async (e) => { await deleteEntry(e.id); setViewEntry(null); showToast("Entry deleted", "success"); }} onDuplicate={(e) => { setViewEntry(null); setEditEntry(null); setNewEntry(true); setTimeout(() => setEditEntry({ ...e, id: null, status: STATUSES.DRAFT, date: todayStr(), startTime: nowTime(), endTime: "", preImages: [], postImages: [], reviewerNotes: "", reviewedAt: "", paidAt: "" }), 50); }} mob={mob} />;
     }
     if (page === "dashboard") {
       const recent = myEntries.slice(0, 5);
@@ -3028,26 +3347,241 @@ export default function App() {
               </div>
             );
           })()}
-          {/* Rejected entries banner for members */}
-          {!isTreasurer && (() => { const rejected = myEntries.filter(e => e.status === STATUSES.REJECTED); return rejected.length > 0 ? (
-            <div style={{ ...S.card, background: "#FFF5F5", borderColor: "#F0BABA", borderLeft: "4px solid " + BRAND.error, display: "flex", alignItems: mob ? "flex-start" : "center", justifyContent: "space-between", flexDirection: mob ? "column" : "row", gap: 10, marginBottom: mob ? 8 : 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}><span style={{ fontSize: 20 }}>⚠️</span><div><span style={{ fontWeight: 600, display: "block", color: BRAND.error }}>{rejected.length === 1 ? "1 entry needs" : rejected.length + " entries need"} your attention</span><span style={{ fontSize: 13, color: BRAND.textMuted }}>The Treasurer returned these with notes. Fix and resubmit.</span></div></div>
-              <button style={{ ...S.btnPrimary, background: BRAND.error }} onClick={() => { setFilterStatus(STATUSES.REJECTED); nav("entries"); }}>View Rejected →</button>
-            </div>
-          ) : null; })()}
-          {/* Onboarding card for new members */}
-          {myEntries.length === 0 && !isTreasurer && (
-            <div style={{ ...S.card, background: "linear-gradient(135deg, #EEF2FF 0%, #F0FDF4 100%)", borderColor: "#C7D2FE", padding: mob ? 20 : 28 }}>
-              <div style={{ fontSize: 28, marginBottom: 12 }}>👋</div>
-              <div style={{ fontFamily: BRAND.serif, fontSize: 20, fontWeight: 600, color: BRAND.navy, marginBottom: 8 }}>Welcome to {settings.hoaName}!</div>
-              <div style={{ fontSize: 14, color: BRAND.charcoal, lineHeight: 1.7, marginBottom: 16 }}>Here's how reimbursement works:<br/>
-                <strong>1.</strong> Log your work — date, time, category, and what you did<br/>
-                <strong>2.</strong> Add materials and photos if applicable<br/>
-                <strong>3.</strong> Submit for review — the Treasurer will approve or request changes<br/>
-                <strong>4.</strong> Get reimbursed once approved</div>
-              <button style={S.btnPrimary} onClick={() => setNewEntry(true)}><Icon name="plus" size={16} /> Create Your First Entry</button>
-            </div>
-          )}
+          {/* Annual Budget Progress Bar */}
+          {isTreasurer && settings.annualBudget > 0 && (() => {
+            const yr = String(new Date().getFullYear());
+            let ytdSpent = 0;
+            entries.filter(e => (e.status === STATUSES.APPROVED || e.status === STATUSES.PAID) && e.date.startsWith(yr)).forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getRate(e.userId); ytdSpent += calcLabor(h, r) + calcMaterialsTotal(e.materials); });
+            const pct = Math.min((ytdSpent / settings.annualBudget) * 100, 100);
+            const isWarning = pct >= 80;
+            const isDanger = pct >= 100;
+            const barColor = isDanger ? BRAND.error : isWarning ? BRAND.warning : "#2E7D32";
+            return (
+              <div style={{ ...S.card, padding: "18px 24px", marginBottom: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 18 }}>💰</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: BRAND.navy }}>{yr} Reimbursement Budget</span>
+                  </div>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: barColor }}>{pct.toFixed(0)}% used</span>
+                </div>
+                <div style={{ height: 12, background: BRAND.bgSoft, borderRadius: 6, overflow: "hidden", marginBottom: 8 }}>
+                  <div style={{ height: "100%", borderRadius: 6, width: pct + "%", background: barColor, transition: "width 600ms ease-out" }} />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                  <span style={{ color: BRAND.textMuted }}>{fmt(ytdSpent)} spent</span>
+                  <span style={{ color: BRAND.textLight }}>{fmt(settings.annualBudget - ytdSpent)} remaining of {fmt(settings.annualBudget)}</span>
+                </div>
+                {isWarning && !isDanger && <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: BRAND.warning }}>⚠️ Budget is at {pct.toFixed(0)}% — approaching the annual limit.</div>}
+                {isDanger && <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: BRAND.error }}>🚨 Budget exceeded! Approved reimbursements surpass the annual budget.</div>}
+              </div>
+            );
+          })()}
+
+          {/* ── TREASURER COMMAND CENTER ── */}
+          {isTreasurer && (() => {
+            const yr = String(new Date().getFullYear());
+            const mo = String(new Date().getMonth() + 1).padStart(2, "0");
+            const thisMonthStr = yr + "-" + mo;
+            const lastMonthStr = (() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); })();
+
+            // Unpaid approved entries grouped by user
+            const unpaidApproved = entries.filter(e => e.status === STATUSES.APPROVED);
+            const unpaidTotal = unpaidApproved.reduce((s, e) => { const h = calcHours(e.startTime, e.endTime); const r = getRate(e.userId); return s + calcLabor(h, r) + calcMaterialsTotal(e.materials); }, 0);
+            const needsInfoCount = entries.filter(e => e.status === STATUSES.NEEDS_INFO).length;
+
+            // Oldest pending entry age
+            const submitted = entries.filter(e => e.status === STATUSES.SUBMITTED && e.submittedAt);
+            const oldestDays = submitted.length ? Math.floor((Date.now() - new Date(submitted.sort((a,b) => a.submittedAt.localeCompare(b.submittedAt))[0].submittedAt).getTime()) / 86400000) : 0;
+
+            // Member activity this month vs last month
+            const memberActivity = users.filter(u => u.role === ROLES.MEMBER).map(u => {
+              const thisM = entries.filter(e => e.userId === u.id && e.date?.startsWith(thisMonthStr) && e.status !== STATUSES.TRASH).length;
+              const lastM = entries.filter(e => e.userId === u.id && e.date?.startsWith(lastMonthStr) && e.status !== STATUSES.TRASH).length;
+              return { ...u, thisMonth: thisM, lastMonth: lastM };
+            }).sort((a, b) => b.thisMonth - a.thisMonth);
+
+            return (
+              <div style={{ marginBottom: 16 }}>
+                {/* Action strip */}
+                <div style={{ display: "flex", gap: 10, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}>
+                  {[
+                    { label: "Pending Review", value: pendingCount, sub: pendingCount > 0 ? fmt(entries.filter(e=>e.status===STATUSES.SUBMITTED).reduce((s,e)=>{const h=calcHours(e.startTime,e.endTime);const r=getRate(e.userId);return s+calcLabor(h,r)+calcMaterialsTotal(e.materials);},0)) : "All clear", color: pendingCount > 0 ? BRAND.warning : BRAND.success, page: "review", emoji: "🕐" },
+                    { label: "Awaiting Payment", value: unpaidApproved.length, sub: unpaidApproved.length > 0 ? fmt(unpaidTotal) + " owed" : "All paid", color: unpaidApproved.length > 0 ? "#1565C0" : BRAND.success, page: "payment", emoji: "💳" },
+                    { label: "Needs Info", value: needsInfoCount, sub: needsInfoCount > 0 ? "Awaiting member reply" : "None", color: needsInfoCount > 0 ? "#C2410C" : BRAND.success, page: "entries", emoji: "💬" },
+                  ].map(item => (
+                    <button key={item.label} onClick={() => nav(item.page)} style={{ flex: "0 0 auto", minWidth: 140, padding: "14px 16px", borderRadius: 12, border: "1px solid " + item.color + "30", background: item.color + "08", cursor: "pointer", fontFamily: BRAND.sans, textAlign: "left", transition: "all 200ms" }}
+                      onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px " + item.color + "22"; }}
+                      onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
+                      <div style={{ fontSize: 22, marginBottom: 4 }}>{item.emoji}</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: item.color, lineHeight: 1 }}>{item.value}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: BRAND.charcoal, marginTop: 2 }}>{item.label}</div>
+                      <div style={{ fontSize: 11, color: BRAND.textMuted, marginTop: 1 }}>{item.sub}</div>
+                    </button>
+                  ))}
+                  {oldestDays > 0 && (
+                    <button onClick={() => nav("review")} style={{ flex: "0 0 auto", minWidth: 140, padding: "14px 16px", borderRadius: 12, border: "1px solid " + (oldestDays >= 7 ? BRAND.error : BRAND.warning) + "40", background: (oldestDays >= 7 ? BRAND.error : BRAND.warning) + "08", cursor: "pointer", fontFamily: BRAND.sans, textAlign: "left" }}>
+                      <div style={{ fontSize: 22, marginBottom: 4 }}>⏳</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: oldestDays >= 7 ? BRAND.error : BRAND.warning, lineHeight: 1 }}>{oldestDays}d</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: BRAND.charcoal, marginTop: 2 }}>Oldest Pending</div>
+                      <div style={{ fontSize: 11, color: BRAND.textMuted }}>{oldestDays >= 7 ? "⚠️ Overdue" : "Within SLA"}</div>
+                    </button>
+                  )}
+                </div>
+
+                {/* Member activity table */}
+                {memberActivity.length > 0 && (
+                  <div style={{ ...S.card, padding: 0, overflow: "hidden", marginBottom: 16 }}>
+                    <div style={{ padding: "14px 20px", borderBottom: "1px solid " + BRAND.borderLight, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontWeight: 700, fontSize: 14, color: BRAND.navy }}>Member Activity</span>
+                      <span style={{ fontSize: 12, color: BRAND.textLight }}>This month vs last month</span>
+                    </div>
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                        <thead><tr style={{ background: BRAND.bgSoft }}>
+                          <th style={{ ...S.th, textAlign: "left" }}>Member</th>
+                          <th style={{ ...S.th, textAlign: "right" }}>This Month</th>
+                          <th style={{ ...S.th, textAlign: "right" }}>Last Month</th>
+                          <th style={{ ...S.th, textAlign: "right" }}>YTD Total</th>
+                        </tr></thead>
+                        <tbody>{memberActivity.map((u, i) => {
+                          const ytd = entries.filter(e => e.userId === u.id && e.date?.startsWith(yr) && (e.status === STATUSES.APPROVED || e.status === STATUSES.PAID)).reduce((s,e)=>{const h=calcHours(e.startTime,e.endTime);const r=getRate(u.id);return s+calcLabor(h,r)+calcMaterialsTotal(e.materials);},0);
+                          const trend = u.thisMonth > u.lastMonth ? "↑" : u.thisMonth < u.lastMonth ? "↓" : "→";
+                          const trendColor = u.thisMonth > u.lastMonth ? BRAND.success : u.thisMonth < u.lastMonth ? BRAND.error : BRAND.textLight;
+                          return (
+                            <tr key={u.id} style={{ background: i % 2 ? BRAND.bgSoft : BRAND.white, borderBottom: "1px solid " + BRAND.borderLight }}>
+                              <td style={{ padding: "10px 16px", fontWeight: 600, color: BRAND.charcoal }}>{u.name}</td>
+                              <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                                <span style={{ fontWeight: 700, color: BRAND.navy }}>{u.thisMonth}</span>
+                                <span style={{ marginLeft: 4, color: trendColor, fontWeight: 700 }}>{trend}</span>
+                              </td>
+                              <td style={{ padding: "10px 12px", textAlign: "right", color: BRAND.textMuted }}>{u.lastMonth}</td>
+                              <td style={{ padding: "10px 16px", textAlign: "right", fontWeight: 600, color: BRAND.brick }}>{fmt(ytd)}</td>
+                            </tr>
+                          );
+                        })}</tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* ── MEMBER DASHBOARD ── */}
+          {!isTreasurer && (() => {
+            const yr = String(new Date().getFullYear());
+            const myYrEntries = myEntries.filter(e => e.date?.startsWith(yr) && e.status !== STATUSES.TRASH);
+            const ytdApproved = myYrEntries.filter(e => e.status === STATUSES.APPROVED).reduce((s,e)=>{const h=calcHours(e.startTime,e.endTime);const r=getRate(e.userId);return s+calcLabor(h,r)+calcMaterialsTotal(e.materials);},0);
+            const ytdPaid = myYrEntries.filter(e => e.status === STATUSES.PAID).reduce((s,e)=>{const h=calcHours(e.startTime,e.endTime);const r=getRate(e.userId);return s+calcLabor(h,r)+calcMaterialsTotal(e.materials);},0);
+            const pendingEntries = myEntries.filter(e => [STATUSES.SUBMITTED, STATUSES.AWAITING_SECOND].includes(e.status));
+            const rejectedEntries = myEntries.filter(e => e.status === STATUSES.REJECTED);
+            const needsInfoEntries = myEntries.filter(e => e.status === STATUSES.NEEDS_INFO);
+
+            // Average approval time from auditLog
+            const approvedWithLog = myEntries.filter(e => (e.status === STATUSES.APPROVED || e.status === STATUSES.PAID) && e.submittedAt && e.reviewedAt);
+            const avgApprovalDays = approvedWithLog.length ? (approvedWithLog.reduce((s,e) => s + (new Date(e.reviewedAt) - new Date(e.submittedAt)) / 86400000, 0) / approvedWithLog.length).toFixed(1) : null;
+
+            // Pending entries with age
+            const withAge = pendingEntries.map(e => ({ ...e, ageDays: e.submittedAt ? Math.floor((Date.now() - new Date(e.submittedAt).getTime()) / 86400000) : 0 })).sort((a,b) => b.ageDays - a.ageDays);
+
+            if (myEntries.length === 0) return (
+              <div style={{ ...S.card, background: "linear-gradient(135deg, #EEF2FF 0%, #F0FDF4 100%)", borderColor: "#C7D2FE", padding: mob ? 20 : 28, marginBottom: 16 }}>
+                <div style={{ fontSize: 28, marginBottom: 12 }}>👋</div>
+                <div style={{ fontFamily: BRAND.serif, fontSize: 20, fontWeight: 600, color: BRAND.navy, marginBottom: 8 }}>Welcome to {settings.hoaName}!</div>
+                <div style={{ fontSize: 14, color: BRAND.charcoal, lineHeight: 1.7, marginBottom: 16 }}>Here's how reimbursement works:<br/>
+                  <strong>1.</strong> Log your work — date, time, category, and what you did<br/>
+                  <strong>2.</strong> Add materials and photos if applicable<br/>
+                  <strong>3.</strong> Submit for review — the Treasurer will approve or request changes<br/>
+                  <strong>4.</strong> Get reimbursed once approved</div>
+                <button style={S.btnPrimary} onClick={() => setNewEntry(true)}><Icon name="plus" size={16} /> Create Your First Entry</button>
+              </div>
+            );
+
+            return (
+              <div style={{ marginBottom: 16 }}>
+                {/* 1. YTD earnings summary */}
+                <div style={{ ...S.card, background: "linear-gradient(135deg, #F0FDF4 0%, #E8EDF5 100%)", borderColor: "#B5CCAE", marginBottom: 16 }}>
+                  <div style={{ fontFamily: BRAND.serif, fontSize: 16, fontWeight: 600, color: BRAND.navy, marginBottom: 14 }}>{yr} Earnings Summary</div>
+                  <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "repeat(4, 1fr)", gap: mob ? 12 : 16 }}>
+                    {[
+                      { label: "Approved", value: fmt(ytdApproved), color: BRAND.success, icon: "✓" },
+                      { label: "Paid Out", value: fmt(ytdPaid), color: "#3B5998", icon: "💳" },
+                      { label: "Pending", value: fmt(dashStats.pendingPayout || 0), color: BRAND.warning, icon: "⏳" },
+                      { label: "Total Entries", value: myYrEntries.length, color: BRAND.navy, icon: "📋" },
+                    ].map(s => (
+                      <div key={s.label} style={{ textAlign: "center", padding: "12px 8px", background: "rgba(255,255,255,0.6)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.8)" }}>
+                        <div style={{ fontSize: 20, marginBottom: 4 }}>{s.icon}</div>
+                        <div style={{ fontSize: mob ? 18 : 22, fontWeight: 800, color: s.color }}>{s.value}</div>
+                        <div style={{ fontSize: 11, color: BRAND.textMuted, marginTop: 2, fontWeight: 600 }}>{s.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {avgApprovalDays && (
+                    <div style={{ marginTop: 12, padding: "8px 12px", background: "rgba(255,255,255,0.5)", borderRadius: 8, fontSize: 12, color: BRAND.textMuted, display: "flex", gap: 6, alignItems: "center" }}>
+                      <span>⚡</span>
+                      <span>Your entries are typically approved in <strong style={{ color: BRAND.navy }}>{avgApprovalDays} days</strong></span>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Pending entries with age */}
+                {withAge.length > 0 && (
+                  <div style={{ ...S.card, padding: 0, overflow: "hidden", marginBottom: 16 }}>
+                    <div style={{ padding: "14px 20px", borderBottom: "1px solid " + BRAND.borderLight }}>
+                      <span style={{ fontWeight: 700, fontSize: 14, color: BRAND.navy }}>⏳ Awaiting Review</span>
+                      <span style={{ fontSize: 12, color: BRAND.textLight, marginLeft: 8 }}>{withAge.length} entr{withAge.length === 1 ? "y" : "ies"}</span>
+                    </div>
+                    <div style={{ padding: "8px 0" }}>
+                      {withAge.map(e => {
+                        const ageColor = e.ageDays >= 7 ? BRAND.error : e.ageDays >= 3 ? BRAND.warning : BRAND.success;
+                        const total = calcLabor(calcHours(e.startTime, e.endTime), getRate(e.userId)) + calcMaterialsTotal(e.materials);
+                        return (
+                          <div key={e.id} onClick={() => setViewEntry(e)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 20px", cursor: "pointer", borderBottom: "1px solid " + BRAND.borderLight + "80", transition: "background 150ms" }}
+                            onMouseEnter={ev => ev.currentTarget.style.background = BRAND.bgSoft}
+                            onMouseLeave={ev => ev.currentTarget.style.background = "transparent"}>
+                            <div style={{ width: 8, height: 8, borderRadius: 4, background: ageColor, flexShrink: 0 }} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 600, fontSize: 13, color: BRAND.charcoal, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.category} — {e.description}</div>
+                              <div style={{ fontSize: 11, color: BRAND.textLight, marginTop: 2 }}>{formatDate(e.date)}</div>
+                            </div>
+                            <div style={{ textAlign: "right", flexShrink: 0 }}>
+                              <div style={{ fontWeight: 700, fontSize: 13, color: BRAND.navy }}>{fmt(total)}</div>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: ageColor }}>{e.ageDays === 0 ? "Today" : e.ageDays + "d ago"}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* 3+4. Rejected / Needs Info — needing action */}
+                {(rejectedEntries.length > 0 || needsInfoEntries.length > 0) && (
+                  <div style={{ ...S.card, background: "#FFF5F5", borderColor: "#F0BABA", borderLeft: "4px solid " + BRAND.error, marginBottom: 16 }}>
+                    <div style={{ fontWeight: 700, color: BRAND.error, marginBottom: 10 }}>⚠️ {rejectedEntries.length + needsInfoEntries.length} entr{rejectedEntries.length + needsInfoEntries.length === 1 ? "y needs" : "ies need"} your attention</div>
+                    {[...rejectedEntries, ...needsInfoEntries].slice(0, 3).map(e => {
+                      const total = calcLabor(calcHours(e.startTime, e.endTime), getRate(e.userId)) + calcMaterialsTotal(e.materials);
+                      return (
+                        <div key={e.id} onClick={() => setViewEntry(e)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#fff", borderRadius: 8, marginBottom: 6, cursor: "pointer", border: "1px solid #F0BABA" }}>
+                          <StatusBadge status={e.status} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.charcoal, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.category} — {e.description}</div>
+                            {e.reviewerNotes && <div style={{ fontSize: 12, color: BRAND.textMuted, marginTop: 2 }}>"{e.reviewerNotes.slice(0, 60)}{e.reviewerNotes.length > 60 ? "…" : ""}"</div>}
+                          </div>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: BRAND.navy, flexShrink: 0 }}>{fmt(total)}</div>
+                        </div>
+                      );
+                    })}
+                    {rejectedEntries.length + needsInfoEntries.length > 3 && (
+                      <button style={{ ...S.btnGhost, fontSize: 12, marginTop: 4 }} onClick={() => { setFilterStatus(STATUSES.REJECTED); nav("entries"); }}>View all →</button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           <div style={S.card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}><h3 style={S.h3}>Recent Entries</h3><button style={S.btnGhost} onClick={() => setPage("entries")}>View all →</button></div>
             {recent.length === 0 ? (
@@ -3463,6 +3997,7 @@ export default function App() {
         </div>
       );
     }
+    if (page === "payment") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <PaymentRunPage entries={entries} users={users} settings={settings} onMarkPaid={async (ids, paymentDetails) => { let count = 0; for (const id of ids) { const updated = await markPaid(id, paymentDetails); if (updated) count++; } if (count > 0) showToast(count + " entr" + (count === 1 ? "y" : "ies") + " marked as paid", "success"); }} mob={mob} />; }
     if (page === "reports") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <ReportsPage entries={entries} users={users} settings={settings} currentUser={currentUser} mob={mob} />; }
     if (page === "settings") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <SettingsPage settings={settings} users={users} currentUser={currentUser} allEntries={entries} onSaveSettings={saveSettings} onAddUser={addUser} onRemoveUser={removeUser} onUpdateRate={updateUserRate} />; }
     if (page === "insights") return (
@@ -3631,10 +4166,11 @@ export default function App() {
               <div style={{ padding: "0 20px", marginBottom: 8 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: BRAND.textLight, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>Treasurer Tools</div>
                 {[
-                  { id: "reports",  label: "Reports",            emoji: "📊", desc: "PDF/CSV export" },
-                  { id: "insights", label: "Community Insights",  emoji: "✨", desc: "Spending trends" },
-                  { id: "settings", label: "Settings",            emoji: "⚙️",  desc: "HOA name, rates, members" },
-                  { id: "trash",    label: "Trash",               emoji: "🗑",  desc: trashCount > 0 ? trashCount + " item" + (trashCount > 1 ? "s" : "") : "Empty", badge: trashCount || 0 },
+                  { id: "payment",  label: "Payment Run",          emoji: "💳", desc: "Batch pay approved entries" },
+                  { id: "reports",  label: "Reports",              emoji: "📊", desc: "PDF/CSV export" },
+                  { id: "insights", label: "Community Insights",   emoji: "✨", desc: "Spending trends" },
+                  { id: "settings", label: "Settings",             emoji: "⚙️",  desc: "HOA name, rates, members" },
+                  { id: "trash",    label: "Trash",                emoji: "🗑",  desc: trashCount > 0 ? trashCount + " item" + (trashCount > 1 ? "s" : "") : "Empty", badge: trashCount || 0 },
                 ].map(item => (
                   <button key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, width: "100%", padding: "14px 16px", borderRadius: 12, border: "none", background: "none", cursor: "pointer", fontFamily: BRAND.sans, marginBottom: 4, textAlign: "left" }}
                     onMouseEnter={ev => ev.currentTarget.style.background = BRAND.bgSoft}

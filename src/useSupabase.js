@@ -23,6 +23,7 @@ function mapEntry(row) {
     submittedAt: row.submitted_at || "",
     paidAt: row.paid_at || "",
     auditLog: row.audit_log || [],
+    comments: row.comments || [],
     secondApproverId: row.second_approver_id || null,
     secondApprovedAt: row.second_approved_at || "",
     createdAt: row.created_at,
@@ -438,6 +439,26 @@ export function useSupabase() {
     return mapped;
   }, [currentUser]);
 
+  // ── COMMENTS ───────────────────────────────────────────────────────────
+  const addComment = useCallback(async (entryId, message) => {
+    const { data: current } = await supabase.from("entries").select("comments").eq("id", entryId).single();
+    const existing = current?.comments || [];
+    const newComment = {
+      id: crypto.randomUUID(),
+      userId: currentUser.id,
+      userName: currentUser.name,
+      role: currentUser.role,
+      message: message.trim(),
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [...existing, newComment];
+    const { data, error } = await supabase.from("entries").update({ comments: updated }).eq("id", entryId).select().single();
+    if (error) { console.error("Comment error:", error); return null; }
+    const mapped = mapEntry(data);
+    setEntries(prev => prev.map(e => e.id === entryId ? mapped : e));
+    return mapped;
+  }, [currentUser]);
+
   // ── SETTINGS ───────────────────────────────────────────────────────────
   const saveSettings = useCallback(async (newSettings) => {
     const { error } = await supabase.from("settings").update({
@@ -506,7 +527,7 @@ export function useSupabase() {
     login, logout, register, resetPassword, changePassword,
     // Entries
     saveEntry, deleteEntry, trashEntry, restoreEntry, approveEntry, firstApprove, secondApprove, rejectEntry, markPaid,
-    needsInfoEntry, bulkApprove,
+    needsInfoEntry, bulkApprove, addComment,
     // Settings & Users
     saveSettings, addUser, removeUser, updateUserRate,
     // Misc
