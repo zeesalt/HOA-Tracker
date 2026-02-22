@@ -3025,8 +3025,8 @@ export default function App() {
               })}
             </div>
           )}
+        <ConfirmDialog open={!!permDeleteTarget} onClose={() => setPermDeleteTarget(null)} title="Permanently Delete?" message={permDeleteTarget ? "This cannot be undone. " + (permDeleteTarget.category || "") + " by " + (users.find(u => u.id === permDeleteTarget?.userId)?.name || "Unknown") + " will be permanently removed." : ""} confirmText="Delete Forever" danger onConfirm={async () => { if (permDeleteTarget) { await deleteEntry(permDeleteTarget.id); setPermDeleteTarget(null); showToast("Permanently deleted", "success"); }}} />
         </div>
-      <ConfirmDialog open={!!permDeleteTarget} onClose={() => setPermDeleteTarget(null)} title="Permanently Delete?" message={permDeleteTarget ? "This cannot be undone. " + (permDeleteTarget.category || "") + " by " + (users.find(u => u.id === permDeleteTarget?.userId)?.name || "Unknown") + " will be permanently removed." : ""} confirmText="Delete Forever" danger onConfirm={async () => { if (permDeleteTarget) { await deleteEntry(permDeleteTarget.id); setPermDeleteTarget(null); showToast("Permanently deleted", "success"); }}} />
       );
     }
     if (page === "reports") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <ReportsPage entries={entries} users={users} settings={settings} currentUser={currentUser} mob={mob} />; }
