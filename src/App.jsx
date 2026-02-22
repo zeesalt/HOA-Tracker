@@ -98,6 +98,16 @@ function calcMaterialsTotal(materials) {
   return (materials || []).reduce((sum, m) => sum + (Number(m.quantity) || 0) * (Number(m.unitCost) || 0), 0);
 }
 function formatDate(d) { if (!d) return ""; const date = new Date(d + "T00:00:00"); return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }
+function timeAgo(dateStr) {
+  if (!dateStr) return "";
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return mins + "m ago";
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + "h ago";
+  return Math.floor(hrs / 24) + "d ago";
+}
 function formatTime(t) { if (!t) return ""; const [h, m] = t.split(":"); const hr = parseInt(h); return (hr > 12 ? hr - 12 : hr || 12) + ":" + m + " " + (hr >= 12 ? "PM" : "AM"); }
 function getUserRate(users, settings, userId) {
   const u = users?.find(u => u.id === userId);
@@ -1103,7 +1113,7 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
 // ═══════════════════════════════════════════════════════════════════════════
 const SWIPE_THRESHOLD     = 60;   // px to commit reveal
 const SWIPE_MAX_MEMBER    = 80;   // px travel for single-button reveal
-const SWIPE_MAX_TREASURER = 180;  // px travel for three-button reveal
+const SWIPE_MAX_TREASURER = 196;  // px travel for three 64px buttons (3×64=192 + 4px buffer)
 
 const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSubmit, onApprove, onReject, onDelete }) => {
   const u = users.find(u => u.id === entry.userId);
@@ -1203,7 +1213,7 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
               {canTreasDelete && <Icon name="trash" size={20} style={{ color: "#fff" }} />}
             </>
           ) : (
-            <span style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>{canEdit ? "✏️ Edit" : "👁 View"}</span>
+            <span style={{ color: "#fff", fontSize: 22 }}>{canEdit ? <Icon name="edit" size={22} style={{ color: "#fff" }} /> : <Icon name="inbox" size={22} style={{ color: "#fff" }} />}</span>
           )}
         </div>
       )}
@@ -1310,12 +1320,13 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
 
       {/* ── REVEALED: swipe-left (Member) → Edit or View ── */}
       {revealed === "left" && !isTreasurer && (
-        <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, display: "flex", alignItems: "center", paddingRight: 12, zIndex: 2 }}>
+        <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, display: "flex", alignItems: "stretch", zIndex: 2 }}>
           <button
-            style={{ background: "#fff", color: canEdit ? BRAND.navy : "#4B5563", border: "2px solid " + (canEdit ? BRAND.navy : "#4B5563"), borderRadius: 8, padding: "7px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+            aria-label={canEdit ? "Edit entry" : "View entry"}
+            style={{ background: canEdit ? BRAND.navy : "#4B5563", color: "#fff", border: "none", width: 80, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
             onClick={(e) => { e.stopPropagation(); reset(); canEdit ? onEdit(entry) : onClick(); }}
           >
-            {canEdit ? "Edit" : "View"}
+            <Icon name={canEdit ? "edit" : "inbox"} size={22} />
           </button>
         </div>
       )}
@@ -1902,17 +1913,6 @@ const CommunityInsights = ({ fetchStats, settings, mob, cachedStats, onStatsCach
 // ═══════════════════════════════════════════════════════════════════════════
 const NotificationPanel = ({ entries, users, settings, onView, onClose, onReviewAll, mob }) => {
   const pending = entries.filter(e => e.status === STATUSES.SUBMITTED).sort((a, b) => b.createdAt?.localeCompare(a.createdAt) || b.date.localeCompare(a.date));
-  const timeAgo = (dateStr) => {
-    if (!dateStr) return "";
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return "just now";
-    if (mins < 60) return mins + "m ago";
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return hrs + "h ago";
-    const days = Math.floor(hrs / 24);
-    return days + "d ago";
-  };
   return (
     <>
       <div style={{ position: "fixed", inset: 0, zIndex: 94 }} onClick={onClose} aria-hidden="true" />
@@ -2006,8 +2006,20 @@ const SettingsPage = ({ settings, users, currentUser, allEntries, onSaveSettings
         <div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <Field label="Invite Code">
-              <input style={{ ...S.input, fontFamily: "monospace", letterSpacing: "0.1em", textTransform: "uppercase" }}
-                value={form.inviteCode || ""} onChange={e => set("inviteCode", e.target.value.toUpperCase())} placeholder="e.g. MILL2024" />
+              <div style={{ display: "flex", gap: 8 }}>
+                <input style={{ ...S.input, fontFamily: "monospace", letterSpacing: "0.1em", textTransform: "uppercase", flex: 1 }}
+                  value={form.inviteCode || ""} onChange={e => set("inviteCode", e.target.value.toUpperCase())} placeholder="e.g. MILL2024" />
+                {form.inviteCode && (
+                  <button
+                    type="button"
+                    style={{ ...S.btnSecondary, padding: "10px 14px", flexShrink: 0 }}
+                    title="Copy invite code"
+                    onClick={() => { navigator.clipboard.writeText(form.inviteCode).then(() => { setSaved("code"); setTimeout(() => setSaved(false), 1500); }); }}
+                  >
+                    {saved === "code" ? <Icon name="check" size={16} /> : <Icon name="copy" size={16} />}
+                  </button>
+                )}
+              </div>
             </Field>
             <Field label="Code Expires">
               <input type="datetime-local" style={S.input}
@@ -2231,6 +2243,7 @@ export default function App() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterMember, setFilterMember] = useState("all");
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
   const [sortField, setSortField] = useState("date");   // date | member | category | total | status | hours
@@ -2707,47 +2720,101 @@ export default function App() {
           <h2 style={S.h2}>{isTreasurer ? "All Entries" : "My Entries"}</h2>
           {!mob && <button style={S.btnPrimary} onClick={() => setNewEntry(true)}><Icon name="plus" size={16} /> New Entry</button>}
         </div>
-        {/* Filter bar */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16, alignItems: "center" }}>
-          <input style={{ ...S.input, width: mob ? "100%" : 200, padding: "8px 12px", fontSize: 13 }} placeholder="🔍 Search entries, members, locations..." value={filterSearch} onChange={e => setFilterSearch(e.target.value)} />
-          <select style={{ ...S.select, width: "auto", padding: "8px 12px", fontSize: 13, minWidth: 120 }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-            <option value="all">All Statuses</option>
-            {Object.values(STATUSES).map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <select style={{ ...S.select, width: "auto", padding: "8px 12px", fontSize: 13, minWidth: 130 }} value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
-            <option value="all">All Categories</option>
-            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          {isTreasurer && (
-            <select style={{ ...S.select, width: "auto", padding: "8px 12px", fontSize: 13, minWidth: 130 }} value={filterMember} onChange={e => setFilterMember(e.target.value)}>
-              <option value="all">All Members</option>
-              {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
-          )}
-          {/* Date range quick presets */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <input type="date" style={{ ...S.input, padding: "7px 10px", fontSize: 12, width: "auto" }} value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} title="From date" />
-            <span style={{ fontSize: 12, color: BRAND.textLight }}>–</span>
-            <input type="date" style={{ ...S.input, padding: "7px 10px", fontSize: 12, width: "auto" }} value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} title="To date" />
-            {[
-              { label: "This Month", fn: () => { const d = new Date(); setFilterDateFrom(d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-01"); setFilterDateTo(new Date().toISOString().split("T")[0]); } },
-              { label: "Last Month", fn: () => { const d = new Date(); d.setMonth(d.getMonth()-1); const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"); setFilterDateFrom(y+"-"+m+"-01"); const end=new Date(y,d.getMonth()+1,0); setFilterDateTo(end.toISOString().split("T")[0]); } },
-              { label: "YTD", fn: () => { setFilterDateFrom(new Date().getFullYear()+"-01-01"); setFilterDateTo(new Date().toISOString().split("T")[0]); } },
-            ].map(p => (
-              <button key={p.label} onClick={p.fn} style={{ padding: "5px 10px", borderRadius: 12, border: "1px solid "+BRAND.borderLight, background: BRAND.white, color: BRAND.navy, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: BRAND.sans, whiteSpace: "nowrap" }}>{p.label}</button>
-            ))}
-          </div>
-          {(filterSearch || filterStatus !== "all" || filterCategory !== "all" || filterMember !== "all" || filterDateFrom || filterDateTo) && (() => {
-            const activeCount = [filterSearch, filterStatus !== "all", filterCategory !== "all", filterMember !== "all", filterDateFrom, filterDateTo].filter(Boolean).length;
-            return (
-              <button style={{ ...S.btnGhost, fontSize: 12, padding: "6px 10px", display: "flex", alignItems: "center", gap: 6 }}
-                onClick={() => { setFilterSearch(""); setFilterStatus("all"); setFilterCategory("all"); setFilterMember("all"); setFilterDateFrom(""); setFilterDateTo(""); }}>
-                <span style={{ background: BRAND.brick, color: "#fff", borderRadius: 10, fontSize: 11, fontWeight: 700, padding: "1px 6px", minWidth: 18, textAlign: "center" }}>{activeCount}</span>
-                Clear filters
-              </button>
-            );
-          })()}
-        </div>
+        {/* Filter bar — search always visible; advanced filters collapse into a panel on mobile */}
+        {(() => {
+          const hasActiveFilter = filterSearch || filterStatus !== "all" || filterCategory !== "all" || filterMember !== "all" || filterDateFrom || filterDateTo;
+          const activeCount = [filterSearch, filterStatus !== "all", filterCategory !== "all", filterMember !== "all", filterDateFrom, filterDateTo].filter(Boolean).length;
+          const advancedCount = [filterStatus !== "all", filterCategory !== "all", filterMember !== "all", filterDateFrom, filterDateTo].filter(Boolean).length;
+          const clearAll = () => { setFilterSearch(""); setFilterStatus("all"); setFilterCategory("all"); setFilterMember("all"); setFilterDateFrom(""); setFilterDateTo(""); };
+          const datePresets = [
+            { label: "This Month", fn: () => { const d = new Date(); setFilterDateFrom(d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-01"); setFilterDateTo(new Date().toISOString().split("T")[0]); } },
+            { label: "Last Month", fn: () => { const d = new Date(); d.setMonth(d.getMonth()-1); const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"); setFilterDateFrom(y+"-"+m+"-01"); const end=new Date(y,d.getMonth()+1,0); setFilterDateTo(end.toISOString().split("T")[0]); } },
+            { label: "YTD", fn: () => { setFilterDateFrom(new Date().getFullYear()+"-01-01"); setFilterDateTo(new Date().toISOString().split("T")[0]); } },
+          ];
+          return (
+            <div style={{ marginBottom: 16 }}>
+              {/* Row 1: search + filter button (mobile) or full bar (desktop) */}
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input style={{ ...S.input, flex: 1, padding: "8px 12px", fontSize: 13 }} placeholder="🔍 Search entries, members, locations..." value={filterSearch} onChange={e => setFilterSearch(e.target.value)} />
+                {mob ? (
+                  <button onClick={() => setFilterPanelOpen(p => !p)} aria-expanded={filterPanelOpen} aria-label="Toggle filters"
+                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 6, border: "1px solid " + (advancedCount > 0 ? BRAND.brick : BRAND.border), background: advancedCount > 0 ? BRAND.brick + "0F" : BRAND.white, color: advancedCount > 0 ? BRAND.brick : BRAND.textMuted, fontFamily: BRAND.sans, fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    <Icon name="settings" size={16} />
+                    {advancedCount > 0 ? <span style={{ background: BRAND.brick, color: "#fff", borderRadius: 10, fontSize: 11, fontWeight: 700, padding: "1px 6px", minWidth: 18, textAlign: "center" }}>{advancedCount}</span> : "Filter"}
+                  </button>
+                ) : (
+                  <>
+                    <select style={{ ...S.select, width: "auto", padding: "8px 12px", fontSize: 13, minWidth: 120 }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                      <option value="all">All Statuses</option>
+                      {Object.values(STATUSES).map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <select style={{ ...S.select, width: "auto", padding: "8px 12px", fontSize: 13, minWidth: 130 }} value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
+                      <option value="all">All Categories</option>
+                      {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    {isTreasurer && (
+                      <select style={{ ...S.select, width: "auto", padding: "8px 12px", fontSize: 13, minWidth: 130 }} value={filterMember} onChange={e => setFilterMember(e.target.value)}>
+                        <option value="all">All Members</option>
+                        {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      </select>
+                    )}
+                    <input type="date" style={{ ...S.input, padding: "7px 10px", fontSize: 12, width: "auto" }} value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} title="From" />
+                    <span style={{ fontSize: 12, color: BRAND.textLight }}>–</span>
+                    <input type="date" style={{ ...S.input, padding: "7px 10px", fontSize: 12, width: "auto" }} value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} title="To" />
+                    {datePresets.map(p => <button key={p.label} onClick={p.fn} style={{ padding: "5px 10px", borderRadius: 12, border: "1px solid "+BRAND.borderLight, background: BRAND.white, color: BRAND.navy, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: BRAND.sans, whiteSpace: "nowrap" }}>{p.label}</button>)}
+                    {hasActiveFilter && <button style={{ ...S.btnGhost, fontSize: 12, padding: "6px 10px", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }} onClick={clearAll}><span style={{ background: BRAND.brick, color: "#fff", borderRadius: 10, fontSize: 11, fontWeight: 700, padding: "1px 6px", minWidth: 18, textAlign: "center" }}>{activeCount}</span>Clear</button>}
+                  </>
+                )}
+              </div>
+
+              {/* Mobile expanded filter panel */}
+              {mob && filterPanelOpen && (
+                <div className="fade-in" style={{ marginTop: 8, padding: "14px 14px 10px", background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 10, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: BRAND.textLight, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Status</div>
+                      <select style={{ ...S.select, fontSize: 13, padding: "8px 10px" }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                        <option value="all">All</option>
+                        {Object.values(STATUSES).map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: BRAND.textLight, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Category</div>
+                      <select style={{ ...S.select, fontSize: 13, padding: "8px 10px" }} value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
+                        <option value="all">All</option>
+                        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    {isTreasurer && (
+                      <div style={{ gridColumn: "1 / -1" }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: BRAND.textLight, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Member</div>
+                        <select style={{ ...S.select, fontSize: 13, padding: "8px 10px" }} value={filterMember} onChange={e => setFilterMember(e.target.value)}>
+                          <option value="all">All Members</option>
+                          {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </select>
+                      </div>
+                    )}
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: BRAND.textLight, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>From</div>
+                      <input type="date" style={{ ...S.input, fontSize: 13, padding: "8px 10px" }} value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: BRAND.textLight, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>To</div>
+                      <input type="date" style={{ ...S.input, fontSize: 13, padding: "8px 10px" }} value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                    {datePresets.map(p => <button key={p.label} onClick={p.fn} style={{ padding: "5px 12px", borderRadius: 12, border: "1px solid "+BRAND.borderLight, background: BRAND.bgSoft, color: BRAND.navy, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: BRAND.sans }}>{p.label}</button>)}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid " + BRAND.borderLight, paddingTop: 10 }}>
+                    {advancedCount > 0 ? <button style={{ ...S.btnGhost, fontSize: 13, color: BRAND.brick, padding: "6px 4px" }} onClick={clearAll}>✕ Clear filters</button> : <span />}
+                    <button style={{ ...S.btnPrimary, fontSize: 13, padding: "8px 20px" }} onClick={() => setFilterPanelOpen(false)}>Done</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
         {(() => {
           let filtered = myEntries;
           if (filterDateFrom) filtered = filtered.filter(e => e.date >= filterDateFrom);
@@ -2978,7 +3045,7 @@ export default function App() {
       return (
         <div className="fade-in">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <h2 style={S.h2}>🗑 Trash</h2>
+            <h2 style={S.h2}>Trash</h2>
             <span style={{ fontSize: 13, color: BRAND.textMuted }}>{trashed.length} {trashed.length === 1 ? "entry" : "entries"}</span>
           </div>
           <p style={{ margin: "0 0 20px", fontSize: 14, color: BRAND.textMuted }}>Declined or deleted entries. Restore any entry to Draft to reopen it.</p>
@@ -3188,7 +3255,7 @@ export default function App() {
         <main id="main-content" style={{ padding: "16px 16px" }}>{renderPage()}</main>
         {/* FAB */}
         {!newEntry && !editEntry && !viewEntry && (page === "dashboard" || page === "entries") && (
-          <button aria-label="Create new work entry" style={{ position: "fixed", bottom: 96, right: 20, width: 56, height: 56, borderRadius: 28, background: BRAND.brick, color: "#fff", border: "none", boxShadow: "0 4px 16px rgba(142,59,46,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 15 }} onClick={() => setNewEntry(true)}>
+          <button aria-label="Create new work entry" style={{ position: "fixed", bottom: 160, right: 20, width: 56, height: 56, borderRadius: 28, background: BRAND.brick, color: "#fff", border: "none", boxShadow: "0 4px 16px rgba(142,59,46,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 15 }} onClick={() => setNewEntry(true)}>
             <Icon name="plus" size={24} />
           </button>
         )}
@@ -3306,7 +3373,7 @@ export default function App() {
           <span style={{ fontSize: 14, color: BRAND.textMuted }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</span>
           <div style={{ display: "flex", alignItems: "center", gap: 12, position: "relative" }}>
             {isTreasurer && (
-              <button aria-label={"Notifications" + (pendingCount > 0 ? ", " + pendingCount + " pending" : "")} style={{ background: "none", border: "none", color: BRAND.charcoal, padding: 6, cursor: "pointer", position: "relative", borderRadius: 8, minWidth: 36, minHeight: 36, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowNotifPanel(p => !p)}>
+              <button aria-label={"Notifications" + (pendingCount > 0 ? ", " + pendingCount + " pending" : "")} style={{ background: "none", border: "none", color: BRAND.charcoal, padding: 6, cursor: "pointer", position: "relative", borderRadius: 8, minWidth: 36, minHeight: 36, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={(e) => { e.stopPropagation(); setShowNotifPanel(p => !p); }}>
                 <Icon name="bell" size={20} />
                 {pendingCount > 0 && <span aria-hidden="true" style={{ position: "absolute", top: 2, right: 2, background: "#EF4444", color: "#fff", fontSize: 9, fontWeight: 700, width: 16, height: 16, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>{pendingCount}</span>}
               </button>
