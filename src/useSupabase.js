@@ -187,7 +187,7 @@ export function useSupabase() {
       setEntries(prev => prev.map(e => e.id === existingId ? mapped : e));
       return mapped;
     } else {
-      row.audit_log = appendAuditLog([], "Entry created", "Status: Draft");
+      row.audit_log = appendAuditLog([], "Entry created", "Status: " + formData.status);
       const { data, error } = await supabase
         .from("entries").insert(row).select().single();
       if (error) { console.error("Insert error:", error); return null; }

@@ -504,6 +504,9 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
   const [formDirty, setFormDirty] = useState(false);
   const [draftId, setDraftId] = useState(entry?.id || null);
   const [autoSaveStatus, setAutoSaveStatus] = useState(""); // "", "saving", "saved"
+  const [submitting, setSubmitting] = useState(false);
+  const draftIdRef = useRef(draftId);
+  draftIdRef.current = draftId;
   const set = (k, v) => { setFormDirty(true); setForm(f => ({ ...f, [k]: v })); };
   const setEndFromDuration = (mins) => {
     if (!form.startTime) return;
@@ -522,14 +525,18 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
   useEffect(() => {
     // Don't auto-save if editing a submitted/approved/paid entry
     if (entry && entry.status && entry.status !== STATUSES.DRAFT && entry.status !== STATUSES.REJECTED) return;
+    // Don't auto-save if user is in the submit flow
+    if (showSubmitConfirm || submitting) return;
     const timer = setTimeout(async () => {
       // Need at least date to save
       if (!form.date) return;
+      // Double-check submit isn't in progress (async guard)
+      if (showSubmitConfirm || submitting) return;
       setAutoSaveStatus("saving");
       const data = { ...form, status: STATUSES.DRAFT, userId: form.userId || currentUser.id };
       try {
-        const result = await onSave(data, draftId, true); // true = silent (don't navigate)
-        if (result && !draftId) setDraftId(result.id);
+        const result = await onSave(data, draftIdRef.current, true); // true = silent (don't navigate)
+        if (result && !draftIdRef.current) { setDraftId(result.id); draftIdRef.current = result.id; }
         setAutoSaveStatus("saved");
         setTimeout(() => setAutoSaveStatus(""), 2000);
       } catch (e) {
@@ -537,7 +544,7 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
       }
     }, 3000);
     return () => clearTimeout(timer);
-  }, [form]);
+  }, [form, showSubmitConfirm, submitting]);
 
   const validate = () => {
     const e = {};
@@ -625,7 +632,7 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
           <span style={{ fontSize: 13, fontWeight: 600, color: "#6B7280" }}>Cancel</span>
         </button>
         {/* Save Draft */}
-        <button onClick={async () => { const data = { ...form, status: STATUSES.DRAFT, userId: form.userId || currentUser.id }; setAutoSaveStatus("saving"); const result = await onSave(data, draftId, false); if (result && !draftId) setDraftId(result.id); setAutoSaveStatus("saved"); setTimeout(() => setAutoSaveStatus(""), 2000); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: mob ? "16px 8px" : "20px 12px", borderRadius: 14, border: "1px solid #DBEAFE", background: "#EFF6FF", cursor: "pointer", transition: "all 200ms", fontFamily: BRAND.sans, boxShadow: "0 2px 8px rgba(21,101,192,0.08)" }} onMouseEnter={ev => { ev.currentTarget.style.transform = "translateY(-2px)"; ev.currentTarget.style.boxShadow = "0 4px 16px rgba(21,101,192,0.18)"; }} onMouseLeave={ev => { ev.currentTarget.style.transform = "translateY(0)"; ev.currentTarget.style.boxShadow = "0 2px 8px rgba(21,101,192,0.08)"; }}>
+        <button onClick={async () => { const data = { ...form, status: STATUSES.DRAFT, userId: form.userId || currentUser.id }; setAutoSaveStatus("saving"); const result = await onSave(data, draftIdRef.current, false); if (result && !draftIdRef.current) { setDraftId(result.id); draftIdRef.current = result.id; } setAutoSaveStatus("saved"); setTimeout(() => setAutoSaveStatus(""), 2000); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: mob ? "16px 8px" : "20px 12px", borderRadius: 14, border: "1px solid #DBEAFE", background: "#EFF6FF", cursor: "pointer", transition: "all 200ms", fontFamily: BRAND.sans, boxShadow: "0 2px 8px rgba(21,101,192,0.08)" }} onMouseEnter={ev => { ev.currentTarget.style.transform = "translateY(-2px)"; ev.currentTarget.style.boxShadow = "0 4px 16px rgba(21,101,192,0.18)"; }} onMouseLeave={ev => { ev.currentTarget.style.transform = "translateY(0)"; ev.currentTarget.style.boxShadow = "0 2px 8px rgba(21,101,192,0.08)"; }}>
           <div style={{ width: 44, height: 44, borderRadius: 22, background: "#1565C0", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}><Icon name="edit" size={22} /></div>
           <span style={{ fontSize: 13, fontWeight: 600, color: "#1565C0" }}>Save Draft</span>
           {autoSaveStatus === "saving" && <span role="status" aria-live="polite" style={{ fontSize: 11, color: "#1565C0", opacity: 0.7 }}>Saving...</span>}
@@ -643,7 +650,7 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 16 }}>
         {entry && entry.status === STATUSES.DRAFT && <button style={{ ...S.btnGhost, color: BRAND.error, fontSize: 13 }} onClick={() => setShowDeleteConfirm(true)}><Icon name="trash" size={14} /> Delete Draft</button>}
       </div>
-      <ConfirmDialog open={showSubmitConfirm} onClose={() => setShowSubmitConfirm(false)} title="Submit Entry?" message={"Submit for review? Total: " + fmt(grandTotal)} confirmText="Submit" onConfirm={() => onSubmit({ ...form, status: STATUSES.SUBMITTED }, draftId)} />
+      <ConfirmDialog open={showSubmitConfirm} onClose={() => setShowSubmitConfirm(false)} title="Submit Entry?" message={"Submit for review? Total: " + fmt(grandTotal)} confirmText="Submit" onConfirm={() => { setSubmitting(true); onSubmit({ ...form, status: STATUSES.SUBMITTED }, draftIdRef.current); }} />
       <ConfirmDialog open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Delete Entry?" message="This draft will be permanently deleted." confirmText="Delete" danger onConfirm={onDelete} />
       <ConfirmDialog open={showCancelConfirm} onClose={() => setShowCancelConfirm(false)} title="Discard Changes?" message="You have unsaved changes. Are you sure you want to leave?" confirmText="Discard" danger onConfirm={onCancel} />
     </div>
