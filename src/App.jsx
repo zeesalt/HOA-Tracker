@@ -1721,12 +1721,17 @@ export default function App() {
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectNote, setRejectNote] = useState("");
   const [toast, setToast] = useState(null); // { message, type, detail }
+  const [previewAsId, setPreviewAsId] = useState(null); // non-null = Treasurer previewing as a member
 
   // Sync auth errors from hook
   useEffect(() => { if (authError) setLoginError(authError); }, [authError]);
 
-  const isTreasurer = currentUser?.role === ROLES.TREASURER;
-  const myEntries = entries.filter(e => isTreasurer || e.userId === currentUser?.id).sort((a, b) => b.date.localeCompare(a.date));
+  // When previewing, derive a fake currentUser from the chosen member — role overridden to Member
+  const realIsTreasurer = currentUser?.role === ROLES.TREASURER;
+  const previewUser = previewAsId ? users.find(u => u.id === previewAsId) : null;
+  const viewAs = (realIsTreasurer && previewUser) ? { ...previewUser, role: ROLES.MEMBER } : currentUser;
+  const isTreasurer = viewAs?.role === ROLES.TREASURER;
+  const myEntries = entries.filter(e => isTreasurer || e.userId === viewAs?.id).sort((a, b) => b.date.localeCompare(a.date));
   const pendingCount = entries.filter(e => e.status === STATUSES.SUBMITTED || e.status === STATUSES.AWAITING_SECOND).length;
 
   // Helper: get rate for a user
@@ -1914,11 +1919,11 @@ export default function App() {
       })();
       return (
       <div className="fade-in"><h2 style={{ ...S.h2, marginBottom: 24 }}>{editEntry ? "Edit Entry" : "New Work Entry"}</h2>
-        <div style={S.card}><EntryForm entry={smartEntry} settings={settings} users={users} currentUser={currentUser} onSave={doSave} onSubmit={doSubmit} onCancel={() => { setNewEntry(false); setEditEntry(null); }} onDelete={doDelete} mob={mob} /></div></div>
+        <div style={S.card}><EntryForm entry={smartEntry} settings={settings} users={users} currentUser={currentUser} onSave={doSave} onSubmit={previewAsId ? () => {} : doSubmit} onCancel={() => { setNewEntry(false); setEditEntry(null); }} onDelete={previewAsId ? () => {} : doDelete} mob={mob} /></div></div>
     );}
     if (viewEntry) {
       const fresh = entries.find(e => e.id === viewEntry.id) || viewEntry;
-      return <EntryDetail entry={fresh} settings={settings} users={users} currentUser={currentUser} onBack={() => setViewEntry(null)} onEdit={() => { setEditEntry(fresh); setViewEntry(null); }} onApprove={doApprove} onReject={doReject} onMarkPaid={doMarkPaid} onSecondApprove={doSecondApprove} onDelete={async (e) => { await deleteEntry(e.id); setViewEntry(null); showToast("Entry deleted", "success"); }} onDuplicate={(e) => { setViewEntry(null); setEditEntry(null); setNewEntry(true); setTimeout(() => setEditEntry({ ...e, id: null, status: STATUSES.DRAFT, date: todayStr(), startTime: nowTime(), endTime: "", preImages: [], postImages: [], reviewerNotes: "", reviewedAt: "", paidAt: "" }), 50); }} mob={mob} />;
+      return <EntryDetail entry={fresh} settings={settings} users={users} currentUser={viewAs} onBack={() => setViewEntry(null)} onEdit={() => { setEditEntry(fresh); setViewEntry(null); }} onApprove={doApprove} onReject={doReject} onMarkPaid={doMarkPaid} onSecondApprove={doSecondApprove} onDelete={async (e) => { await deleteEntry(e.id); setViewEntry(null); showToast("Entry deleted", "success"); }} onDuplicate={(e) => { setViewEntry(null); setEditEntry(null); setNewEntry(true); setTimeout(() => setEditEntry({ ...e, id: null, status: STATUSES.DRAFT, date: todayStr(), startTime: nowTime(), endTime: "", preImages: [], postImages: [], reviewerNotes: "", reviewedAt: "", paidAt: "" }), 50); }} mob={mob} />;
     }
     if (page === "dashboard") {
       const recent = myEntries.slice(0, 5);
@@ -2000,7 +2005,7 @@ export default function App() {
           <div style={S.card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}><h3 style={S.h3}>Recent Entries</h3><button style={S.btnGhost} onClick={() => setPage("entries")}>View all →</button></div>
             {recent.length === 0 ? <div style={{ textAlign: "center", padding: 40, color: BRAND.textLight }}>No entries yet. Create your first work entry.</div>
-            : mob ? recent.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} currentUser={currentUser} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => doApproveEntry(e.id, "")} onReject={(e) => setViewEntry(e)} onDelete={async (e) => { if (window.confirm("Delete this entry? This cannot be undone.")) { await deleteEntry(e.id); showToast("Entry deleted", "success"); } }} />)
+            : mob ? recent.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} currentUser={viewAs} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => doApproveEntry(e.id, "")} onReject={(e) => setViewEntry(e)} onDelete={async (e) => { if (window.confirm("Delete this entry? This cannot be undone.")) { await deleteEntry(e.id); showToast("Entry deleted", "success"); } }} />)
             : (
               <div style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 8, overflow: "hidden" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
@@ -2050,7 +2055,7 @@ export default function App() {
           if (filterCategory !== "all") filtered = filtered.filter(e => e.category === filterCategory);
           if (filterMember !== "all") filtered = filtered.filter(e => e.userId === filterMember);
           return filtered.length === 0 ? <div style={{ ...S.card, textAlign: "center", padding: 60, color: BRAND.textLight }}>{myEntries.length === 0 ? "No entries yet." : "No entries match your filters."}</div>
-          : mob ? filtered.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} currentUser={currentUser} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => doApproveEntry(e.id, "")} onReject={(e) => setViewEntry(e)} onDelete={async (e) => { if (window.confirm("Delete this entry? This cannot be undone.")) { await deleteEntry(e.id); showToast("Entry deleted", "success"); } }} />)
+          : mob ? filtered.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} currentUser={viewAs} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => doApproveEntry(e.id, "")} onReject={(e) => setViewEntry(e)} onDelete={async (e) => { if (window.confirm("Delete this entry? This cannot be undone.")) { await deleteEntry(e.id); showToast("Entry deleted", "success"); } }} />)
           : (
             <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
@@ -2066,7 +2071,7 @@ export default function App() {
       </div>
     );
     if (page === "review") {
-      if (!isTreasurer) { nav("dashboard"); return null; }
+      if (!isTreasurer || previewAsId) { nav("dashboard"); return null; }
       const pending = entries.filter(e => e.status === STATUSES.SUBMITTED || e.status === STATUSES.AWAITING_SECOND).sort((a, b) => b.date.localeCompare(a.date));
       return (
         <div className="fade-in">
@@ -2108,8 +2113,8 @@ export default function App() {
         </div>
       );
     }
-    if (page === "reports") { if (!isTreasurer) { nav("dashboard"); return null; } return <ReportsPage entries={entries} users={users} settings={settings} currentUser={currentUser} mob={mob} />; }
-    if (page === "settings") { if (!isTreasurer) { nav("dashboard"); return null; } return <SettingsPage settings={settings} users={users} currentUser={currentUser} onSaveSettings={saveSettings} onAddUser={addUser} onRemoveUser={removeUser} onUpdateRate={updateUserRate} />; }
+    if (page === "reports") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <ReportsPage entries={entries} users={users} settings={settings} currentUser={currentUser} mob={mob} />; }
+    if (page === "settings") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <SettingsPage settings={settings} users={users} currentUser={currentUser} onSaveSettings={saveSettings} onAddUser={addUser} onRemoveUser={removeUser} onUpdateRate={updateUserRate} />; }
     if (page === "insights") return (
       <div className="fade-in">
         <h2 style={{ ...S.h2, marginBottom: 8 }}>Community Insights</h2>
@@ -2123,8 +2128,17 @@ export default function App() {
   // ══════════════════════════════════════════════════════════════════════════
   // MAIN LAYOUT
   // ══════════════════════════════════════════════════════════════════════════
-  const initials = currentUser.name.split(" ").map(n => n[0]).join("");
+  const initials = (viewAs?.name || currentUser.name).split(" ").map(n => n[0]).join("");
   const isActive = (id) => page === id && !viewEntry && !editEntry && !newEntry;
+  const members = users.filter(u => u.role === ROLES.MEMBER);
+
+  // Preview mode banner — shown at top of content when Treasurer is previewing as Member
+  const PreviewBanner = () => realIsTreasurer && previewAsId ? (
+    <div role="alert" style={{ background: "#FFF8E1", borderBottom: "2px solid #F59E0B", padding: "10px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, fontSize: 13, color: "#92400E", position: "sticky", top: 0, zIndex: 15 }}>
+      <span>👁 Previewing as <strong>{viewAs?.name}</strong> — you're seeing Member view. Actions are disabled.</span>
+      <button onClick={() => { setPreviewAsId(null); nav("dashboard"); }} style={{ background: "#F59E0B", color: "#fff", border: "none", borderRadius: 6, padding: "5px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>Exit Preview</button>
+    </div>
+  ) : null;
 
   if (mob) {
     return (
@@ -2158,7 +2172,7 @@ export default function App() {
               </div>
               <div style={{ padding: "12px 8px", borderRadius: 8, background: "rgba(255,255,255,0.06)", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
                 <div aria-hidden="true" style={{ width: 36, height: 36, borderRadius: 6, background: isTreasurer ? BRAND.brick : BRAND.green, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#fff" }}>{initials}</div>
-                <div><div style={{ fontSize: 14, fontWeight: 600, color: "#fff" }}>{currentUser.name}</div><div style={{ fontSize: 13, color: "#7A766E" }}>{currentUser.role}</div></div>
+                <div><div style={{ fontSize: 14, fontWeight: 600, color: "#fff" }}>{currentUser.name}</div><div style={{ fontSize: 13, color: "#7A766E" }}>{realIsTreasurer && previewAsId ? "👁 Previewing as Member" : currentUser.role}</div></div>
               </div>
               {navItems.map(item => (
                 <button key={item.id} aria-current={isActive(item.id) ? "page" : undefined} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 12px", borderRadius: 6, fontSize: 15, fontWeight: isActive(item.id) ? 600 : 400, background: isActive(item.id) ? "rgba(255,255,255,0.1)" : "transparent", color: isActive(item.id) ? "#fff" : "#9B978F", cursor: "pointer", border: "none", width: "100%", textAlign: "left", fontFamily: BRAND.sans, marginBottom: 2 }} onClick={() => nav(item.id)}>
@@ -2167,6 +2181,19 @@ export default function App() {
                 </button>
               ))}
               <div style={{ flex: 1 }} />
+              {realIsTreasurer && members.length > 0 && (
+                <div style={{ padding: "12px 8px", borderRadius: 8, background: "rgba(255,255,255,0.06)", marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, color: "#7A766E", marginBottom: 6, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Preview as Member</div>
+                  <select
+                    style={{ width: "100%", background: "rgba(255,255,255,0.08)", color: "#fff", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 6, padding: "7px 10px", fontSize: 13, fontFamily: BRAND.sans, cursor: "pointer" }}
+                    value={previewAsId || ""}
+                    onChange={e => { const v = e.target.value; setPreviewAsId(v || null); if (v) { setDrawerOpen(false); nav("dashboard"); } }}
+                  >
+                    <option value="">— Treasurer view —</option>
+                    {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </div>
+              )}
               <button style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 12px", borderRadius: 6, fontSize: 15, background: "transparent", color: "#9B978F", cursor: "pointer", border: "none", width: "100%", textAlign: "left", fontFamily: BRAND.sans }} onClick={handleLogout}><Icon name="logout" size={20} /> Sign Out</button>
             </div>
           </div>
@@ -2174,6 +2201,7 @@ export default function App() {
         {/* Offline banner */}
         {!online && <div role="alert" style={{ background: "#FFF3E0", borderBottom: "1px solid #FFB74D", padding: "8px 16px", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#E65100" }}><Icon name="wifiOff" size={16} /><span>You're offline. Viewing cached data.</span></div>}
         {/* Content */}
+        <PreviewBanner />
         <main id="main-content" style={{ padding: "16px 16px" }}>{renderPage()}</main>
         {/* FAB */}
         {!newEntry && !editEntry && !viewEntry && (page === "dashboard" || page === "entries") && (
@@ -2233,12 +2261,25 @@ export default function App() {
         </nav>
         <div style={{ padding: "16px 12px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ padding: "10px 12px", borderRadius: 8, background: "rgba(255,255,255,0.06)", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
-            <div aria-hidden="true" style={{ width: 32, height: 32, borderRadius: 6, background: isTreasurer ? BRAND.brick : BRAND.green, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff" }}>{initials}</div>
+            <div aria-hidden="true" style={{ width: 32, height: 32, borderRadius: 6, background: realIsTreasurer ? BRAND.brick : BRAND.green, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff" }}>{initials}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>{currentUser.name}</div>
-              <div style={{ fontSize: 12, color: "#7A766E", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser.role}</div>
+              <div style={{ fontSize: 12, color: "#7A766E", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{realIsTreasurer && previewAsId ? "👁 Previewing as Member" : currentUser.role}</div>
             </div>
           </div>
+          {realIsTreasurer && members.length > 0 && (
+            <div style={{ marginBottom: 6 }}>
+              <div style={{ fontSize: 10, color: "#6B6560", marginBottom: 4, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", paddingLeft: 4 }}>Preview as Member</div>
+              <select
+                style={{ width: "100%", background: "rgba(255,255,255,0.08)", color: previewAsId ? "#F59E0B" : "#9B978F", border: "1px solid " + (previewAsId ? "#F59E0B" : "rgba(255,255,255,0.12)"), borderRadius: 6, padding: "7px 10px", fontSize: 12, fontFamily: BRAND.sans, cursor: "pointer" }}
+                value={previewAsId || ""}
+                onChange={e => { const v = e.target.value; setPreviewAsId(v || null); if (v) nav("dashboard"); }}
+              >
+                <option value="">— Treasurer view —</option>
+                {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </div>
+          )}
           <button style={{ ...S.navItem(false), padding: "8px 12px", fontSize: 13 }} onClick={handleLogout}><Icon name="logout" size={16} /> Sign Out</button>
         </div>
       </aside>
@@ -2252,12 +2293,13 @@ export default function App() {
                 {pendingCount > 0 && <span aria-hidden="true" style={{ position: "absolute", top: 2, right: 2, background: "#EF4444", color: "#fff", fontSize: 9, fontWeight: 700, width: 16, height: 16, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>{pendingCount}</span>}
               </button>
             )}
-            <span style={{ fontSize: 14, fontWeight: 500, color: BRAND.charcoal }}>{currentUser.name}</span>
-            <RoleBadge role={currentUser.role} />
+            <span style={{ fontSize: 14, fontWeight: 500, color: BRAND.charcoal }}>{currentUser.name}{realIsTreasurer && previewAsId ? <span style={{ fontSize: 11, color: "#92400E", background: "#FFF8E1", border: "1px solid #F59E0B", borderRadius: 4, padding: "1px 6px", marginLeft: 6 }}>👁 preview</span> : null}</span>
+            <RoleBadge role={realIsTreasurer && !previewAsId ? currentUser.role : ROLES.MEMBER} />
             {showNotifPanel && isTreasurer && <NotificationPanel entries={entries} users={users} settings={settings} onView={(e) => { setShowNotifPanel(false); setViewEntry(e); }} onClose={() => setShowNotifPanel(false)} onReviewAll={() => { setShowNotifPanel(false); nav("review"); }} mob={mob} />}
           </div>
         </header>
         {!online && <div role="alert" style={{ background: "#FFF3E0", borderBottom: "1px solid #FFB74D", padding: "10px 32px", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#E65100" }}><Icon name="wifiOff" size={16} /><span>You're offline. Viewing cached data — changes require an internet connection.</span></div>}
+        <PreviewBanner />
         <main id="main-content" style={S.content}>{renderPage()}</main>
         {toast && (
           <div className="fade-in" role="status" aria-live="polite" onClick={() => setToast(null)} style={{ position: "fixed", bottom: 24, right: 24, zIndex: 50, background: toast.type === "success" ? "#065F46" : toast.type === "error" ? "#991B1B" : BRAND.navy, color: "#fff", borderRadius: 12, padding: "14px 20px", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", cursor: "pointer", display: "flex", alignItems: "flex-start", gap: 12, maxWidth: 400 }}>
