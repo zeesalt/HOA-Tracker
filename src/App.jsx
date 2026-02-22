@@ -41,6 +41,7 @@ const STATUSES = { DRAFT: "Draft", SUBMITTED: "Submitted", APPROVED: "Approved",
 const ROLES = { TREASURER: "Treasurer", MEMBER: "Member" };
 const DEFAULT_SETTINGS = { hoaName: "24 Mill Street", defaultHourlyRate: 40, userRates: {}, currency: "USD" };
 const MOBILE_BP = 768;
+const IRS_MILEAGE_RATE = 0.67; // IRS standard mileage rate 2024 ($/mile) — update annually
 
 function useIsMobile() {
   const [m, setM] = useState(typeof window !== "undefined" ? window.innerWidth < MOBILE_BP : false);
@@ -594,7 +595,7 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
       </div>
       {/* Quick duration buttons */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: -8, marginBottom: 16 }}>
-        <span style={{ fontSize: 12, color: BRAND.textLight, lineHeight: "28px" }}>Quick:</span>
+        <span style={{ fontSize: 12, color: BRAND.textLight, lineHeight: "28px" }} title="Sets end time based on start time">⏱ Quick duration:</span>
         {[30, 60, 90, 120, 180, 240].map(mins => (
           <button key={mins} type="button" onClick={() => setEndFromDuration(mins)} style={{ padding: "4px 12px", borderRadius: 14, border: "1px solid " + BRAND.borderLight, background: hours > 0 && Math.round(hours * 60) === mins ? BRAND.navy : BRAND.white, color: hours > 0 && Math.round(hours * 60) === mins ? "#fff" : BRAND.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: BRAND.sans, transition: "all 150ms" }}>{mins < 60 ? mins + "m" : (mins / 60) + "hr"}</button>
         ))}
@@ -619,7 +620,15 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
       </Field>
       <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: mob ? 12 : 16 }}>
         <Field label="Location"><input style={S.input} value={form.location} onChange={e => set("location", e.target.value)} placeholder="e.g. Unit 3B" /></Field>
-        <Field label="Mileage"><input type="number" min="0" style={S.input} value={form.mileage} onChange={e => set("mileage", e.target.value)} placeholder="Miles driven" /></Field>
+        <Field label="Mileage">
+          <input type="number" min="0" step="0.1" style={S.input} value={form.mileage} onChange={e => set("mileage", e.target.value)} placeholder="Miles driven" />
+          {form.mileage > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: BRAND.textLight, marginTop: 4 }}>
+              <span>@ ${IRS_MILEAGE_RATE}/mi (IRS {new Date().getFullYear()})</span>
+              <span style={{ fontWeight: 600, color: BRAND.navy }}>{fmt(Number(form.mileage) * IRS_MILEAGE_RATE)} reimbursable</span>
+            </div>
+          )}
+        </Field>
       </div>
       <Field label="Materials"><MaterialsEditor materials={form.materials} onChange={m => set("materials", m)} mob={mob} /></Field>
 
@@ -647,6 +656,24 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
         <div style={{ fontSize: 11, color: BRAND.textLight, marginTop: 10 }}>Billed in 30-min increments, rounded up.</div>
       </div>
 
+      {/* Sticky autosave status bar */}
+      {autoSaveStatus && (
+        <div role="status" aria-live="polite" style={{
+          position: "sticky", top: 0, zIndex: 8,
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "8px 14px", marginBottom: 12, borderRadius: 8,
+          background: autoSaveStatus === "saved" ? "#E8F5E9" : "#FFF8E1",
+          border: "1px solid " + (autoSaveStatus === "saved" ? "#A5D6A7" : "#FFD54F"),
+          fontSize: 13, fontWeight: 600,
+          color: autoSaveStatus === "saved" ? BRAND.success : "#795548",
+          fontFamily: BRAND.sans,
+        }}>
+          {autoSaveStatus === "saving" && <span style={{ display: "inline-block", animation: "spin 1s linear infinite" }}>⟳</span>}
+          {autoSaveStatus === "saved"  && <span>✓</span>}
+          {autoSaveStatus === "saving" ? "Saving draft..." : "Draft saved"}
+        </div>
+      )}
+
       {/* Action bar */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: mob ? 10 : 14, marginBottom: 16 }}>
         {/* Cancel */}
@@ -658,8 +685,7 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
         <button onClick={async () => { const data = { ...form, status: STATUSES.DRAFT, userId: form.userId || currentUser.id }; setAutoSaveStatus("saving"); const result = await onSave(data, draftIdRef.current, false); if (result && !draftIdRef.current) { setDraftId(result.id); draftIdRef.current = result.id; } setAutoSaveStatus("saved"); setTimeout(() => setAutoSaveStatus(""), 2000); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: mob ? "16px 8px" : "20px 12px", borderRadius: 14, border: "1px solid #DBEAFE", background: "#EFF6FF", cursor: "pointer", transition: "all 200ms", fontFamily: BRAND.sans, boxShadow: "0 2px 8px rgba(21,101,192,0.08)" }} onMouseEnter={ev => { ev.currentTarget.style.transform = "translateY(-2px)"; ev.currentTarget.style.boxShadow = "0 4px 16px rgba(21,101,192,0.18)"; }} onMouseLeave={ev => { ev.currentTarget.style.transform = "translateY(0)"; ev.currentTarget.style.boxShadow = "0 2px 8px rgba(21,101,192,0.08)"; }}>
           <div style={{ width: 44, height: 44, borderRadius: 22, background: "#1565C0", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}><Icon name="edit" size={22} /></div>
           <span style={{ fontSize: 13, fontWeight: 600, color: "#1565C0" }}>Save Draft</span>
-          {autoSaveStatus === "saving" && <span role="status" aria-live="polite" style={{ fontSize: 11, color: "#1565C0", opacity: 0.7 }}>Saving...</span>}
-          {autoSaveStatus === "saved" && <span role="status" aria-live="polite" style={{ fontSize: 11, color: BRAND.success }}>✓ Saved</span>}
+          {/* autosave status now shown in sticky bar above action buttons */}
         </button>
         {/* Submit for Review */}
         <button onClick={() => { if (validate()) setShowSubmitConfirm(true); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: mob ? "16px 8px" : "20px 12px", borderRadius: 14, border: "1px solid " + BRAND.brick + "30", background: BRAND.brick + "0A", cursor: "pointer", transition: "all 200ms", fontFamily: BRAND.sans, boxShadow: "0 2px 8px rgba(142,59,46,0.08)" }} onMouseEnter={ev => { ev.currentTarget.style.transform = "translateY(-3px)"; ev.currentTarget.style.boxShadow = "0 6px 20px rgba(142,59,46,0.22)"; }} onMouseLeave={ev => { ev.currentTarget.style.transform = "translateY(0)"; ev.currentTarget.style.boxShadow = "0 2px 8px rgba(142,59,46,0.08)"; }}>
@@ -764,14 +790,22 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
           </div>
           <div style={{ fontSize: 14, color: BRAND.textMuted }}>{formatDate(entry.date)} · {formatTime(entry.startTime)} – {formatTime(entry.endTime)} · {user?.name || "Unknown"}</div>
         </div>
-        {canEdit && <button style={S.btnPrimary} onClick={onEdit}><Icon name="edit" size={16} /> Edit</button>}
-        {!canEdit && <button style={S.btnSecondary} onClick={() => onDuplicate(entry)}><Icon name="copy" size={16} /> Duplicate</button>}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {canEdit && <button style={S.btnPrimary} onClick={onEdit}><Icon name="edit" size={16} /> Edit</button>}
+          <button
+            style={{ ...S.btnGhost, fontSize: 13, border: "1px solid " + BRAND.borderLight }}
+            onClick={() => onDuplicate(entry)}
+            title="Create a new draft with the same details"
+          >
+            <Icon name="copy" size={14} /> Duplicate
+          </button>
+        </div>
       </div>
       <div style={S.card}>
         <div style={S.sectionLabel}>Task Description</div>
         <p style={{ margin: 0, lineHeight: 1.7, fontSize: 15 }}>{entry.description}</p>
         {entry.location && <div style={{ marginTop: 12, fontSize: 13, color: BRAND.textMuted }}>📍 {entry.location}</div>}
-        {entry.mileage && <div style={{ marginTop: 6, fontSize: 13, color: BRAND.textMuted }}>🚗 {entry.mileage} miles</div>}
+        {entry.mileage && <div style={{ marginTop: 6, fontSize: 13, color: BRAND.textMuted }}>🚗 {entry.mileage} miles <span style={{ color: BRAND.navy, fontWeight: 600, marginLeft: 8 }}>{fmt(Number(entry.mileage) * IRS_MILEAGE_RATE)}</span> <span style={{ fontSize: 11, color: BRAND.textLight }}>@ ${IRS_MILEAGE_RATE}/mi IRS rate</span></div>}
         {entry.notes && <div style={{ marginTop: 16, padding: 14, background: BRAND.bgSoft, borderRadius: 6, fontSize: 14, border: "1px solid " + BRAND.borderLight }}><span style={{ fontWeight: 600, color: BRAND.textMuted }}>Notes: </span>{entry.notes}</div>}
       </div>
       {entry.materials?.length > 0 && <div style={S.card}><div style={S.sectionLabel}>Materials</div><MaterialsEditor materials={entry.materials} readOnly onChange={() => {}} mob={mob} /></div>}
@@ -1537,7 +1571,7 @@ const ReportsPage = ({ entries, users, settings, currentUser, mob }) => {
                 <span style={{ fontSize: 18 }}>📊</span>
                 <span style={{ fontSize: 15, fontWeight: 700, color: BRAND.navy }}>Fiscal Year Report</span>
               </div>
-              <div style={{ fontSize: 13, color: BRAND.textMuted }}>CPA-ready export: totals by category, member, and month. Includes all approved + paid entries.</div>
+              <div style={{ fontSize: 13, color: BRAND.textMuted }}>CPA-ready multi-section export: totals by category, member &amp; month. Includes all approved + paid entries. <strong>Tip:</strong> Share this with your accountant at year-end.</div>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button style={S.btnSecondary} onClick={() => exportFiscalYear(new Date().getFullYear())}><Icon name="download" size={16} /> {new Date().getFullYear()}</button>
@@ -1680,22 +1714,24 @@ const INSIGHTS_LOADING = [
   { emoji: "🗃️", text: "Raiding the filing cabinet..." },
 ];
 
-const CommunityInsights = ({ fetchStats, settings, mob }) => {
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
+const CommunityInsights = ({ fetchStats, settings, mob, cachedStats, onStatsCached }) => {
+  const [stats, setStats] = useState(cachedStats || null);
+  const [loading, setLoading] = useState(!cachedStats);
   const [loadMsg] = useState(() => INSIGHTS_LOADING[Math.floor(Math.random() * INSIGHTS_LOADING.length)]);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
 
   useEffect(() => {
+    // If we have cached stats, skip loading entirely
+    if (cachedStats) { setStats(cachedStats); setLoading(false); return; }
     let cancelled = false;
     const load = async () => {
       setLoading(true);
-      // Minimum display time for the fun loader
+      // Minimum display time for the fun loader (first load only)
       const [data] = await Promise.all([
         fetchStats(),
         new Promise(r => setTimeout(r, 1200 + Math.random() * 1000)),
       ]);
-      if (!cancelled && data) setStats(data);
+      if (!cancelled && data) { setStats(data); onStatsCached && onStatsCached(data); }
       if (!cancelled) setLoading(false);
     };
     load();
@@ -1890,7 +1926,7 @@ const NotificationPanel = ({ entries, users, settings, onView, onClose, onReview
   );
 };
 
-const SettingsPage = ({ settings, users, currentUser, onSaveSettings, onAddUser, onRemoveUser, onUpdateRate }) => {
+const SettingsPage = ({ settings, users, currentUser, allEntries, onSaveSettings, onAddUser, onRemoveUser, onUpdateRate }) => {
   const [form, setForm] = useState({ ...settings });
   const [saved, setSaved] = useState(false);
   const [newName, setNewName] = useState("");
@@ -1973,24 +2009,86 @@ const SettingsPage = ({ settings, users, currentUser, onSaveSettings, onAddUser,
           {memberError && <div style={{ color: BRAND.error, fontSize: 13, marginBottom: 10 }}>{memberError}</div>}
           <button style={{ ...S.btnPrimary, opacity: addingUser ? 0.6 : 1 }} onClick={addMember} disabled={addingUser}><Icon name="plus" size={16} /> {addingUser ? "Adding..." : "Add Member"}</button>
         </div>
-        {members.length === 0 ? <div style={{ textAlign: "center", padding: 24, color: BRAND.textLight, fontSize: 14 }}>No members yet.</div> : (
-          <div style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 8, overflow: "hidden" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-              <thead><tr><th scope="col" style={S.th}>Name</th><th scope="col" style={S.th}>Email</th><th scope="col" style={{ ...S.th, width: 120 }}>Rate</th><th scope="col" style={{ ...S.th, width: 50 }}></th></tr></thead>
-              <tbody>{members.map(u => (
-                <tr key={u.id}>
-                  <td style={{ ...S.td, fontWeight: 500 }}>{u.name}</td>
-                  <td style={{ ...S.td, color: BRAND.textMuted }}>{u.email}</td>
-                  <td style={S.td}><RateInput initialValue={u.hourlyRate} placeholder={"$" + form.defaultHourlyRate} onSave={val => onUpdateRate(u.id, val)} /></td>
-                  <td style={S.td}><button aria-label={"Remove " + u.name} style={{ ...S.btnGhost, padding: 6, color: BRAND.error }} onClick={() => setDeleteTarget(u)}><Icon name="trash" size={16} /></button></td>
-                </tr>
-              ))}</tbody>
-            </table>
+        {members.length === 0 ? <div style={{ textAlign: "center", padding: 24, color: BRAND.textLight, fontSize: 14 }}>No other members yet. Add someone above.</div> : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {members.map(u => {
+              const entryCount = (allEntries).filter(e => e.userId === u.id).length;
+              const approvedCount = (allEntries).filter(e => e.userId === u.id && (e.status === "Approved" || e.status === "Paid")).length;
+              const pendingCount  = (allEntries).filter(e => e.userId === u.id && e.status === "Submitted").length;
+              const hasHistory = entryCount > 0;
+              return (
+                <div key={u.id} style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 10, padding: "14px 16px", background: BRAND.white }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 160 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 16, background: BRAND.navy + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: BRAND.navy, flexShrink: 0 }}>
+                          {u.name.split(" ").map(n => n[0]).join("").slice(0,2)}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: BRAND.charcoal }}>{u.name}</div>
+                          <div style={{ fontSize: 12, color: BRAND.textMuted }}>{u.email}</div>
+                        </div>
+                        <RoleBadge role={u.role} />
+                      </div>
+                      {hasHistory && (
+                        <div style={{ display: "flex", gap: 12, fontSize: 12, color: BRAND.textLight, marginTop: 6, paddingLeft: 40 }}>
+                          <span>{entryCount} total entries</span>
+                          {approvedCount > 0 && <span style={{ color: BRAND.success }}>✓ {approvedCount} approved/paid</span>}
+                          {pendingCount  > 0 && <span style={{ color: BRAND.warning }}>⏳ {pendingCount} pending</span>}
+                        </div>
+                      )}
+                      {!hasHistory && <div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 4, paddingLeft: 40 }}>No entries yet</div>}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+                        <label style={{ fontSize: 11, color: BRAND.textLight, fontWeight: 600 }}>Hourly Rate</label>
+                        <RateInput initialValue={u.hourlyRate} placeholder={"$" + form.defaultHourlyRate + " default"} onSave={val => onUpdateRate(u.id, val)} />
+                      </div>
+                      <button
+                        aria-label={"Remove " + u.name}
+                        style={{ ...S.btnGhost, padding: "8px 12px", color: BRAND.error, border: "1px solid " + BRAND.error + "30", borderRadius: 8, fontSize: 13 }}
+                        onClick={() => setDeleteTarget(u)}
+                      >
+                        <Icon name="trash" size={16} /> Remove
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
-        {members.length > 0 && <div style={{ marginTop: 8, fontSize: 12, color: BRAND.textLight }}>Rates save automatically when you leave the field.</div>}
+        {members.length > 0 && <div style={{ marginTop: 8, fontSize: 12, color: BRAND.textLight }}>Rates save automatically when you leave the field. Removed members\'s entries are retained for record-keeping.</div>}
       </div>
-      <ConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Remove Member?" message={deleteTarget ? "Remove " + deleteTarget.name + "?" : ""} confirmText="Remove" danger onConfirm={() => removeMember(deleteTarget.id)} />
+
+      {/* Remove Member Confirm — with entry count warning */}
+      {deleteTarget && (() => {
+        const entryCount = (allEntries).filter(e => e.userId === deleteTarget.id).length;
+        const hasPending  = (allEntries).some(e => e.userId === deleteTarget.id && e.status === "Submitted");
+        const hasApproved = (allEntries).some(e => e.userId === deleteTarget.id && (e.status === "Approved" || e.status === "Paid"));
+        return (
+          <Modal open={true} onClose={() => setDeleteTarget(null)} title={"Remove " + deleteTarget.name + "?"}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <p style={{ fontSize: 14, color: BRAND.textMuted, lineHeight: 1.7 }}>
+                <strong>{deleteTarget.name}</strong> will lose access immediately. Their profile will be removed but their work entries are retained for your records.
+              </p>
+              {entryCount > 0 && (
+                <div style={{ padding: "12px 14px", background: BRAND.bgSoft, borderRadius: 8, border: "1px solid " + BRAND.borderLight, fontSize: 13 }}>
+                  <div style={{ fontWeight: 600, color: BRAND.navy, marginBottom: 4 }}>📋 {entryCount} work {entryCount === 1 ? "entry" : "entries"} on file</div>
+                  {hasApproved && <div style={{ color: BRAND.success, marginTop: 2 }}>✓ Approved/paid entries are preserved in reports.</div>}
+                  {hasPending  && <div style={{ color: BRAND.warning, marginTop: 2 }}>⏳ They have pending submissions — review or decline before removing.</div>}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
+                <button style={S.btnSecondary} onClick={() => setDeleteTarget(null)}>Cancel</button>
+                <button style={S.btnDanger} onClick={() => removeMember(deleteTarget.id)}>
+                  <Icon name="trash" size={16} /> Remove {deleteTarget.name}
+                </button>
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
     </div>
   );
 };
@@ -1999,6 +2097,24 @@ const SettingsPage = ({ settings, users, currentUser, onSaveSettings, onAddUser,
 // MAIN APP
 // ═══════════════════════════════════════════════════════════════════════════
 export default function App() {
+  // Inject global CSS keyframes once
+  useEffect(() => {
+    const id = "hoa-global-styles";
+    if (document.getElementById(id)) return;
+    const el = document.createElement("style");
+    el.id = id;
+    el.textContent = `
+      @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      @keyframes bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+      .fade-in { animation: fadeIn 200ms ease-out; }
+      .skip-link { position: absolute; left: -9999px; top: 0; }
+      .skip-link:focus { left: 0; background: #fff; padding: 8px 16px; z-index: 9999; color: #000; font-weight: 600; }
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    `;
+    document.head.appendChild(el);
+  }, []);
+
   const mob = useIsMobile();
   const online = useOnline();
   const {
@@ -2006,7 +2122,7 @@ export default function App() {
     login, logout: sbLogout, register,
     saveEntry, deleteEntry, trashEntry, restoreEntry, approveEntry, firstApprove, secondApprove, rejectEntry, markPaid,
     saveSettings, addUser, removeUser, updateUserRate,
-    setAuthError, fetchCommunityStats,
+    setAuthError, fetchCommunityStats, refresh,
   } = useSupabase();
 
   const [page, setPage] = useState("dashboard");
@@ -2029,6 +2145,8 @@ export default function App() {
   const [registering, setRegistering] = useState(false);
   const [regSuccess, setRegSuccess] = useState(false);
   const [filterSearch, setFilterSearch] = useState("");
+  const [permDeleteTarget, setPermDeleteTarget] = useState(null); // for trash permanent delete confirm
+  const [cachedInsightsStats, setCachedInsightsStats] = useState(null); // cache between tab visits
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterMember, setFilterMember] = useState("all");
@@ -2050,7 +2168,9 @@ export default function App() {
   const previewUser = previewAsId ? users.find(u => u.id === previewAsId) : null;
   const viewAs = (realIsTreasurer && previewUser) ? { ...previewUser, role: ROLES.MEMBER } : currentUser;
   const isTreasurer = viewAs?.role === ROLES.TREASURER;
-  const myEntries = entries.filter(e => isTreasurer || e.userId === viewAs?.id).sort((a, b) => b.date.localeCompare(a.date));
+  const myEntries = useMemo(() =>
+    entries.filter(e => isTreasurer || e.userId === viewAs?.id).sort((a, b) => b.date.localeCompare(a.date)),
+  [entries, isTreasurer, viewAs?.id]);
   const pendingCount = entries.filter(e => e.status === STATUSES.SUBMITTED || e.status === STATUSES.AWAITING_SECOND).length;
 
   // Helper: get rate for a user
@@ -2082,9 +2202,17 @@ export default function App() {
     setRegSuccess(true);
   };
   const handleLogout = async () => { await sbLogout(); setLoginEmail(""); setLoginPassword(""); setLoginError(""); setPage("dashboard"); setViewEntry(null); setEditEntry(null); setNewEntry(false); };
+  // Track when each page was last visited so we can skip the loading animation
+  const lastVisitedRef = useRef({});
   const nav = (p) => {
     if (p === page && !viewEntry && !editEntry && !newEntry) return; // already there
     setViewEntry(null); setEditEntry(null); setNewEntry(false); setDrawerOpen(false);
+    // Skip loading animation if visited in the last 5 minutes
+    const now = Date.now();
+    const lastVisit = lastVisitedRef.current[p] || 0;
+    const skipAnimation = (now - lastVisit) < 5 * 60 * 1000;
+    if (skipAnimation) { setPage(p); return; }
+    lastVisitedRef.current[p] = now;
     setPageLoading(p);
     const delay = 800 + Math.floor(Math.random() * 800); // 800-1600ms
     setTimeout(() => { setPageLoading(null); setPage(p); }, delay);
@@ -2158,8 +2286,8 @@ export default function App() {
   const doApproveEntry = async (id, notes) => { await approveEntry(id, notes); const e = entries.find(x => x.id === id); const u = users.find(x => x.id === e?.userId); showToast("Entry approved", "success", u?.name + " — " + (e?.category || "")); };
   const doRejectEntry = async (id, notes) => { await rejectEntry(id, notes); const e = entries.find(x => x.id === id); const u = users.find(x => x.id === e?.userId); showToast("Entry returned for edits", "error", u?.name + " will be notified"); };
 
-  // Dashboard stats
-  const dashStats = (() => {
+  // Dashboard stats — memoized so it only recalculates when entries/users/settings change
+  const dashStats = useMemo(() => {
     if (!currentUser) return { total: 0, approved: 0, pending: 0, monthReimb: 0, paid: 0, ytdReimb: 0, monthHours: 0, pendingPayout: 0 };
     const relevant = isTreasurer ? entries : entries.filter(e => e.userId === currentUser.id);
     const approved = relevant.filter(e => e.status === STATUSES.APPROVED || e.status === STATUSES.PAID);
@@ -2170,7 +2298,7 @@ export default function App() {
     thisYear.forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getRate(e.userId); ytdReimb += calcLabor(h, r) + calcMaterialsTotal(e.materials); });
     relevant.filter(e => e.status === STATUSES.APPROVED).forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getRate(e.userId); pendingPayout += calcLabor(h, r) + calcMaterialsTotal(e.materials); });
     return { total: relevant.length, approved: approved.length, pending: relevant.filter(e => e.status === STATUSES.SUBMITTED).length, monthReimb, paid: relevant.filter(e => e.status === STATUSES.PAID).length, ytdReimb, monthHours, pendingPayout };
-  })();
+  }, [entries, users, settings, currentUser?.id, isTreasurer]);
 
   // ══════════════════════════════════════════════════════════════════════════
   // LOGIN SCREEN
@@ -2256,14 +2384,21 @@ export default function App() {
     if (pageLoading) return <PageLoader page={pageLoading} />;
     if (newEntry || editEntry) {
       // Smart defaults: pre-fill from member's most recent entry
-      const smartEntry = editEntry || (() => {
+      const lastEntry = (() => {
         const userEntries = entries.filter(e => e.userId === currentUser.id).sort((a, b) => b.date.localeCompare(a.date));
-        if (userEntries.length === 0) return null;
-        const last = userEntries[0];
-        return { category: last.category, location: last.location || "", userId: currentUser.id };
+        return userEntries.length > 0 ? userEntries[0] : null;
       })();
+      const preFilled = !editEntry && lastEntry;
+      const smartEntry = editEntry || (lastEntry ? { category: lastEntry.category, location: lastEntry.location || "", userId: currentUser.id } : null);
       return (
-      <div className="fade-in"><h2 style={{ ...S.h2, marginBottom: 24 }}>{editEntry ? "Edit Entry" : "New Work Entry"}</h2>
+      <div className="fade-in">
+        <h2 style={{ ...S.h2, marginBottom: preFilled ? 8 : 24 }}>{editEntry ? "Edit Entry" : "New Work Entry"}</h2>
+        {preFilled && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, padding: "8px 14px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8, fontSize: 13, color: "#1d4ed8" }}>
+            <span>✨</span>
+            <span>Pre-filled from your last entry <strong>({lastEntry.category}{lastEntry.location ? " · " + lastEntry.location : ""})</strong>. Update any fields that differ.</span>
+          </div>
+        )}
         <div style={S.card}><EntryForm entry={smartEntry} settings={settings} users={users} currentUser={currentUser} onSave={doSave} onSubmit={previewAsId ? () => {} : doSubmit} onCancel={() => { setNewEntry(false); setEditEntry(null); }} onDelete={previewAsId ? () => {} : doDelete} disableAutoSave={!!previewAsId} mob={mob} /></div></div>
     );}
     if (viewEntry) {
@@ -2389,9 +2524,16 @@ export default function App() {
               {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           )}
-          {(filterSearch || filterStatus !== "all" || filterCategory !== "all" || filterMember !== "all") && (
-            <button style={{ ...S.btnGhost, fontSize: 12, padding: "6px 10px" }} onClick={() => { setFilterSearch(""); setFilterStatus("all"); setFilterCategory("all"); setFilterMember("all"); }}>Clear filters</button>
-          )}
+          {(filterSearch || filterStatus !== "all" || filterCategory !== "all" || filterMember !== "all") && (() => {
+            const activeCount = [filterSearch, filterStatus !== "all", filterCategory !== "all", filterMember !== "all"].filter(Boolean).length;
+            return (
+              <button style={{ ...S.btnGhost, fontSize: 12, padding: "6px 10px", display: "flex", alignItems: "center", gap: 6 }}
+                onClick={() => { setFilterSearch(""); setFilterStatus("all"); setFilterCategory("all"); setFilterMember("all"); }}>
+                <span style={{ background: BRAND.brick, color: "#fff", borderRadius: 10, fontSize: 11, fontWeight: 700, padding: "1px 6px", minWidth: 18, textAlign: "center" }}>{activeCount}</span>
+                Clear filters
+              </button>
+            );
+          })()}
         </div>
         {(() => {
           let filtered = myEntries;
@@ -2505,7 +2647,7 @@ export default function App() {
                         <div style={{ display: "flex", gap: 6 }}>
                           <button style={{ ...S.btnGhost, fontSize: 12, padding: "5px 10px" }} onClick={() => setViewEntry(e)}>View</button>
                           <button style={{ ...S.btnGhost, fontSize: 12, padding: "5px 10px" }} onClick={async () => { const updated = await restoreEntry(e.id, STATUSES.DRAFT); if (updated) showToast("Restored to Draft", "success", e.category + " — " + u?.name); }}>↩ Restore</button>
-                          <button style={{ background: "#7f1d1d", color: "#fff", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontWeight: 600 }} onClick={async () => { if (window.confirm("Permanently delete this entry? This cannot be undone.")) { await deleteEntry(e.id); showToast("Permanently deleted", "success"); } }}>Delete</button>
+                          <button style={{ background: "#7f1d1d", color: "#fff", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontWeight: 600 }} onClick={() => setPermDeleteTarget(e)}>Delete</button>
                         </div>
                       </div>
                     </div>
@@ -2515,15 +2657,16 @@ export default function App() {
             </div>
           )}
         </div>
+      <ConfirmDialog open={!!permDeleteTarget} onClose={() => setPermDeleteTarget(null)} title="Permanently Delete?" message={permDeleteTarget ? "This cannot be undone. " + (permDeleteTarget.category || "") + " by " + (users.find(u => u.id === permDeleteTarget?.userId)?.name || "Unknown") + " will be permanently removed." : ""} confirmText="Delete Forever" danger onConfirm={async () => { if (permDeleteTarget) { await deleteEntry(permDeleteTarget.id); setPermDeleteTarget(null); showToast("Permanently deleted", "success"); }}} />
       );
     }
     if (page === "reports") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <ReportsPage entries={entries} users={users} settings={settings} currentUser={currentUser} mob={mob} />; }
-    if (page === "settings") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <SettingsPage settings={settings} users={users} currentUser={currentUser} onSaveSettings={saveSettings} onAddUser={addUser} onRemoveUser={removeUser} onUpdateRate={updateUserRate} />; }
+    if (page === "settings") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <SettingsPage settings={settings} users={users} currentUser={currentUser} allEntries={entries} onSaveSettings={saveSettings} onAddUser={addUser} onRemoveUser={removeUser} onUpdateRate={updateUserRate} />; }
     if (page === "insights") return (
       <div className="fade-in">
         <h2 style={{ ...S.h2, marginBottom: 8 }}>Community Insights</h2>
         <p style={{ margin: "0 0 24px", fontSize: 14, color: BRAND.textMuted }}>See how your HOA dollars are being put to work.</p>
-        <CommunityInsights fetchStats={fetchCommunityStats} settings={settings} mob={mob} />
+        <CommunityInsights fetchStats={fetchCommunityStats} settings={settings} mob={mob} cachedStats={cachedInsightsStats} onStatsCached={setCachedInsightsStats} />
       </div>
     );
     return null;
