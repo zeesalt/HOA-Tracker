@@ -41,7 +41,21 @@ const STATUSES = { DRAFT: "Draft", SUBMITTED: "Submitted", APPROVED: "Approved",
 const ROLES = { TREASURER: "Treasurer", MEMBER: "Member" };
 const DEFAULT_SETTINGS = { hoaName: "24 Mill Street", defaultHourlyRate: 40, userRates: {}, currency: "USD" };
 const MOBILE_BP = 768;
-const IRS_MILEAGE_RATE = 0.67; // IRS standard mileage rate 2024 ($/mile) — update annually
+const IRS_MILEAGE_RATE = 0.725; // IRS standard mileage rate 2026 ($/mile) — update annually
+
+const PURCHASE_CATEGORIES = [
+  "Cleaning Supplies", "Landscaping Supplies", "Decor",
+  "Tools & Equipment", "Office Supplies", "Fuel & Gas",
+  "Plumbing Supplies", "Electrical Supplies",
+  "Snow Removal Supplies", "Safety Equipment", "Other"
+];
+const PURCHASE_CATEGORY_EMOJIS = {
+  "Cleaning Supplies": "🧹", "Landscaping Supplies": "🌿", "Decor": "🎨",
+  "Tools & Equipment": "🔧", "Office Supplies": "📎", "Fuel & Gas": "⛽",
+  "Plumbing Supplies": "🚿", "Electrical Supplies": "💡",
+  "Snow Removal Supplies": "❄️", "Safety Equipment": "🦺", "Other": "📦",
+};
+const PAYMENT_METHODS = ["Cash", "Personal Credit Card", "Personal Debit Card", "HOA Card", "Other"];
 
 function useIsMobile() {
   const [m, setM] = useState(typeof window !== "undefined" ? window.innerWidth < MOBILE_BP : false);
@@ -839,6 +853,337 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
       <ConfirmDialog open={showSubmitConfirm} onClose={() => setShowSubmitConfirm(false)} title="Submit Entry?" message={"Submit for review? Total: " + fmt(grandTotal)} confirmText="Submit" onConfirm={() => { autoSaveAbortRef.current = true; setSubmitting(true); onSubmit({ ...form, status: STATUSES.SUBMITTED }, draftIdRef.current); }} />
       <ConfirmDialog open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Delete Entry?" message="This draft will be permanently deleted." confirmText="Delete" danger onConfirm={onDelete} />
       <ConfirmDialog open={showCancelConfirm} onClose={() => setShowCancelConfirm(false)} title="Discard Changes?" message="You have unsaved changes. Are you sure you want to leave?" confirmText="Discard" danger onConfirm={onCancel} />
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PURCHASE ENTRY FORM
+// ═══════════════════════════════════════════════════════════════════════════
+const PurchaseEntryForm = ({ entry, settings, currentUser, onSave, onCancel, onSubmit, onDelete, mob }) => {
+  const [form, setForm] = useState({
+    userId: entry?.userId || currentUser?.id,
+    date: entry?.date || todayStr(),
+    storeName: entry?.storeName || "",
+    category: entry?.category || "",
+    description: entry?.description || "",
+    items: entry?.items?.length ? entry.items : [{ id: uid(), name: "", quantity: 1, unitCost: 0 }],
+    tax: entry?.tax || 0,
+    mileage: entry?.mileage || "",
+    paymentMethod: entry?.paymentMethod || "",
+    receiptUrls: entry?.receiptUrls || [],
+    photoUrls: entry?.photoUrls || [],
+    notes: entry?.notes || "",
+    status: entry?.status || "Draft",
+  });
+  const [errors, setErrors] = useState({});
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [receiptWarningDismissed, setReceiptWarningDismissed] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // Item management
+  const addItem = () => set("items", [...form.items, { id: uid(), name: "", quantity: 1, unitCost: 0 }]);
+  const updateItem = (i, field, val) => {
+    const next = [...form.items];
+    next[i] = { ...next[i], [field]: val };
+    set("items", next);
+  };
+  const removeItem = (i) => set("items", form.items.filter((_, idx) => idx !== i));
+
+  // Calculations
+  const subtotal = form.items.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.unitCost) || 0), 0);
+  const tax = Number(form.tax) || 0;
+  const mileageRate = settings?.mileageRate || IRS_MILEAGE_RATE;
+  const mileageVal = Number(form.mileage) || 0;
+  const mileageTotal = mileageVal > 0 ? Math.round(mileageVal * mileageRate * 100) / 100 : 0;
+  const grandTotal = subtotal + tax + mileageTotal;
+
+  const validate = () => {
+    const e = {};
+    if (!form.storeName.trim()) e.storeName = "Store name is required";
+    if (!form.category) e.category = "Select a category";
+    if (!form.items.some(item => item.name?.trim())) e.items = "Add at least one item";
+    if (grandTotal <= 0) e.total = "Total must be greater than zero";
+    if (form.date > todayStr()) e.date = "Date cannot be in the future";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSave = async () => {
+    const data = { ...form, subtotal, tax, total: grandTotal, mileageRate: mileageVal > 0 ? mileageRate : null, mileageTotal, status: "Draft" };
+    await onSave(data, entry?.id);
+  };
+
+  const handleSubmit = async () => {
+    if (!validate()) return;
+    setSubmitting(true);
+    const data = { ...form, subtotal, tax, total: grandTotal, mileageRate: mileageVal > 0 ? mileageRate : null, mileageTotal, status: "Submitted" };
+    await onSubmit(data, entry?.id);
+    setSubmitting(false);
+  };
+
+  const noReceipt = form.receiptUrls.length === 0 && !receiptWarningDismissed;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Date + Store */}
+      <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 16 }}>
+        <Field label="Purchase Date" required>
+          <input type="date" style={{ ...S.input, borderColor: errors.date ? BRAND.error : BRAND.border }} value={form.date} onChange={e => set("date", e.target.value)} />
+          {errors.date && <div style={{ color: BRAND.error, fontSize: 12, marginTop: 4 }}>{errors.date}</div>}
+        </Field>
+        <Field label="Store Name" required>
+          <input style={{ ...S.input, borderColor: errors.storeName ? BRAND.error : BRAND.border }} value={form.storeName} onChange={e => set("storeName", e.target.value)} placeholder="e.g. Home Depot, Target" />
+          {errors.storeName && <div style={{ color: BRAND.error, fontSize: 12, marginTop: 4 }}>{errors.storeName}</div>}
+        </Field>
+      </div>
+
+      {/* Category + Payment */}
+      <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 16 }}>
+        <Field label="Category" required>
+          <select style={{ ...S.select, borderColor: errors.category ? BRAND.error : BRAND.border }} value={form.category} onChange={e => set("category", e.target.value)}>
+            <option value="">Select category...</option>
+            {PURCHASE_CATEGORIES.map(c => <option key={c} value={c}>{PURCHASE_CATEGORY_EMOJIS[c] || ""} {c}</option>)}
+          </select>
+          {errors.category && <div style={{ color: BRAND.error, fontSize: 12, marginTop: 4 }}>{errors.category}</div>}
+        </Field>
+        <Field label="Payment Method">
+          <select style={S.select} value={form.paymentMethod} onChange={e => set("paymentMethod", e.target.value)}>
+            <option value="">Select...</option>
+            {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </Field>
+      </div>
+
+      <Field label="Description / Purpose">
+        <input style={S.input} value={form.description} onChange={e => set("description", e.target.value)} placeholder="What was this purchase for?" />
+      </Field>
+
+      {/* Line Items */}
+      <div>
+        <div style={{ ...S.sectionLabel, marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span>🛒 Items</span>
+          <button type="button" style={{ ...S.btnGhost, fontSize: 12, padding: "4px 12px" }} onClick={addItem}><Icon name="plus" size={14} /> Add Item</button>
+        </div>
+        {errors.items && <div style={{ color: BRAND.error, fontSize: 12, marginBottom: 8 }}>{errors.items}</div>}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {form.items.map((item, i) => (
+            <div key={item.id || i} style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "2fr 80px 100px 90px 36px", gap: 8, alignItems: "end", padding: 12, background: BRAND.bgSoft, borderRadius: 8, border: "1px solid " + BRAND.borderLight }}>
+              <div>
+                {mob && <div style={{ fontSize: 11, color: BRAND.textLight, marginBottom: 3 }}>Item Name</div>}
+                <input style={{ ...S.input, padding: "8px 10px", fontSize: 13 }} value={item.name} onChange={e => updateItem(i, "name", e.target.value)} placeholder="Item name" />
+              </div>
+              <div>
+                {mob && <div style={{ fontSize: 11, color: BRAND.textLight, marginBottom: 3 }}>Qty</div>}
+                <input type="number" min="0.01" step="1" style={{ ...S.input, padding: "8px 10px", fontSize: 13, textAlign: "right" }} value={item.quantity} onChange={e => updateItem(i, "quantity", e.target.value)} />
+              </div>
+              <div>
+                {mob && <div style={{ fontSize: 11, color: BRAND.textLight, marginBottom: 3 }}>Unit Cost ($)</div>}
+                <input type="number" min="0" step="0.01" style={{ ...S.input, padding: "8px 10px", fontSize: 13, textAlign: "right" }} value={item.unitCost} onChange={e => updateItem(i, "unitCost", e.target.value)} placeholder="0.00" />
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.charcoal, textAlign: "right", padding: "8px 0" }}>
+                {fmt((Number(item.quantity) || 0) * (Number(item.unitCost) || 0))}
+              </div>
+              {form.items.length > 1 && (
+                <button type="button" onClick={() => removeItem(i)} style={{ background: "none", border: "none", color: BRAND.error, cursor: "pointer", padding: 4 }} title="Remove item"><Icon name="x" size={16} /></button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Totals */}
+        <div style={{ marginTop: 16, padding: "14px 16px", background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, fontSize: 14 }}>
+            <span style={{ color: BRAND.textMuted }}>Subtotal</span>
+            <span style={{ fontWeight: 600 }}>{fmt(subtotal)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, fontSize: 14 }}>
+            <span style={{ color: BRAND.textMuted }}>Tax</span>
+            <input type="number" min="0" step="0.01" style={{ ...S.input, width: 100, padding: "6px 10px", fontSize: 13, textAlign: "right" }} value={form.tax} onChange={e => set("tax", e.target.value)} placeholder="0.00" />
+          </div>
+          {mileageTotal > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, fontSize: 14 }}>
+              <span style={{ color: BRAND.textMuted }}>Mileage ({mileageVal} mi × {fmt(mileageRate)}/mi)</span>
+              <span style={{ fontWeight: 600 }}>{fmt(mileageTotal)}</span>
+            </div>
+          )}
+          <div style={{ borderTop: "2px solid " + BRAND.navy, paddingTop: 10, display: "flex", justifyContent: "space-between", fontSize: 16 }}>
+            <span style={{ fontWeight: 700, color: BRAND.navy }}>Grand Total</span>
+            <span style={{ fontWeight: 700, color: BRAND.navy }}>{fmt(grandTotal)}</span>
+          </div>
+          {errors.total && <div style={{ color: BRAND.error, fontSize: 12, marginTop: 6 }}>{errors.total}</div>}
+        </div>
+      </div>
+
+      {/* Mileage */}
+      <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 16 }}>
+        <Field label="Round-trip Mileage (optional)">
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input type="number" min="0" step="0.1" style={{ ...S.input, flex: 1 }} value={form.mileage} onChange={e => set("mileage", e.target.value)} placeholder="0" />
+            <span style={{ fontSize: 12, color: BRAND.textLight, whiteSpace: "nowrap" }}>@ {fmt(mileageRate)}/mi</span>
+          </div>
+        </Field>
+      </div>
+
+      {/* Receipts */}
+      <ImageUploader images={form.receiptUrls.map((url, i) => ({ id: "r" + i, dataUrl: url }))} onChange={(imgs) => set("receiptUrls", imgs.map(img => img.dataUrl))} label="📎 Receipts" color={BRAND.brick} icon="receipt" mob={mob} />
+      {noReceipt && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#FFF8E1", border: "1px solid #FFE082", borderRadius: 8, fontSize: 13, color: "#92400E" }}>
+          <span>⚠️</span>
+          <span style={{ flex: 1 }}>No receipt attached. Consider adding one for faster approval.</span>
+          <button style={{ ...S.btnGhost, fontSize: 12, padding: "4px 10px" }} onClick={() => setReceiptWarningDismissed(true)}>Dismiss</button>
+        </div>
+      )}
+
+      {/* Photos */}
+      <ImageUploader images={form.photoUrls.map((url, i) => ({ id: "p" + i, dataUrl: url }))} onChange={(imgs) => set("photoUrls", imgs.map(img => img.dataUrl))} label="📷 Photos" color={BRAND.green} icon="camera" mob={mob} />
+
+      {/* Notes */}
+      <Field label="Notes">
+        <textarea style={{ ...S.input, minHeight: 80 }} value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Any additional notes..." />
+      </Field>
+
+      {/* Actions */}
+      <div style={{ display: "flex", gap: 10, justifyContent: "space-between", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button style={S.btnSecondary} onClick={onCancel}>Cancel</button>
+          {entry?.id && entry?.status === "Draft" && (
+            <button style={{ ...S.btnGhost, color: BRAND.error }} onClick={() => setShowDeleteConfirm(true)}>
+              <Icon name="trash" size={16} /> Delete
+            </button>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button style={S.btnSecondary} onClick={handleSave}><Icon name="save" size={16} /> Save Draft</button>
+          <button style={{ ...S.btnPrimary, opacity: submitting ? 0.6 : 1 }} disabled={submitting} onClick={() => setShowSubmitConfirm(true)}>
+            <Icon name="send" size={16} /> {submitting ? "Submitting..." : "Submit"}
+          </button>
+        </div>
+      </div>
+
+      <ConfirmDialog open={showSubmitConfirm} onClose={() => setShowSubmitConfirm(false)} onConfirm={handleSubmit}
+        title="Submit Purchase Entry?" message={`Submit ${form.storeName || "this purchase"} for ${fmt(grandTotal)} to the Treasurer for review?`} confirmText="Submit" />
+      <ConfirmDialog open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} onConfirm={() => onDelete && onDelete()} title="Delete Draft?" message="This purchase entry draft will be permanently deleted." confirmText="Delete" danger />
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PURCHASE ENTRY DETAIL
+// ═══════════════════════════════════════════════════════════════════════════
+const PurchaseEntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onApprove, onReject, onMarkPaid, mob }) => {
+  const user = users.find(u => u.id === entry.userId);
+  const isTreasurer = currentUser?.role === ROLES.TREASURER;
+  const isOwner = currentUser?.id === entry.userId;
+  const canEdit = isOwner && (entry.status === "Draft" || entry.status === "Rejected");
+  const canReview = isTreasurer && entry.status === "Submitted";
+  const [reviewNotes, setReviewNotes] = useState("");
+  const [showRejectConfirm, setShowRejectConfirm] = useState(false);
+  const mileageRate = entry.mileageRate || settings?.mileageRate || IRS_MILEAGE_RATE;
+
+  return (
+    <div className="fade-in">
+      <button style={{ ...S.btnGhost, marginBottom: 16, padding: "6px 0" }} onClick={onBack}>← Back</button>
+
+      <div style={S.card}>
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 20 }}>🛍️</span>
+              <h2 style={{ ...S.h2, margin: 0 }}>Purchase Entry</h2>
+            </div>
+            <div style={{ fontSize: 13, color: BRAND.textMuted }}>{formatDate(entry.date)} · {user?.name || "Unknown"}</div>
+          </div>
+          <StatusBadge status={entry.status} />
+        </div>
+
+        {/* Workflow Stepper */}
+        <WorkflowStepper status={entry.status} mob={mob} />
+
+        {/* Details Grid */}
+        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 16, margin: "20px 0" }}>
+          <div><div style={{ fontSize: 11, color: BRAND.textLight, textTransform: "uppercase", marginBottom: 4 }}>Store</div><div style={{ fontSize: 15, fontWeight: 600, color: BRAND.charcoal }}>{entry.storeName}</div></div>
+          <div><div style={{ fontSize: 11, color: BRAND.textLight, textTransform: "uppercase", marginBottom: 4 }}>Category</div><div style={{ fontSize: 14 }}>{PURCHASE_CATEGORY_EMOJIS[entry.category] || "📦"} {entry.category}</div></div>
+          {entry.paymentMethod && <div><div style={{ fontSize: 11, color: BRAND.textLight, textTransform: "uppercase", marginBottom: 4 }}>Payment Method</div><div style={{ fontSize: 14 }}>{entry.paymentMethod}</div></div>}
+          {entry.description && <div style={{ gridColumn: "1 / -1" }}><div style={{ fontSize: 11, color: BRAND.textLight, textTransform: "uppercase", marginBottom: 4 }}>Description</div><div style={{ fontSize: 14 }}>{entry.description}</div></div>}
+        </div>
+
+        {/* Line Items Table */}
+        <div style={{ ...S.sectionLabel, marginBottom: 8 }}>Items</div>
+        <div style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 8, overflow: "hidden", marginBottom: 16 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead><tr><th style={S.th}>Item</th><th style={{ ...S.th, textAlign: "right" }}>Qty</th><th style={{ ...S.th, textAlign: "right" }}>Unit Cost</th><th style={{ ...S.th, textAlign: "right" }}>Total</th></tr></thead>
+            <tbody>
+              {(entry.items || []).map((item, i) => (
+                <tr key={i} style={{ background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white }}>
+                  <td style={S.td}>{item.name}</td>
+                  <td style={{ ...S.td, textAlign: "right" }}>{item.quantity}</td>
+                  <td style={{ ...S.td, textAlign: "right" }}>{fmt(item.unitCost)}</td>
+                  <td style={{ ...S.td, textAlign: "right", fontWeight: 600 }}>{fmt((Number(item.quantity) || 0) * (Number(item.unitCost) || 0))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Totals */}
+        <div style={{ padding: "14px 16px", background: BRAND.bgSoft, borderRadius: 8, border: "1px solid " + BRAND.borderLight, marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 14 }}><span>Subtotal</span><span>{fmt(entry.subtotal)}</span></div>
+          {entry.tax > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 14 }}><span>Tax</span><span>{fmt(entry.tax)}</span></div>}
+          {entry.mileageTotal > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 14 }}><span>Mileage ({entry.mileage} mi × {fmt(mileageRate)}/mi)</span><span>{fmt(entry.mileageTotal)}</span></div>}
+          <div style={{ borderTop: "2px solid " + BRAND.navy, paddingTop: 8, marginTop: 4, display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 700, color: BRAND.navy }}><span>Total</span><span>{fmt(entry.total)}</span></div>
+        </div>
+
+        {/* Receipts & Photos */}
+        {entry.receiptUrls?.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={S.sectionLabel}>Receipts</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+              {entry.receiptUrls.map((url, i) => <img key={i} src={url} alt={"Receipt " + (i + 1)} style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, border: "1px solid " + BRAND.borderLight, cursor: "pointer" }} onClick={() => window.open(url)} />)}
+            </div>
+          </div>
+        )}
+        {entry.photoUrls?.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={S.sectionLabel}>Photos</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+              {entry.photoUrls.map((url, i) => <img key={i} src={url} alt={"Photo " + (i + 1)} style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, border: "1px solid " + BRAND.borderLight, cursor: "pointer" }} onClick={() => window.open(url)} />)}
+            </div>
+          </div>
+        )}
+
+        {/* Notes */}
+        {entry.notes && <div style={{ marginBottom: 16 }}><div style={S.sectionLabel}>Notes</div><div style={{ fontSize: 14, color: BRAND.charcoal, marginTop: 4 }}>{entry.notes}</div></div>}
+
+        {/* Reviewer Notes */}
+        {entry.reviewerNotes && (
+          <div style={{ padding: 14, background: entry.status === "Rejected" ? "#FEF2F2" : "#F0FDF4", border: "1px solid " + (entry.status === "Rejected" ? "#FECACA" : "#BBF7D0"), borderRadius: 8, marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: entry.status === "Rejected" ? BRAND.error : BRAND.success, marginBottom: 4 }}>Reviewer Notes</div>
+            <div style={{ fontSize: 14 }}>{entry.reviewerNotes}</div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end", marginTop: 8 }}>
+          {canEdit && <button style={S.btnPrimary} onClick={onEdit}><Icon name="edit" size={16} /> Edit</button>}
+          {canReview && (
+            <>
+              <div style={{ flex: 1 }} />
+              <input style={{ ...S.input, flex: 2, minWidth: 200, maxWidth: 400, fontSize: 13 }} value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} placeholder="Reviewer notes (optional)..." />
+              <button style={{ ...S.btnGhost, color: BRAND.error, border: "1px solid " + BRAND.error + "40" }} onClick={() => setShowRejectConfirm(true)}><Icon name="x" size={16} /> Reject</button>
+              <button style={S.btnPrimary} onClick={() => onApprove(reviewNotes)}><Icon name="check" size={16} /> Approve</button>
+            </>
+          )}
+          {isTreasurer && entry.status === "Approved" && (
+            <button style={{ ...S.btnPrimary, background: BRAND.success }} onClick={() => onMarkPaid && onMarkPaid({ method: "Check" })}><Icon name="dollar" size={16} /> Mark Paid</button>
+          )}
+        </div>
+      </div>
+
+      <ConfirmDialog open={showRejectConfirm} onClose={() => setShowRejectConfirm(false)} onConfirm={() => { onReject(reviewNotes); setShowRejectConfirm(false); }} title="Reject Purchase Entry?" message="This will return the entry to the member for edits." confirmText="Reject" danger />
     </div>
   );
 };
@@ -3166,6 +3511,12 @@ const SettingsPage = ({ settings, users, currentUser, allEntries, onSaveSettings
         <div style={S.sectionLabel}>HOA Configuration</div>
         <Field label="HOA Name"><input style={S.input} value={form.hoaName} onChange={e => set("hoaName", e.target.value)} /></Field>
         <Field label="Default Hourly Rate ($)"><input type="number" min="0" step="0.50" style={S.input} value={form.defaultHourlyRate} onChange={e => set("defaultHourlyRate", Number(e.target.value))} /></Field>
+        <Field label="Mileage Reimbursement Rate ($/mile)">
+          <div>
+            <input type="number" min="0" step="0.005" style={S.input} value={form.mileageRate != null ? form.mileageRate : 0.725} onChange={e => set("mileageRate", Number(e.target.value))} />
+            <div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 6 }}>2026 IRS standard rate: $0.725/mile. Used for mileage reimbursement on purchase entries.</div>
+          </div>
+        </Field>
         <div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <Field label="Invite Code">
@@ -3362,10 +3713,11 @@ export default function App() {
   const mob = useIsMobile();
   const online = useOnline();
   const {
-    currentUser, users, entries, settings, loading, authError,
+    currentUser, users, entries, purchaseEntries, settings, loading, authError,
     login, logout: sbLogout, register, resetPassword, changePassword,
     saveEntry, deleteEntry, trashEntry, restoreEntry, approveEntry, firstApprove, secondApprove, rejectEntry, markPaid,
     needsInfoEntry, bulkApprove, addComment,
+    savePurchaseEntry, deletePurchaseEntry, approvePurchaseEntry, rejectPurchaseEntry, markPurchasePaid,
     saveSettings, addUser, removeUser, updateUserRate,
     setAuthError, fetchCommunityStats, refresh,
   } = useSupabase();
@@ -3433,6 +3785,11 @@ export default function App() {
   const [selectedIds, setSelectedIds] = useState(new Set()); // bulk selection in review queue
   const [moreSheetOpen, setMoreSheetOpen] = useState(false); // mobile "More" bottom sheet
   const [showHelp, setShowHelp] = useState(false);
+  const [entryTab, setEntryTab] = useState("work"); // "work" | "purchases"
+  const [newPurchase, setNewPurchase] = useState(false);
+  const [editPurchase, setEditPurchase] = useState(null);
+  const [viewPurchase, setViewPurchase] = useState(null);
+  const [newEntryType, setNewEntryType] = useState(null); // null | "work" | "purchase" — for FAB chooser
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterMember, setFilterMember] = useState("all");
@@ -3554,6 +3911,7 @@ export default function App() {
   const nav = (p) => {
     if (p === page && !viewEntry && !editEntry && !newEntry) return; // already there
     setViewEntry(null); setEditEntry(null); setNewEntry(false); setDrawerOpen(false);
+    setViewPurchase(null); setEditPurchase(null); setNewPurchase(false); setNewEntryType(null);
     // Skip loading animation if visited in the last 5 minutes
     const now = Date.now();
     const lastVisit = lastVisitedRef.current[p] || 0;
@@ -3609,6 +3967,37 @@ export default function App() {
   const doReject = async (notes) => { if (viewEntry) { const updated = await rejectEntry(viewEntry.id, notes); if (updated) setViewEntry(updated); } };
   const doMarkPaid = async (paymentDetails) => { if (viewEntry) { const updated = await markPaid(viewEntry.id, paymentDetails); if (updated) setViewEntry(updated); } };
   const doComment = async (entryId, message) => { const updated = await addComment(entryId, message); if (updated && viewEntry?.id === entryId) setViewEntry(updated); return updated; };
+
+  // ── PURCHASE ENTRY OPERATIONS ─────────────────────────────────────────────
+  const doPurchaseSave = async (formData, existingId) => {
+    const result = await savePurchaseEntry(formData, existingId);
+    if (result?.error) { showToast("Save failed", "error", result.error); return null; }
+    if (result) { setViewPurchase(result); setEditPurchase(null); setNewPurchase(false); }
+    return result;
+  };
+  const doPurchaseSubmit = async (formData, existingId) => {
+    const data = { ...formData, status: "Submitted" };
+    const result = await savePurchaseEntry(data, existingId);
+    if (result?.error) { showToast("Submit failed", "error", result.error); return; }
+    setEditPurchase(null); setNewPurchase(false); setPage("entries"); setEntryTab("purchases");
+    showToast("Purchase submitted!", "success", fmt(formData.total) + " at " + formData.storeName + " — Treasurer will review shortly");
+  };
+  const doPurchaseDelete = async () => { if (editPurchase) { await deletePurchaseEntry(editPurchase.id); setEditPurchase(null); setPage("entries"); showToast("Purchase draft deleted", "success"); } };
+  const doPurchaseApprove = async (notes) => {
+    if (!viewPurchase) return;
+    const updated = await approvePurchaseEntry(viewPurchase.id, notes);
+    if (updated) { setViewPurchase(updated); showToast("Purchase approved", "success", fmt(updated.total) + " at " + updated.storeName); }
+  };
+  const doPurchaseReject = async (notes) => {
+    if (!viewPurchase) return;
+    const updated = await rejectPurchaseEntry(viewPurchase.id, notes);
+    if (updated) { setViewPurchase(updated); showToast("Purchase returned for edits", "error"); }
+  };
+  const doPurchaseMarkPaid = async (paymentDetails) => {
+    if (!viewPurchase) return;
+    const updated = await markPurchasePaid(viewPurchase.id, paymentDetails);
+    if (updated) { setViewPurchase(updated); showToast("Purchase marked as paid", "success"); }
+  };
   const doDecline = async (notes) => {
     if (!viewEntry) return;
     const u = users.find(x => x.id === viewEntry.userId);
@@ -3642,7 +4031,7 @@ export default function App() {
 
   // Dashboard stats — memoized so it only recalculates when entries/users/settings change
   const dashStats = useMemo(() => {
-    if (!currentUser) return { total: 0, approved: 0, pending: 0, monthReimb: 0, paid: 0, ytdReimb: 0, monthHours: 0, pendingPayout: 0 };
+    if (!currentUser) return { total: 0, approved: 0, pending: 0, monthReimb: 0, paid: 0, ytdReimb: 0, monthHours: 0, pendingPayout: 0, purchaseCount: 0, purchaseTotal: 0 };
     const relevant = isTreasurer ? entries : entries.filter(e => e.userId === currentUser.id);
     const approved = relevant.filter(e => e.status === STATUSES.APPROVED || e.status === STATUSES.PAID);
     const thisMonth = approved.filter(e => e.date.startsWith(new Date().toISOString().slice(0, 7)));
@@ -3651,8 +4040,16 @@ export default function App() {
     thisMonth.forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getRate(e.userId); monthReimb += calcLabor(h, r) + calcMaterialsTotal(e.materials); monthHours += h; });
     thisYear.forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getRate(e.userId); ytdReimb += calcLabor(h, r) + calcMaterialsTotal(e.materials); });
     relevant.filter(e => e.status === STATUSES.APPROVED).forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getRate(e.userId); pendingPayout += calcLabor(h, r) + calcMaterialsTotal(e.materials); });
-    return { total: relevant.length, approved: approved.length, pending: relevant.filter(e => e.status === STATUSES.SUBMITTED).length, monthReimb, paid: relevant.filter(e => e.status === STATUSES.PAID).length, ytdReimb, monthHours, pendingPayout };
-  }, [entries, users, settings, currentUser?.id, isTreasurer]);
+    // Purchase totals
+    const relevantPurchases = isTreasurer ? purchaseEntries : purchaseEntries.filter(e => e.userId === currentUser.id);
+    const approvedPurchases = relevantPurchases.filter(e => e.status === "Approved" || e.status === "Paid");
+    const monthPurchases = approvedPurchases.filter(e => e.date.startsWith(new Date().toISOString().slice(0, 7)));
+    const yearPurchases = approvedPurchases.filter(e => e.date.startsWith(String(new Date().getFullYear())));
+    monthPurchases.forEach(e => { monthReimb += e.total; });
+    yearPurchases.forEach(e => { ytdReimb += e.total; });
+    relevantPurchases.filter(e => e.status === "Approved").forEach(e => { pendingPayout += e.total; });
+    return { total: relevant.length + relevantPurchases.length, approved: approved.length + approvedPurchases.length, pending: relevant.filter(e => e.status === STATUSES.SUBMITTED).length + relevantPurchases.filter(e => e.status === "Submitted").length, monthReimb, paid: relevant.filter(e => e.status === STATUSES.PAID).length + relevantPurchases.filter(e => e.status === "Paid").length, ytdReimb, monthHours, pendingPayout, purchaseCount: relevantPurchases.length, purchaseTotal: approvedPurchases.reduce((s, e) => s + e.total, 0) };
+  }, [entries, purchaseEntries, users, settings, currentUser?.id, isTreasurer]);
 
   // ══════════════════════════════════════════════════════════════════════════
   // LOGIN SCREEN
@@ -3805,6 +4202,20 @@ export default function App() {
         )}
         <div style={S.card}><EntryForm entry={smartEntry} settings={settings} users={users} currentUser={currentUser} onSave={doSave} onSubmit={previewAsId ? () => {} : doSubmit} onCancel={() => { setNewEntry(false); setEditEntry(null); }} onDelete={previewAsId ? () => {} : doDelete} disableAutoSave={!!previewAsId} mob={mob} /></div></div>
     );}
+    // Purchase entry form
+    if (newPurchase || editPurchase) {
+      return (
+        <div className="fade-in">
+          <h2 style={{ ...S.h2, marginBottom: 24 }}>{editPurchase ? "Edit Purchase" : "New Purchase Entry"}</h2>
+          <div style={S.card}><PurchaseEntryForm entry={editPurchase} settings={settings} currentUser={currentUser} onSave={doPurchaseSave} onSubmit={doPurchaseSubmit} onCancel={() => { setNewPurchase(false); setEditPurchase(null); }} onDelete={doPurchaseDelete} mob={mob} /></div>
+        </div>
+      );
+    }
+    // Purchase detail view
+    if (viewPurchase) {
+      const fresh = purchaseEntries.find(e => e.id === viewPurchase.id) || viewPurchase;
+      return <PurchaseEntryDetail entry={fresh} settings={settings} users={users} currentUser={viewAs} onBack={() => setViewPurchase(null)} onEdit={() => { setEditPurchase(fresh); setViewPurchase(null); }} onApprove={doPurchaseApprove} onReject={doPurchaseReject} onMarkPaid={doPurchaseMarkPaid} mob={mob} />;
+    }
     if (viewEntry) {
       const fresh = entries.find(e => e.id === viewEntry.id) || viewEntry;
       return <EntryDetail entry={fresh} settings={settings} users={users} currentUser={viewAs} onBack={() => setViewEntry(null)} onEdit={() => { setEditEntry(fresh); setViewEntry(null); }} onApprove={doApprove} onReject={doDecline} onTrash={doTrash} onRestore={doRestore} onMarkPaid={doMarkPaid} onComment={doComment} onSecondApprove={doSecondApprove} onDelete={async (e) => { await deleteEntry(e.id); setViewEntry(null); showToast("Entry deleted", "success"); }} onDuplicate={(e) => { setViewEntry(null); setEditEntry(null); setNewEntry(true); setTimeout(() => setEditEntry({ ...e, id: null, status: STATUSES.DRAFT, date: todayStr(), startTime: nowTime(), endTime: "", preImages: [], postImages: [], reviewerNotes: "", reviewedAt: "", paidAt: "" }), 50); }} mob={mob} />;
@@ -3819,7 +4230,26 @@ export default function App() {
               <button onClick={() => setShowHelp(true)} aria-label="Help — User Guide" style={{ background: "none", border: "1px solid " + BRAND.borderLight, color: BRAND.textMuted, padding: "6px 12px", cursor: "pointer", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: BRAND.sans, display: "flex", alignItems: "center", gap: 5, transition: "all 150ms" }} onMouseEnter={e => { e.currentTarget.style.background = BRAND.bgSoft; e.currentTarget.style.color = BRAND.navy; }} onMouseLeave={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = BRAND.textMuted; }}>
                 <span style={{ fontSize: 13, fontWeight: 700 }}>?</span> Help
               </button>
-              {!mob && <button style={S.btnPrimary} onClick={() => setNewEntry(true)}><Icon name="plus" size={16} /> New Entry</button>}
+              {!mob && (
+                <div style={{ display: "flex", gap: 8, position: "relative" }}>
+                  <button style={S.btnPrimary} onClick={() => setNewEntryType(t => t ? null : "chooser")}><Icon name="plus" size={16} /> New Entry</button>
+                  {newEntryType === "chooser" && (
+                    <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 6, background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.12)", zIndex: 30, minWidth: 220, overflow: "hidden" }}>
+                      <button style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", width: "100%", border: "none", background: "none", cursor: "pointer", fontFamily: BRAND.sans, fontSize: 14, color: BRAND.charcoal, textAlign: "left" }}
+                        onMouseEnter={ev => ev.currentTarget.style.background = BRAND.bgSoft} onMouseLeave={ev => ev.currentTarget.style.background = "none"}
+                        onClick={() => { setNewEntryType(null); setNewEntry(true); }}>
+                        <span style={{ fontSize: 20 }}>🔨</span><div><div style={{ fontWeight: 600 }}>Work Entry</div><div style={{ fontSize: 12, color: BRAND.textLight }}>Log labor hours & tasks</div></div>
+                      </button>
+                      <div style={{ borderTop: "1px solid " + BRAND.borderLight }} />
+                      <button style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", width: "100%", border: "none", background: "none", cursor: "pointer", fontFamily: BRAND.sans, fontSize: 14, color: BRAND.charcoal, textAlign: "left" }}
+                        onMouseEnter={ev => ev.currentTarget.style.background = BRAND.bgSoft} onMouseLeave={ev => ev.currentTarget.style.background = "none"}
+                        onClick={() => { setNewEntryType(null); setNewPurchase(true); }}>
+                        <span style={{ fontSize: 20 }}>🛍️</span><div><div style={{ fontWeight: 600 }}>Purchase Entry</div><div style={{ fontSize: 12, color: BRAND.textLight }}>Log expenses & receipts</div></div>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "repeat(4, 1fr)", gap: mob ? 8 : 16, marginBottom: mob ? 16 : 28 }}>
@@ -4136,8 +4566,99 @@ export default function App() {
       <div className="fade-in">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <h2 style={S.h2}>{isTreasurer ? "All Entries" : "My Entries"}</h2>
-          {!mob && <button style={S.btnPrimary} onClick={() => setNewEntry(true)}><Icon name="plus" size={16} /> New Entry</button>}
+          {!mob && (
+            <div style={{ display: "flex", gap: 8, position: "relative" }}>
+              <button style={S.btnPrimary} onClick={() => setNewEntryType(t => t ? null : "chooser")}>
+                <Icon name="plus" size={16} /> New Entry
+              </button>
+              {newEntryType === "chooser" && (
+                <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 6, background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.12)", zIndex: 30, minWidth: 220, overflow: "hidden" }}>
+                  <button style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", width: "100%", border: "none", background: "none", cursor: "pointer", fontFamily: BRAND.sans, fontSize: 14, color: BRAND.charcoal, textAlign: "left" }}
+                    onMouseEnter={ev => ev.currentTarget.style.background = BRAND.bgSoft} onMouseLeave={ev => ev.currentTarget.style.background = "none"}
+                    onClick={() => { setNewEntryType(null); setNewEntry(true); }}>
+                    <span style={{ fontSize: 20 }}>🔨</span><div><div style={{ fontWeight: 600 }}>Work Entry</div><div style={{ fontSize: 12, color: BRAND.textLight }}>Log labor hours & tasks</div></div>
+                  </button>
+                  <div style={{ borderTop: "1px solid " + BRAND.borderLight }} />
+                  <button style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", width: "100%", border: "none", background: "none", cursor: "pointer", fontFamily: BRAND.sans, fontSize: 14, color: BRAND.charcoal, textAlign: "left" }}
+                    onMouseEnter={ev => ev.currentTarget.style.background = BRAND.bgSoft} onMouseLeave={ev => ev.currentTarget.style.background = "none"}
+                    onClick={() => { setNewEntryType(null); setNewPurchase(true); }}>
+                    <span style={{ fontSize: 20 }}>🛍️</span><div><div style={{ fontWeight: 600 }}>Purchase Entry</div><div style={{ fontSize: 12, color: BRAND.textLight }}>Log expenses & receipts</div></div>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
+        {/* Entry type tabs */}
+        <div style={{ display: "flex", marginBottom: 16, borderRadius: 8, background: BRAND.bgSoft, padding: 4, maxWidth: 320 }}>
+          <button style={{ flex: 1, padding: "9px 16px", borderRadius: 6, border: "none", fontFamily: BRAND.sans, fontSize: 13, fontWeight: 600, cursor: "pointer", background: entryTab === "work" ? BRAND.white : "transparent", color: entryTab === "work" ? BRAND.navy : BRAND.textMuted, boxShadow: entryTab === "work" ? "0 1px 3px rgba(0,0,0,0.08)" : "none", transition: "all 150ms" }} onClick={() => setEntryTab("work")}>
+            🔨 Work{myEntries.length > 0 ? ` (${myEntries.length})` : ""}
+          </button>
+          <button style={{ flex: 1, padding: "9px 16px", borderRadius: 6, border: "none", fontFamily: BRAND.sans, fontSize: 13, fontWeight: 600, cursor: "pointer", background: entryTab === "purchases" ? BRAND.white : "transparent", color: entryTab === "purchases" ? BRAND.navy : BRAND.textMuted, boxShadow: entryTab === "purchases" ? "0 1px 3px rgba(0,0,0,0.08)" : "none", transition: "all 150ms" }} onClick={() => setEntryTab("purchases")}>
+            🛍️ Purchases{(() => { const c = (isTreasurer ? purchaseEntries : purchaseEntries.filter(e => e.userId === viewAs?.id)).length; return c > 0 ? ` (${c})` : ""; })()}
+          </button>
+        </div>
+        {entryTab === "purchases" ? (() => {
+          const myPurchases = isTreasurer ? purchaseEntries : purchaseEntries.filter(e => e.userId === viewAs?.id);
+          const filtered = myPurchases.filter(e => {
+            if (filterSearch) { const s = filterSearch.toLowerCase(); if (!e.storeName?.toLowerCase().includes(s) && !e.category?.toLowerCase().includes(s) && !e.description?.toLowerCase().includes(s)) return false; }
+            if (filterStatus !== "all" && e.status !== filterStatus) return false;
+            return true;
+          }).sort((a, b) => b.date.localeCompare(a.date));
+          if (filtered.length === 0) return (
+            <div style={{ ...S.card, textAlign: "center", padding: "48px 32px" }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🛍️</div>
+              <div style={{ fontWeight: 600, color: BRAND.navy, marginBottom: 8, fontSize: 16 }}>No purchase entries yet</div>
+              <div style={{ fontSize: 14, color: BRAND.textLight, marginBottom: 20 }}>Track HOA purchases like supplies, decor, and fuel.</div>
+              <button style={S.btnPrimary} onClick={() => setNewPurchase(true)}><Icon name="plus" size={16} /> New Purchase</button>
+            </div>
+          );
+          return mob ? filtered.map((e, i) => (
+            <div key={e.id} style={{ animation: `cardSlideIn 280ms cubic-bezier(0.34,1.56,0.64,1) ${Math.min(i, 7) * 45}ms both`, marginBottom: 10 }}>
+              <div onClick={() => setViewPurchase(e)} style={{ ...S.card, cursor: "pointer", padding: "14px 16px", transition: "box-shadow 150ms" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 15, color: BRAND.charcoal }}>{e.storeName}</div>
+                    <div style={{ fontSize: 12, color: BRAND.textMuted }}>{formatDate(e.date)} · {e.category}</div>
+                  </div>
+                  <StatusBadge status={e.status} />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontSize: 12, color: BRAND.textLight }}>{e.items?.length || 0} item{(e.items?.length || 0) !== 1 ? "s" : ""}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: BRAND.navy }}>{fmt(e.total)}</div>
+                </div>
+              </div>
+            </div>
+          )) : (
+            <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                <thead><tr>
+                  <th style={S.th}>Date</th>
+                  {isTreasurer && <th style={S.th}>Member</th>}
+                  <th style={S.th}>Store</th>
+                  <th style={S.th}>Category</th>
+                  <th style={{ ...S.th, textAlign: "right" }}>Items</th>
+                  <th style={{ ...S.th, textAlign: "right" }}>Total</th>
+                  <th style={S.th}>Status</th>
+                </tr></thead>
+                <tbody>{filtered.map((e, i) => {
+                  const u = users.find(u => u.id === e.userId);
+                  return (
+                    <tr key={e.id} onClick={() => setViewPurchase(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms" }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
+                      <td style={S.td}>{formatDate(e.date)}</td>
+                      {isTreasurer && <td style={S.td}>{u?.name}</td>}
+                      <td style={S.td}>{e.storeName}</td>
+                      <td style={S.td}>{PURCHASE_CATEGORY_EMOJIS[e.category] || "📦"} {e.category}</td>
+                      <td style={{ ...S.td, textAlign: "right" }}>{e.items?.length || 0}</td>
+                      <td style={{ ...S.td, textAlign: "right", fontWeight: 600 }}>{fmt(e.total)}</td>
+                      <td style={S.td}><StatusBadge status={e.status} /></td>
+                    </tr>
+                  );
+                })}</tbody>
+              </table>
+            </div>
+          );
+        })() : (<>
         {/* Filter bar — search always visible; advanced filters collapse into a panel on mobile */}
         {(() => {
           const hasActiveFilter = filterSearch || filterStatus !== "all" || filterCategory !== "all" || filterMember !== "all" || filterDateFrom || filterDateTo;
@@ -4330,6 +4851,7 @@ export default function App() {
             </div>
           );
         })()}
+        </>)}
       </div>
     );
     if (page === "review") {
@@ -4561,7 +5083,7 @@ export default function App() {
     pullStartY.current = null;
   };
   const initials = (viewAs?.name || currentUser.name).split(" ").map(n => n[0]).join("");
-  const isActive = (id) => page === id && !viewEntry && !editEntry && !newEntry;
+  const isActive = (id) => page === id && !viewEntry && !editEntry && !newEntry && !viewPurchase && !editPurchase && !newPurchase;
   const members = users.filter(u => u.role === ROLES.MEMBER);
 
   // Preview mode banner — shown at top of content when Treasurer is previewing as Member
@@ -4678,10 +5200,24 @@ export default function App() {
         <PreviewBanner />
         <main id="main-content" style={{ padding: "16px 16px", paddingTop: 72 }}><div key={page} className="page-enter">{renderPage()}</div></main>
         {/* FAB */}
-        {!newEntry && !editEntry && !viewEntry && (page === "dashboard" || page === "entries") && (
-          <button aria-label="Create new work entry" style={{ position: "fixed", bottom: 160, right: 20, width: 56, height: 56, borderRadius: 28, background: BRAND.brick, color: "#fff", border: "none", boxShadow: "0 4px 16px rgba(142,59,46,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 15 }} onClick={() => setNewEntry(true)}>
-            <Icon name="plus" size={24} />
-          </button>
+        {!newEntry && !editEntry && !viewEntry && !newPurchase && !editPurchase && !viewPurchase && (page === "dashboard" || page === "entries") && (
+          <>
+            {newEntryType === "chooser" && <div style={{ position: "fixed", inset: 0, zIndex: 14, background: "rgba(0,0,0,0.3)" }} onClick={() => setNewEntryType(null)} />}
+            {newEntryType === "chooser" && (
+              <div style={{ position: "fixed", bottom: 230, right: 20, zIndex: 16, background: BRAND.white, borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden", minWidth: 200 }}>
+                <button style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", width: "100%", border: "none", background: "none", cursor: "pointer", fontFamily: BRAND.sans, fontSize: 14, color: BRAND.charcoal, textAlign: "left" }} onClick={() => { setNewEntryType(null); setNewEntry(true); }}>
+                  <span style={{ fontSize: 20 }}>🔨</span><div><div style={{ fontWeight: 600 }}>Work Entry</div><div style={{ fontSize: 11, color: BRAND.textLight }}>Log hours & tasks</div></div>
+                </button>
+                <div style={{ borderTop: "1px solid " + BRAND.borderLight }} />
+                <button style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", width: "100%", border: "none", background: "none", cursor: "pointer", fontFamily: BRAND.sans, fontSize: 14, color: BRAND.charcoal, textAlign: "left" }} onClick={() => { setNewEntryType(null); setNewPurchase(true); }}>
+                  <span style={{ fontSize: 20 }}>🛍️</span><div><div style={{ fontWeight: 600 }}>Purchase Entry</div><div style={{ fontSize: 11, color: BRAND.textLight }}>Log expenses & receipts</div></div>
+                </button>
+              </div>
+            )}
+            <button aria-label="Create new entry" style={{ position: "fixed", bottom: 160, right: 20, width: 56, height: 56, borderRadius: 28, background: BRAND.brick, color: "#fff", border: "none", boxShadow: "0 4px 16px rgba(142,59,46,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 15, transform: newEntryType === "chooser" ? "rotate(45deg)" : "none", transition: "transform 200ms" }} onClick={() => setNewEntryType(t => t === "chooser" ? null : "chooser")}>
+              <Icon name="plus" size={24} />
+            </button>
+          </>
         )}
         {/* More bottom sheet */}
         {moreSheetOpen && (

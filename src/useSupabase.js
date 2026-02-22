@@ -30,6 +30,38 @@ function mapEntry(row) {
   };
 }
 
+// Maps DB row → app shape for purchase entries
+function mapPurchaseEntry(row) {
+  return {
+    id: row.id,
+    entryType: "purchase",
+    userId: row.user_id,
+    date: row.date,
+    storeName: row.store_name,
+    category: row.category,
+    description: row.description || "",
+    status: row.status,
+    items: row.items || [],
+    subtotal: Number(row.subtotal) || 0,
+    tax: Number(row.tax) || 0,
+    total: Number(row.total) || 0,
+    mileage: row.mileage || "",
+    mileageRate: row.mileage_rate ? Number(row.mileage_rate) : null,
+    mileageTotal: row.mileage_total ? Number(row.mileage_total) : 0,
+    paymentMethod: row.payment_method || "",
+    receiptUrls: row.receipt_urls || [],
+    photoUrls: row.photo_urls || [],
+    notes: row.notes || "",
+    reviewerNotes: row.reviewer_notes || "",
+    reviewedBy: row.reviewed_by || null,
+    reviewedAt: row.reviewed_at || "",
+    submittedAt: row.submitted_at || "",
+    paidAt: row.paid_at || "",
+    auditLog: row.audit_log || [],
+    createdAt: row.created_at,
+  };
+}
+
 function mapProfile(row) {
   return {
     id: row.id,
@@ -49,6 +81,7 @@ function mapSettings(row) {
     inviteExpiresAt: row.invite_expires_at || null,
     annualBudget: Number(row.annual_budget) || 0,
     dualApprovalThreshold: Number(row.dual_approval_threshold) || 0,
+    mileageRate: row.mileage_rate != null ? Number(row.mileage_rate) : 0.725,
   };
 }
 
@@ -57,7 +90,8 @@ export function useSupabase() {
   const [currentUser, setCurrentUser] = useState(null);
   const [users, setUsers] = useState([]);
   const [entries, setEntries] = useState([]);
-  const [settings, setSettings] = useState({ hoaName: "24 Mill Street", defaultHourlyRate: 40, currency: "USD", inviteCode: "", inviteExpiresAt: null });
+  const [purchaseEntries, setPurchaseEntries] = useState([]);
+  const [settings, setSettings] = useState({ hoaName: "24 Mill Street", defaultHourlyRate: 40, currency: "USD", inviteCode: "", inviteExpiresAt: null, mileageRate: 0.725 });
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState("");
 
@@ -97,6 +131,11 @@ export function useSupabase() {
         .from("entries").select("*").order("date", { ascending: false });
       if (allEntries) setEntries(allEntries.map(mapEntry));
 
+      // Load purchase entries (RLS handles visibility)
+      const { data: allPurchases } = await supabase
+        .from("purchase_entries").select("*").order("date", { ascending: false });
+      if (allPurchases) setPurchaseEntries(allPurchases.map(mapPurchaseEntry));
+
       // Load settings
       const { data: settingsRow } = await supabase
         .from("settings").select("*").eq("id", 1).single();
@@ -128,6 +167,27 @@ export function useSupabase() {
     return () => supabase.removeChannel(channel);
   }, [session?.user?.id]);
 
+  // Real-time for purchase entries
+  useEffect(() => {
+    if (!session?.user) return;
+    const channel = supabase
+      .channel("purchase-entries-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "purchase_entries" }, (payload) => {
+        if (payload.eventType === "INSERT") {
+          setPurchaseEntries(prev => {
+            if (prev.find(e => e.id === payload.new.id)) return prev;
+            return [mapPurchaseEntry(payload.new), ...prev];
+          });
+        } else if (payload.eventType === "UPDATE") {
+          setPurchaseEntries(prev => prev.map(e => e.id === payload.new.id ? mapPurchaseEntry(payload.new) : e));
+        } else if (payload.eventType === "DELETE") {
+          setPurchaseEntries(prev => prev.filter(e => e.id !== payload.old.id));
+        }
+      })
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [session?.user?.id]);
+
   // ── LOGIN / LOGOUT ─────────────────────────────────────────────────────
   const login = useCallback(async (email, password) => {
     setAuthError("");
@@ -145,6 +205,7 @@ export function useSupabase() {
     setCurrentUser(null);
     setUsers([]);
     setEntries([]);
+    setPurchaseEntries([]);
   }, []);
 
   const register = useCallback(async (name, email, password, inviteCode) => {
@@ -439,6 +500,111 @@ export function useSupabase() {
     return mapped;
   }, [currentUser]);
 
+  // ── PURCHASE ENTRIES ─────────────────────────────────────────────────────
+  const savePurchaseEntry = useCallback(async (formData, existingId) => {
+    const row = {
+      user_id: formData.userId,
+      date: formData.date,
+      store_name: formData.storeName,
+      category: formData.category,
+      description: formData.description || null,
+      items: formData.items || [],
+      subtotal: Number(formData.subtotal) || 0,
+      tax: Number(formData.tax) || 0,
+      total: Number(formData.total) || 0,
+      mileage: formData.mileage ? Number(formData.mileage) : null,
+      mileage_rate: formData.mileageRate ? Number(formData.mileageRate) : null,
+      mileage_total: formData.mileageTotal ? Number(formData.mileageTotal) : null,
+      payment_method: formData.paymentMethod || null,
+      receipt_urls: formData.receiptUrls || [],
+      photo_urls: formData.photoUrls || [],
+      notes: formData.notes || null,
+      status: formData.status,
+      ...(formData.status === "Submitted" ? { submitted_at: new Date().toISOString() } : {}),
+    };
+
+    if (existingId) {
+      const { data: current } = await supabase
+        .from("purchase_entries").select("audit_log, status").eq("id", existingId).single();
+      const statusChanged = formData.status !== current?.status;
+      const action = formData.status === "Submitted" ? "Submitted for review"
+                   : formData.status === "Draft" ? "Draft saved" : "Entry edited";
+      const details = statusChanged ? "Status: " + current?.status + " → " + formData.status : null;
+      row.audit_log = appendAuditLog(current?.audit_log, action, details, null);
+      const { data, error } = await supabase
+        .from("purchase_entries").update(row).eq("id", existingId).select().single();
+      if (error) { console.error("Purchase update error:", error); return { error: error.message }; }
+      const mapped = mapPurchaseEntry(data);
+      setPurchaseEntries(prev => prev.map(e => e.id === existingId ? mapped : e));
+      return mapped;
+    } else {
+      row.audit_log = appendAuditLog([], "Purchase entry created", null, [
+        { field: "Store", from: "—", to: formData.storeName || "—" },
+        { field: "Category", from: "—", to: formData.category || "—" },
+        { field: "Total", from: "—", to: "$" + (Number(formData.total) || 0).toFixed(2) },
+      ]);
+      const { data, error } = await supabase
+        .from("purchase_entries").insert(row).select().single();
+      if (error) { console.error("Purchase insert error:", error); return { error: error.message }; }
+      const mapped = mapPurchaseEntry(data);
+      setPurchaseEntries(prev => [mapped, ...prev]);
+      return mapped;
+    }
+  }, [currentUser]);
+
+  const deletePurchaseEntry = useCallback(async (id) => {
+    const { error } = await supabase.from("purchase_entries").delete().eq("id", id);
+    if (error) { console.error("Purchase delete error:", error); return false; }
+    setPurchaseEntries(prev => prev.filter(e => e.id !== id));
+    return true;
+  }, []);
+
+  const approvePurchaseEntry = useCallback(async (id, reviewerNotes) => {
+    const { data: current } = await supabase.from("purchase_entries").select("audit_log").eq("id", id).single();
+    const log = appendAuditLog(current?.audit_log, "Approved",
+      reviewerNotes ? "Notes: " + reviewerNotes : null,
+      [{ field: "Status", from: "Submitted", to: "Approved" }]);
+    const { data, error } = await supabase.from("purchase_entries").update({
+      status: "Approved", reviewer_notes: reviewerNotes || null, reviewed_at: new Date().toISOString(),
+      reviewed_by: session?.user?.id, audit_log: log,
+    }).eq("id", id).select().single();
+    if (error) { console.error("Purchase approve error:", error); return null; }
+    const mapped = mapPurchaseEntry(data);
+    setPurchaseEntries(prev => prev.map(e => e.id === id ? mapped : e));
+    return mapped;
+  }, [currentUser, session]);
+
+  const rejectPurchaseEntry = useCallback(async (id, reviewerNotes) => {
+    const { data: current } = await supabase.from("purchase_entries").select("audit_log").eq("id", id).single();
+    const log = appendAuditLog(current?.audit_log, "Rejected",
+      null,
+      [{ field: "Status", from: "Submitted", to: "Rejected" },
+       { field: "Reason", from: "—", to: reviewerNotes || "No reason given" }]);
+    const { data, error } = await supabase.from("purchase_entries").update({
+      status: "Rejected", reviewer_notes: reviewerNotes || null, reviewed_at: new Date().toISOString(),
+      reviewed_by: session?.user?.id, audit_log: log,
+    }).eq("id", id).select().single();
+    if (error) { console.error("Purchase reject error:", error); return null; }
+    const mapped = mapPurchaseEntry(data);
+    setPurchaseEntries(prev => prev.map(e => e.id === id ? mapped : e));
+    return mapped;
+  }, [currentUser, session]);
+
+  const markPurchasePaid = useCallback(async (id, paymentDetails) => {
+    const { data: current } = await supabase.from("purchase_entries").select("audit_log").eq("id", id).single();
+    const detailStr = paymentDetails ? paymentDetails.method + (paymentDetails.reference ? " #" + paymentDetails.reference : "") : "No details";
+    const log = appendAuditLog(current?.audit_log, "Marked as Paid", null,
+      [{ field: "Status", from: "Approved", to: "Paid" },
+       { field: "Payment", from: "—", to: detailStr }]);
+    const { data, error } = await supabase.from("purchase_entries").update({
+      status: "Paid", paid_at: new Date().toISOString(), audit_log: log,
+    }).eq("id", id).select().single();
+    if (error) { console.error("Purchase markPaid error:", error); return null; }
+    const mapped = mapPurchaseEntry(data);
+    setPurchaseEntries(prev => prev.map(e => e.id === id ? mapped : e));
+    return mapped;
+  }, [currentUser]);
+
   // ── COMMENTS ───────────────────────────────────────────────────────────
   const addComment = useCallback(async (entryId, message) => {
     const { data: current } = await supabase.from("entries").select("comments").eq("id", entryId).single();
@@ -469,6 +635,7 @@ export function useSupabase() {
       invite_expires_at: newSettings.inviteExpiresAt || null,
       annual_budget: newSettings.annualBudget || 0,
       dual_approval_threshold: newSettings.dualApprovalThreshold || 0,
+      mileage_rate: newSettings.mileageRate != null ? newSettings.mileageRate : 0.725,
     }).eq("id", 1);
     if (error) { console.error("Settings error:", error); return false; }
     setSettings(newSettings);
@@ -522,12 +689,14 @@ export function useSupabase() {
 
   return {
     // State
-    currentUser, users, entries, settings, loading, authError,
+    currentUser, users, entries, purchaseEntries, settings, loading, authError,
     // Auth
     login, logout, register, resetPassword, changePassword,
     // Entries
     saveEntry, deleteEntry, trashEntry, restoreEntry, approveEntry, firstApprove, secondApprove, rejectEntry, markPaid,
     needsInfoEntry, bulkApprove, addComment,
+    // Purchase Entries
+    savePurchaseEntry, deletePurchaseEntry, approvePurchaseEntry, rejectPurchaseEntry, markPurchasePaid,
     // Settings & Users
     saveSettings, addUser, removeUser, updateUserRate,
     // Misc
