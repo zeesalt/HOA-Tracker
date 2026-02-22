@@ -855,24 +855,186 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ENTRY CARD (Mobile list replacement for tables)
+// ENTRY CARD (Mobile list replacement for tables — swipeable)
+// Swipe LEFT  → reveal Edit action (Draft/Rejected) or View (others)
+// Swipe RIGHT → reveal Submit (Draft) or Approve/Reject (Treasurer, Submitted)
 // ═══════════════════════════════════════════════════════════════════════════
-const EntryCard = ({entry, users, settings, onClick}) => {
+const SWIPE_THRESHOLD = 60;   // px to trigger reveal
+const SWIPE_MAX      = 80;    // max px of travel
+
+const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSubmit, onApprove, onReject }) => {
   const u = users.find(u => u.id === entry.userId);
-  const hrs = calcHours(entry.startTime, entry.endTime);
-  const rate = getUserRate(users, settings, entry.userId);
+  const hrs   = calcHours(entry.startTime, entry.endTime);
+  const rate  = getUserRate(users, settings, entry.userId);
   const total = calcLabor(hrs, rate) + calcMaterialsTotal(entry.materials);
   const photoCount = (entry.preImages?.length || 0) + (entry.postImages?.length || 0);
+
+  const isTreasurer = currentUser?.role === ROLES.TREASURER;
+  const canEdit   = [STATUSES.DRAFT, STATUSES.REJECTED].includes(entry.status) && (entry.userId === currentUser?.id || isTreasurer);
+  const canSubmit = entry.status === STATUSES.DRAFT && entry.userId === currentUser?.id;
+  const canReview = isTreasurer && entry.status === STATUSES.SUBMITTED;
+
+  // ── swipe state ────────────────────────────────────────────────────────
+  const touchStartX = useRef(null);
+  const touchStartY = useRef(null);
+  const [offsetX, setOffsetX]   = useState(0);
+  const [revealed, setRevealed] = useState(null); // "left" | "right" | null
+  const [swiping, setSwiping]   = useState(false);
+
+  const reset = () => { setOffsetX(0); setRevealed(null); setSwiping(false); };
+
+  const onTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    setSwiping(false);
+  };
+
+  const onTouchMove = (e) => {
+    if (touchStartX.current === null) return;
+    const dx = e.touches[0].clientX - touchStartX.current;
+    const dy = e.touches[0].clientY - touchStartY.current;
+    // ignore mostly-vertical scrolls
+    if (!swiping && Math.abs(dy) > Math.abs(dx)) return;
+    setSwiping(true);
+    e.preventDefault(); // prevent scroll while swiping
+    const clamped = Math.max(-SWIPE_MAX, Math.min(SWIPE_MAX, dx));
+    setOffsetX(clamped);
+  };
+
+  const onTouchEnd = () => {
+    if (!swiping) { touchStartX.current = null; return; }
+    if (offsetX < -SWIPE_THRESHOLD) {
+      // Swiped left → show right-side action (edit or view)
+      setOffsetX(-SWIPE_MAX);
+      setRevealed("left");
+    } else if (offsetX > SWIPE_THRESHOLD) {
+      // Swiped right → show left-side action (submit or approve)
+      setOffsetX(SWIPE_MAX);
+      setRevealed("right");
+    } else {
+      reset();
+    }
+    touchStartX.current = null;
+  };
+
+  // tap on card body while revealed → reset
+  const handleCardClick = () => {
+    if (revealed) { reset(); return; }
+    onClick();
+  };
+
+  // ── action colours ─────────────────────────────────────────────────────
+  const leftBg  = canEdit ? BRAND.navy : "#4B5563";      // swipe-left reveals: Edit
+  const rightBg = canSubmit ? BRAND.green                // swipe-right reveals: Submit
+                : canReview ? BRAND.success : "#4B5563"; // or Approve
+
   return (
-    <div role="button" tabIndex={0} onKeyDown={e => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onClick())} aria-label={entry.category + ": " + entry.description + ", " + fmt(total) + ", " + entry.status} style={{ ...S.card, cursor: "pointer", padding: "14px 16px" }} onClick={onClick}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}><CategoryBadge category={entry.category} /><StatusBadge status={entry.status} />{photoCount > 0 && <span aria-label={photoCount + " photos"} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 12, color: BRAND.textLight, background: BRAND.bgSoft, padding: "2px 8px", borderRadius: 10 }}>📷 {photoCount}</span>}</div>
-          <div style={{ fontSize: 14, fontWeight: 500, color: BRAND.charcoal, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{entry.description}</div>
-        </div>
-        <div style={{ textAlign: "right", marginLeft: 12 }}><div style={{ fontSize: 16, fontWeight: 700, color: BRAND.navy }}>{fmt(total)}</div></div>
+    <div style={{ position: "relative", overflow: "hidden", borderRadius: 12, marginBottom: 10 }}>
+      {/* ── LEFT action backdrop (swipe-right to reveal) ── */}
+      <div aria-hidden="true" style={{
+        position: "absolute", inset: 0, display: "flex", alignItems: "center",
+        paddingLeft: 20, background: rightBg, borderRadius: 12,
+      }}>
+        <span style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>
+          {canSubmit ? "✅ Submit" : canReview ? "✅ Approve" : ""}
+        </span>
       </div>
-      <div style={{ fontSize: 13, color: BRAND.textLight }}>{relativeDate(entry.date)} · {fmtHours(hrs)}{u ? " · " + u.name : ""}</div>
+
+      {/* ── RIGHT action backdrop (swipe-left to reveal) ── */}
+      <div aria-hidden="true" style={{
+        position: "absolute", inset: 0, display: "flex", alignItems: "center",
+        justifyContent: "flex-end", paddingRight: 20, background: leftBg, borderRadius: 12,
+      }}>
+        <span style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>
+          {canEdit ? "✏️ Edit" : "👁 View"}
+        </span>
+      </div>
+
+      {/* ── CARD (slides) ── */}
+      <div
+        role="button" tabIndex={0}
+        aria-label={entry.category + ": " + entry.description + ", " + fmt(total) + ", " + entry.status}
+        onKeyDown={e => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onClick())}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onClick={handleCardClick}
+        style={{
+          ...S.card,
+          cursor: "pointer",
+          padding: "14px 16px",
+          marginBottom: 0,
+          transform: `translateX(${offsetX}px)`,
+          transition: swiping ? "none" : "transform 250ms ease",
+          userSelect: "none",
+          WebkitUserSelect: "none",
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+              <CategoryBadge category={entry.category} />
+              <StatusBadge status={entry.status} />
+              {photoCount > 0 && (
+                <span aria-label={photoCount + " photos"} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 12, color: BRAND.textLight, background: BRAND.bgSoft, padding: "2px 8px", borderRadius: 10 }}>
+                  📷 {photoCount}
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: BRAND.charcoal, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {entry.description}
+            </div>
+          </div>
+          <div style={{ textAlign: "right", marginLeft: 12 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: BRAND.navy }}>{fmt(total)}</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontSize: 13, color: BRAND.textLight }}>
+            {relativeDate(entry.date)} · {fmtHours(hrs)}{u ? " · " + u.name : ""}
+          </div>
+          {/* hint dots shown when not swiped */}
+          {!revealed && (canSubmit || canEdit || canReview) && (
+            <div aria-hidden="true" style={{ display: "flex", gap: 3, opacity: 0.3 }}>
+              <span style={{ width: 5, height: 5, borderRadius: "50%", background: BRAND.charcoal }} />
+              <span style={{ width: 5, height: 5, borderRadius: "50%", background: BRAND.charcoal }} />
+              <span style={{ width: 5, height: 5, borderRadius: "50%", background: BRAND.charcoal }} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── REVEALED ACTION BUTTONS (tap to fire) ── */}
+      {revealed === "right" && (canSubmit || canReview) && (
+        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, display: "flex", alignItems: "center", paddingLeft: 12, zIndex: 2 }}>
+          <button
+            style={{ background: "#fff", color: rightBg, border: "2px solid " + rightBg, borderRadius: 8, padding: "6px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+            onClick={(e) => { e.stopPropagation(); reset(); canSubmit ? onSubmit(entry) : onApprove(entry); }}
+          >
+            {canSubmit ? "Submit" : "Approve"}
+          </button>
+          {canReview && onReject && (
+            <button
+              style={{ background: "#fff", color: BRAND.brick, border: "2px solid " + BRAND.brick, borderRadius: 8, padding: "6px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer", marginLeft: 6 }}
+              onClick={(e) => { e.stopPropagation(); reset(); onReject(entry); }}
+            >
+              Reject
+            </button>
+          )}
+        </div>
+      )}
+      {revealed === "left" && (
+        <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, display: "flex", alignItems: "center", paddingRight: 12, zIndex: 2 }}>
+          <button
+            style={{ background: "#fff", color: leftBg, border: "2px solid " + leftBg, borderRadius: 8, padding: "6px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+            onClick={(e) => { e.stopPropagation(); reset(); canEdit ? onEdit(entry) : onClick(); }}
+          >
+            {canEdit ? "Edit" : "View"}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
@@ -1768,7 +1930,7 @@ export default function App() {
           <div style={S.card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}><h3 style={S.h3}>Recent Entries</h3><button style={S.btnGhost} onClick={() => setPage("entries")}>View all →</button></div>
             {recent.length === 0 ? <div style={{ textAlign: "center", padding: 40, color: BRAND.textLight }}>No entries yet. Create your first work entry.</div>
-            : mob ? recent.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} onClick={() => setViewEntry(e)} />)
+            : mob ? recent.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} currentUser={currentUser} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => setViewEntry(e)} onReject={(e) => setViewEntry(e)} />)
             : (
               <div style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 8, overflow: "hidden" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
@@ -1818,7 +1980,7 @@ export default function App() {
           if (filterCategory !== "all") filtered = filtered.filter(e => e.category === filterCategory);
           if (filterMember !== "all") filtered = filtered.filter(e => e.userId === filterMember);
           return filtered.length === 0 ? <div style={{ ...S.card, textAlign: "center", padding: 60, color: BRAND.textLight }}>{myEntries.length === 0 ? "No entries yet." : "No entries match your filters."}</div>
-          : mob ? filtered.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} onClick={() => setViewEntry(e)} />)
+          : mob ? filtered.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} currentUser={currentUser} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => setViewEntry(e)} onReject={(e) => setViewEntry(e)} />)
           : (
             <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
