@@ -174,9 +174,44 @@ export function useSupabase() {
 
   // ── ENTRIES ────────────────────────────────────────────────────────────
   // Helper: append to audit log
-  const appendAuditLog = (existingLog, action, details) => {
+  const appendAuditLog = (existingLog, action, details, changes) => {
     const user = currentUser || {};
-    return [...(existingLog || []), { action, by: user.id || "system", byName: user.name || "System", at: new Date().toISOString(), details }];
+    return [...(existingLog || []), {
+      action,
+      by: user.id || "system",
+      byName: user.name || "System",
+      at: new Date().toISOString(),
+      details: details || null,
+      changes: changes || null,   // array of { field, from, to }
+    }];
+  };
+
+  // Produce a human-readable diff between old DB row and new formData
+  const diffEntry = (old, form) => {
+    const changes = [];
+    const fmtTime = (t) => t ? t.slice(0, 5) : "—";
+    const fmtMat  = (m) => m?.length ? m.map(x => x.name || "item").join(", ") : "none";
+    const checks = [
+      { field: "Date",        from: old.date,                  to: form.date },
+      { field: "Start time",  from: fmtTime(old.start_time),   to: fmtTime(form.startTime) },
+      { field: "End time",    from: fmtTime(old.end_time),      to: fmtTime(form.endTime) },
+      { field: "Category",    from: old.category,               to: form.category },
+      { field: "Description", from: old.description,            to: form.description },
+      { field: "Location",    from: old.location || "",          to: form.location || "" },
+      { field: "Mileage",     from: String(old.mileage || ""),  to: String(form.mileage || "") },
+      { field: "Notes",       from: old.notes || "",             to: form.notes || "" },
+      { field: "Materials",
+        from: fmtMat(old.materials),
+        to:   fmtMat(form.materials),
+        skip: JSON.stringify(old.materials || []) === JSON.stringify(form.materials || []) },
+    ];
+    for (const c of checks) {
+      if (c.skip) continue;
+      const f = String(c.from ?? "").trim();
+      const t = String(c.to   ?? "").trim();
+      if (f !== t) changes.push({ field: c.field, from: f || "—", to: t || "—" });
+    }
+    return changes;
   };
 
   const saveEntry = useCallback(async (formData, existingId) => {
@@ -198,10 +233,20 @@ export function useSupabase() {
     };
 
     if (existingId) {
-      // Fetch current entry for audit log
-      const { data: current } = await supabase.from("entries").select("audit_log, status").eq("id", existingId).single();
-      const action = formData.status === "Submitted" ? "Submitted for review" : formData.status === "Draft" ? "Draft saved" : "Entry updated";
-      row.audit_log = appendAuditLog(current?.audit_log, action, formData.status !== current?.status ? "Status: " + current?.status + " → " + formData.status : "Entry edited");
+      const { data: current } = await supabase
+        .from("entries")
+        .select("audit_log, status, date, start_time, end_time, category, description, location, mileage, notes, materials")
+        .eq("id", existingId).single();
+
+      const statusChanged = formData.status !== current?.status;
+      const action = formData.status === "Submitted" ? "Submitted for review"
+                   : formData.status === "Draft"     ? "Draft saved"
+                   : "Entry edited";
+      const details = statusChanged ? "Status: " + current?.status + " → " + formData.status : null;
+      const changes = statusChanged ? null : diffEntry(current || {}, formData);
+
+      row.audit_log = appendAuditLog(current?.audit_log, action, details, changes?.length ? changes : null);
+
       const { data, error } = await supabase
         .from("entries").update(row).eq("id", existingId).select().single();
       if (error) { console.error("Update error:", error); return { error: error.message }; }
@@ -209,7 +254,18 @@ export function useSupabase() {
       setEntries(prev => prev.map(e => e.id === existingId ? mapped : e));
       return mapped;
     } else {
-      row.audit_log = appendAuditLog([], "Entry created", "Status: " + formData.status);
+      // New entry — record all initial field values
+      const initChanges = [
+        { field: "Date",        from: "—", to: formData.date || "—" },
+        { field: "Category",    from: "—", to: formData.category || "—" },
+        { field: "Start time",  from: "—", to: formData.startTime ? formData.startTime.slice(0,5) : "—" },
+        { field: "End time",    from: "—", to: formData.endTime   ? formData.endTime.slice(0,5)   : "—" },
+        { field: "Description", from: "—", to: formData.description || "—" },
+        ...(formData.location ? [{ field: "Location", from: "—", to: formData.location }] : []),
+        ...(formData.mileage  ? [{ field: "Mileage",  from: "—", to: String(formData.mileage) }] : []),
+        ...(formData.materials?.length ? [{ field: "Materials", from: "—", to: formData.materials.map(m => m.name).join(", ") }] : []),
+      ];
+      row.audit_log = appendAuditLog([], "Entry created", null, initChanges);
       const { data, error } = await supabase
         .from("entries").insert(row).select().single();
       if (error) { console.error("Insert error:", error); return { error: error.message }; }
@@ -228,7 +284,10 @@ export function useSupabase() {
 
   const approveEntry = useCallback(async (id, reviewerNotes) => {
     const { data: current } = await supabase.from("entries").select("audit_log").eq("id", id).single();
-    const log = appendAuditLog(current?.audit_log, "Approved", reviewerNotes ? "Notes: " + reviewerNotes : "No notes");
+    const log = appendAuditLog(current?.audit_log, "Approved",
+      reviewerNotes ? "Notes: " + reviewerNotes : null,
+      [{ field: "Status", from: current?.status || "Submitted", to: "Approved" },
+       ...(reviewerNotes ? [{ field: "Reviewer note", from: "—", to: reviewerNotes }] : [])]);
     const { data, error } = await supabase.from("entries").update({
       status: "Approved", reviewer_notes: reviewerNotes || null, reviewed_at: new Date().toISOString(), audit_log: log,
     }).eq("id", id).select().single();
@@ -241,7 +300,10 @@ export function useSupabase() {
   // First approval when dual approval is required — sets to "Awaiting 2nd Approval"
   const firstApprove = useCallback(async (id, reviewerNotes, thresholdInfo) => {
     const { data: current } = await supabase.from("entries").select("audit_log").eq("id", id).single();
-    const log = appendAuditLog(current?.audit_log, "First approval", reviewerNotes ? "Notes: " + reviewerNotes + " | " + thresholdInfo : thresholdInfo);
+    const log = appendAuditLog(current?.audit_log, "First approval",
+      thresholdInfo,
+      [{ field: "Status", from: current?.status || "Submitted", to: "Awaiting 2nd Approval" },
+       ...(reviewerNotes ? [{ field: "Reviewer note", from: "—", to: reviewerNotes }] : [])]);
     const { data, error } = await supabase.from("entries").update({
       status: "Awaiting 2nd Approval", reviewer_notes: reviewerNotes || null, reviewed_at: new Date().toISOString(), audit_log: log,
     }).eq("id", id).select().single();
@@ -253,7 +315,8 @@ export function useSupabase() {
 
   const secondApprove = useCallback(async (id) => {
     const { data: current } = await supabase.from("entries").select("audit_log").eq("id", id).single();
-    const log = appendAuditLog(current?.audit_log, "Second approval granted", "Dual approval complete");
+    const log = appendAuditLog(current?.audit_log, "Second approval granted", "Dual approval complete",
+      [{ field: "Status", from: "Awaiting 2nd Approval", to: "Approved" }]);
     const { data, error } = await supabase.from("entries").update({
       status: "Approved", second_approver_id: session?.user?.id, second_approved_at: new Date().toISOString(), audit_log: log,
     }).eq("id", id).select().single();
@@ -265,7 +328,10 @@ export function useSupabase() {
 
   const rejectEntry = useCallback(async (id, reviewerNotes) => {
     const { data: current } = await supabase.from("entries").select("audit_log").eq("id", id).single();
-    const log = appendAuditLog(current?.audit_log, "Rejected", reviewerNotes ? "Reason: " + reviewerNotes : "No reason given");
+    const log = appendAuditLog(current?.audit_log, "Declined",
+      null,
+      [{ field: "Status", from: current?.status || "Submitted", to: "Rejected" },
+       { field: "Reason", from: "—", to: reviewerNotes || "No reason given" }]);
     const { data, error } = await supabase.from("entries").update({
       status: "Rejected", reviewer_notes: reviewerNotes || null, reviewed_at: new Date().toISOString(), audit_log: log,
     }).eq("id", id).select().single();
@@ -277,7 +343,11 @@ export function useSupabase() {
 
   const trashEntry = useCallback(async (id, comment, action) => {
     const { data: current } = await supabase.from("entries").select("audit_log").eq("id", id).single();
-    const log = appendAuditLog(current?.audit_log, action || "Moved to Trash", comment ? "Reason: " + comment : "No reason given");
+    const { data: currentFull } = await supabase.from("entries").select("status").eq("id", id).single();
+    const log = appendAuditLog(current?.audit_log, action || "Moved to Trash",
+      null,
+      [{ field: "Status", from: currentFull?.status || "—", to: "Trash" },
+       ...(comment ? [{ field: "Reason", from: "—", to: comment }] : [])]);
     const { data, error } = await supabase.from("entries").update({
       status: "Trash",
       reviewer_notes: comment || null,
@@ -292,7 +362,9 @@ export function useSupabase() {
 
   const restoreEntry = useCallback(async (id, previousStatus) => {
     const { data: current } = await supabase.from("entries").select("audit_log").eq("id", id).single();
-    const log = appendAuditLog(current?.audit_log, "Restored from Trash", "Restored to: " + previousStatus);
+    const log = appendAuditLog(current?.audit_log, "Restored from Trash",
+      null,
+      [{ field: "Status", from: "Trash", to: previousStatus || "Draft" }]);
     const { data, error } = await supabase.from("entries").update({
       status: previousStatus || "Draft",
       audit_log: log,
@@ -306,7 +378,10 @@ export function useSupabase() {
   const markPaid = useCallback(async (id, paymentDetails) => {
     const { data: current } = await supabase.from("entries").select("audit_log").eq("id", id).single();
     const detailStr = paymentDetails ? paymentDetails.method + (paymentDetails.reference ? " #" + paymentDetails.reference : "") : "No details";
-    const log = appendAuditLog(current?.audit_log, "Marked as Paid", detailStr);
+    const log = appendAuditLog(current?.audit_log, "Marked as Paid",
+      null,
+      [{ field: "Status", from: "Approved", to: "Paid" },
+       { field: "Payment", from: "—", to: detailStr }]);
     const { data, error } = await supabase.from("entries").update({
       status: "Paid", paid_at: new Date().toISOString(), audit_log: log,
     }).eq("id", id).select().single();

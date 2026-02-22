@@ -726,7 +726,7 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
   const [reviewNotes, setReviewNotes] = useState(entry.reviewerNotes || "");
   const [showApproveConfirm, setShowApproveConfirm] = useState(false);
   const [showPaidConfirm, setShowPaidConfirm] = useState(false);
-  const [showAuditLog, setShowAuditLog] = useState(false);
+  const [showAuditLog, setShowAuditLog] = useState(true); // open by default
   const [showDeclinePanel, setShowDeclinePanel] = useState(false);
   const [showTrashPanel, setShowTrashPanel] = useState(false);
   const [declineNote, setDeclineNote] = useState("");
@@ -911,29 +911,112 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
           <div style={{ fontSize: 13, fontWeight: 600, color: "#3B5998" }}>✓ Paid on {formatDate(entry.paidAt.split("T")[0])}</div>
         </div>
       )}
-      {/* Audit Trail */}
-      {entry.auditLog?.length > 0 && (
-        <div style={{ marginTop: 8 }}>
-          <button style={{ ...S.btnGhost, fontSize: 12, color: BRAND.textLight }} onClick={() => setShowAuditLog(p => !p)}><Icon name="file" size={14} /> {showAuditLog ? "Hide" : "Show"} Audit Trail ({entry.auditLog.length})</button>
-          {showAuditLog && (
-            <div style={{ ...S.card, marginTop: 8, padding: 16 }}>
-              <div style={S.sectionLabel}>Audit Trail</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-                {[...entry.auditLog].reverse().map((log, i) => (
-                  <div key={i} style={{ display: "flex", gap: 12, padding: "10px 0", borderBottom: i < entry.auditLog.length - 1 ? "1px solid " + BRAND.borderLight : "none" }}>
-                    <div style={{ width: 8, height: 8, borderRadius: 4, background: log.action.includes("Reject") ? BRAND.error : log.action.includes("Approv") ? BRAND.success : log.action.includes("Paid") ? "#3B5998" : BRAND.textLight, flexShrink: 0, marginTop: 5 }} />
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.charcoal }}>{log.action}</div>
-                      <div style={{ fontSize: 12, color: BRAND.textMuted }}>{log.byName} · {new Date(log.at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</div>
-                      {log.details && <div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 2 }}>{log.details}</div>}
-                    </div>
-                  </div>
-                ))}
+      {/* Audit Trail — visible to all users */}
+      {(() => {
+        if (!entry.auditLog?.length) return null;
+
+        // colour + icon per action type
+        const eventStyle = (action) => {
+          if (!action) return { dot: BRAND.textLight, bg: "transparent", icon: "●" };
+          const a = action.toLowerCase();
+          if (a.includes("creat"))   return { dot: BRAND.navy,    bg: BRAND.navy    + "10", icon: "✦" };
+          if (a.includes("submit"))  return { dot: "#2563EB",     bg: "#2563EB10",          icon: "↑" };
+          if (a.includes("approv"))  return { dot: BRAND.success, bg: BRAND.success + "12", icon: "✓" };
+          if (a.includes("paid"))    return { dot: "#3B5998",     bg: "#3B599812",          icon: "💳" };
+          if (a.includes("declin") || a.includes("reject")) return { dot: BRAND.error, bg: BRAND.error + "10", icon: "✕" };
+          if (a.includes("trash"))   return { dot: "#7f1d1d",     bg: "#7f1d1d10",          icon: "🗑" };
+          if (a.includes("restor"))  return { dot: "#D97706",     bg: "#D9770610",          icon: "↩" };
+          if (a.includes("edit") || a.includes("saved")) return { dot: "#6366F1", bg: "#6366F110", icon: "✎" };
+          return { dot: BRAND.textLight, bg: "transparent", icon: "●" };
+        };
+
+        const logs = [...entry.auditLog].reverse();
+
+        return (
+          <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
+            <button
+              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                       padding: "14px 20px", background: "none", border: "none", cursor: "pointer",
+                       fontFamily: BRAND.sans, borderBottom: showAuditLog ? "1px solid " + BRAND.borderLight : "none" }}
+              onClick={() => setShowAuditLog(p => !p)}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: BRAND.charcoal }}>Activity &amp; Changes</span>
+                <span style={{ fontSize: 11, color: BRAND.textLight, background: BRAND.bgSoft,
+                               border: "1px solid " + BRAND.borderLight, borderRadius: 10, padding: "1px 7px" }}>
+                  {entry.auditLog.length}
+                </span>
               </div>
-            </div>
-          )}
-        </div>
-      )}
+              <span style={{ fontSize: 12, color: BRAND.textLight }}>{showAuditLog ? "▲ Hide" : "▼ Show"}</span>
+            </button>
+
+            {showAuditLog && (
+              <div style={{ padding: "4px 0 8px" }}>
+                {logs.map((log, i) => {
+                  const es = eventStyle(log.action);
+                  const ts = new Date(log.at).toLocaleDateString("en-US", {
+                    month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit"
+                  });
+                  return (
+                    <div key={i} style={{ display: "flex", gap: 0, padding: "0 20px" }}>
+                      {/* Timeline spine */}
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginRight: 12, flexShrink: 0 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: "50%", background: es.bg,
+                                      border: "2px solid " + es.dot, display: "flex", alignItems: "center",
+                                      justifyContent: "center", fontSize: 12, color: es.dot, flexShrink: 0,
+                                      marginTop: 10, zIndex: 1 }}>
+                          {es.icon}
+                        </div>
+                        {i < logs.length - 1 && (
+                          <div style={{ width: 2, flex: 1, minHeight: 12, background: BRAND.borderLight, margin: "2px 0" }} />
+                        )}
+                      </div>
+
+                      {/* Content */}
+                      <div style={{ flex: 1, padding: "10px 0", paddingBottom: i < logs.length - 1 ? 4 : 10 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: es.dot }}>{log.action}</span>
+                          <span style={{ fontSize: 11, color: BRAND.textLight, whiteSpace: "nowrap" }}>{ts}</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: BRAND.textMuted, marginTop: 1 }}>{log.byName}</div>
+
+                        {/* Details string (legacy + notes) */}
+                        {log.details && (
+                          <div style={{ marginTop: 5, fontSize: 12, color: BRAND.charcoal,
+                                        background: BRAND.bgSoft, borderRadius: 6, padding: "5px 10px",
+                                        borderLeft: "3px solid " + es.dot }}>
+                            {log.details}
+                          </div>
+                        )}
+
+                        {/* Structured field diffs */}
+                        {log.changes?.length > 0 && (
+                          <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 3 }}>
+                            {log.changes.map((c, ci) => (
+                              <div key={ci} style={{ fontSize: 12, display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
+                                <span style={{ color: BRAND.textLight, fontWeight: 600, minWidth: 80, flexShrink: 0 }}>{c.field}</span>
+                                {c.from === "—" || !c.from ? (
+                                  <span style={{ color: BRAND.success }}>{c.to}</span>
+                                ) : (
+                                  <>
+                                    <span style={{ color: BRAND.error, textDecoration: "line-through", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.from}</span>
+                                    <span style={{ color: BRAND.textLight }}>→</span>
+                                    <span style={{ color: BRAND.success, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.to}</span>
+                                  </>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
       <ConfirmDialog open={showApproveConfirm} onClose={() => setShowApproveConfirm(false)} title={dualRequired ? "First Approval" : "Approve?"} message={dualRequired ? "This entry (" + fmt(grandTotal) + ") exceeds the dual-approval threshold. A second board member will need to approve before it's final." : "Approve " + fmt(grandTotal) + " for " + (user?.name || "member") + "?"} confirmText={dualRequired ? "First Approve" : "Approve"} onConfirm={() => onApprove(reviewNotes)} />
       <ConfirmDialog open={showPaidConfirm} onClose={() => setShowPaidConfirm(false)} title="Mark as Paid?" message={"Confirm payment of " + fmt(grandTotal) + " to " + (user?.name || "member") + " via " + payMethod + (payRef ? " (#" + payRef + ")" : "") + "?"} confirmText="Mark Paid" onConfirm={() => onMarkPaid({ method: payMethod, reference: payRef })} />
     </div>
