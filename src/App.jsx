@@ -68,6 +68,16 @@ const fmt = (n) => "$" + Number(n || 0).toFixed(2);
 const fmtHours = (h) => Number(h || 0).toFixed(2) + " hrs";
 const todayStr = () => new Date().toISOString().split("T")[0];
 const nowTime = () => { const d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+const relativeDate = (dateStr) => {
+  const today = todayStr();
+  if (dateStr === today) return "Today";
+  const d = new Date(dateStr + "T12:00:00");
+  const t = new Date(today + "T12:00:00");
+  const diff = Math.round((t - d) / 86400000);
+  if (diff === 1) return "Yesterday";
+  if (diff > 1 && diff <= 6) return diff + " days ago";
+  return formatDate(dateStr);
+};
 
 function calcHours(start, end) {
   if (!start || !end) return 0;
@@ -507,6 +517,7 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
   const [submitting, setSubmitting] = useState(false);
   const draftIdRef = useRef(draftId);
   draftIdRef.current = draftId;
+  const autoSaveAbortRef = useRef(false);
   const set = (k, v) => { setFormDirty(true); setForm(f => ({ ...f, [k]: v })); };
   const setEndFromDuration = (mins) => {
     if (!form.startTime) return;
@@ -531,11 +542,13 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
       // Need at least date to save
       if (!form.date) return;
       // Double-check submit isn't in progress (async guard)
-      if (showSubmitConfirm || submitting) return;
+      if (showSubmitConfirm || submitting || autoSaveAbortRef.current) return;
       setAutoSaveStatus("saving");
       const data = { ...form, status: STATUSES.DRAFT, userId: form.userId || currentUser.id };
       try {
         const result = await onSave(data, draftIdRef.current, true); // true = silent (don't navigate)
+        // After await: check if submit started while we were saving — if so, discard result
+        if (autoSaveAbortRef.current) { setAutoSaveStatus(""); return; }
         if (result && !draftIdRef.current) { setDraftId(result.id); draftIdRef.current = result.id; }
         setAutoSaveStatus("saved");
         setTimeout(() => setAutoSaveStatus(""), 2000);
@@ -585,10 +598,18 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
         ))}
       </div>
       <Field label="Category" required>
-        <select style={{ ...S.select, ...errStyle("category") }} value={form.category} onChange={e => set("category", e.target.value)}>
-          <option value="">Select category...</option>
-          {CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_EMOJIS[c] || "📋"} {c}</option>)}
-        </select>{errors.category && <span role="alert" style={{ color: BRAND.error, fontSize: 13 }}>{errors.category}</span>}
+        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "repeat(3, 1fr)", gap: 8 }}>
+          {CATEGORIES.map(c => {
+            const selected = form.category === c;
+            const color = catColors[c] || BRAND.navy;
+            return (
+              <button key={c} type="button" onClick={() => set("category", c)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 10, border: selected ? "2px solid " + color : "1px solid " + BRAND.borderLight, background: selected ? color + "12" : BRAND.white, cursor: "pointer", fontFamily: BRAND.sans, fontSize: 13, fontWeight: selected ? 700 : 500, color: selected ? color : BRAND.charcoal, transition: "all 150ms", textAlign: "left" }}>
+                <span style={{ fontSize: 18 }}>{CATEGORY_EMOJIS[c] || "📋"}</span>{c}
+              </button>
+            );
+          })}
+        </div>
+        {errors.category && <span role="alert" style={{ color: BRAND.error, fontSize: 13, marginTop: 4, display: "block" }}>{errors.category}</span>}
       </Field>
       <Field label="Task Description" required>
         <textarea style={{ ...S.textarea, ...errStyle("description") }} value={form.description} onChange={e => set("description", e.target.value)} placeholder="Describe the work performed..." />
@@ -650,9 +671,48 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 16 }}>
         {entry && entry.status === STATUSES.DRAFT && <button style={{ ...S.btnGhost, color: BRAND.error, fontSize: 13 }} onClick={() => setShowDeleteConfirm(true)}><Icon name="trash" size={14} /> Delete Draft</button>}
       </div>
-      <ConfirmDialog open={showSubmitConfirm} onClose={() => setShowSubmitConfirm(false)} title="Submit Entry?" message={"Submit for review? Total: " + fmt(grandTotal)} confirmText="Submit" onConfirm={() => { setSubmitting(true); onSubmit({ ...form, status: STATUSES.SUBMITTED }, draftIdRef.current); }} />
+      <ConfirmDialog open={showSubmitConfirm} onClose={() => setShowSubmitConfirm(false)} title="Submit Entry?" message={"Submit for review? Total: " + fmt(grandTotal)} confirmText="Submit" onConfirm={() => { autoSaveAbortRef.current = true; setSubmitting(true); onSubmit({ ...form, status: STATUSES.SUBMITTED }, draftIdRef.current); }} />
       <ConfirmDialog open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Delete Entry?" message="This draft will be permanently deleted." confirmText="Delete" danger onConfirm={onDelete} />
       <ConfirmDialog open={showCancelConfirm} onClose={() => setShowCancelConfirm(false)} title="Discard Changes?" message="You have unsaved changes. Are you sure you want to leave?" confirmText="Discard" danger onConfirm={onCancel} />
+    </div>
+  );
+};
+
+// Workflow Stepper — visual progress indicator
+const WORKFLOW_STEPS = [
+  { key: "Draft", label: "Draft", icon: "edit" },
+  { key: "Submitted", label: "Submitted", icon: "send" },
+  { key: "Approved", label: "Approved", icon: "check" },
+  { key: "Paid", label: "Paid", icon: "dollar" },
+];
+const WorkflowStepper = ({ status, mob }) => {
+  const rejected = status === STATUSES.REJECTED;
+  const awaitingSecond = status === STATUSES.AWAITING_SECOND;
+  const steps = rejected ? WORKFLOW_STEPS.slice(0, 2) : awaitingSecond ? [...WORKFLOW_STEPS.slice(0, 3)] : WORKFLOW_STEPS;
+  const currentIdx = rejected ? 1 : awaitingSecond ? 2 : steps.findIndex(s => s.key === status);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 24, width: "100%", overflow: "hidden" }}>
+      {steps.map((s, i) => {
+        const done = i < currentIdx;
+        const active = i === currentIdx;
+        const isRejectStep = rejected && active;
+        const isAwaitStep = awaitingSecond && active;
+        const dotColor = isRejectStep ? BRAND.error : isAwaitStep ? "#4338CA" : done ? BRAND.success : active ? BRAND.navy : BRAND.border;
+        const lineColor = done ? BRAND.success : BRAND.borderLight;
+        return (
+          <div key={s.key} style={{ display: "flex", alignItems: "center", flex: i < steps.length - 1 ? 1 : "none" }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: mob ? 48 : 64 }}>
+              <div style={{ width: mob ? 28 : 32, height: mob ? 28 : 32, borderRadius: 16, background: (done || active) ? dotColor : BRAND.bgSoft, border: "2px solid " + dotColor, display: "flex", alignItems: "center", justifyContent: "center", color: (done || active) ? "#fff" : BRAND.textLight, transition: "all 300ms" }}>
+                {isRejectStep ? <Icon name="x" size={14} /> : done ? <Icon name="check" size={14} /> : <Icon name={s.icon} size={14} />}
+              </div>
+              <span style={{ fontSize: 11, fontWeight: active ? 700 : 500, color: active ? dotColor : done ? BRAND.success : BRAND.textLight, marginTop: 4, whiteSpace: "nowrap" }}>
+                {isRejectStep ? "Rejected" : isAwaitStep ? "Awaiting 2nd" : s.label}
+              </span>
+            </div>
+            {i < steps.length - 1 && <div style={{ flex: 1, height: 2, background: lineColor, minWidth: 12, marginBottom: 18 }} />}
+          </div>
+        );
+      })}
     </div>
   );
 };
@@ -686,6 +746,7 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
   return (
     <div className="fade-in">
       <button style={{ ...S.btnGhost, marginBottom: 20, padding: "6px 0" }} onClick={onBack}><Icon name="back" size={18} /> Back to entries</button>
+      <WorkflowStepper status={entry.status} mob={mob} />
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
@@ -811,7 +872,7 @@ const EntryCard = ({entry, users, settings, onClick}) => {
         </div>
         <div style={{ textAlign: "right", marginLeft: 12 }}><div style={{ fontSize: 16, fontWeight: 700, color: BRAND.navy }}>{fmt(total)}</div></div>
       </div>
-      <div style={{ fontSize: 13, color: BRAND.textLight }}>{formatDate(entry.date)} · {fmtHours(hrs)}{u ? " · " + u.name : ""}</div>
+      <div style={{ fontSize: 13, color: BRAND.textLight }}>{relativeDate(entry.date)} · {fmtHours(hrs)}{u ? " · " + u.name : ""}</div>
     </div>
   );
 };
@@ -1425,6 +1486,9 @@ export default function App() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterMember, setFilterMember] = useState("all");
+  const [rejectingId, setRejectingId] = useState(null);
+  const [rejectNote, setRejectNote] = useState("");
+  const [toast, setToast] = useState(null); // { message, type, detail }
 
   // Sync auth errors from hook
   useEffect(() => { if (authError) setLoginError(authError); }, [authError]);
@@ -1483,11 +1547,14 @@ export default function App() {
       return created;
     }
   };
+  const showToast = (message, type, detail) => { setToast({ message, type, detail }); setTimeout(() => setToast(null), 4000); };
   const doSubmit = async (formData, draftId) => {
     const id = draftId || (editEntry ? editEntry.id : null);
     const data = { ...formData, status: STATUSES.SUBMITTED };
     await saveEntry(data, id);
+    const total = calcLabor(calcHours(formData.startTime, formData.endTime), getRate(formData.userId || currentUser.id)) + calcMaterialsTotal(formData.materials);
     setEditEntry(null); setNewEntry(false); setPage("entries");
+    showToast("Entry submitted!", "success", fmt(total) + " for " + formData.category + " — Treasurer will review shortly");
   };
   const doDelete = async () => { if (editEntry) { await deleteEntry(editEntry.id); setEditEntry(null); setPage("entries"); } };
   const doApprove = async (notes) => {
@@ -1508,8 +1575,8 @@ export default function App() {
   const doReject = async (notes) => { if (viewEntry) { const updated = await rejectEntry(viewEntry.id, notes); if (updated) setViewEntry(updated); } };
   const doMarkPaid = async (paymentDetails) => { if (viewEntry) { const updated = await markPaid(viewEntry.id, paymentDetails); if (updated) setViewEntry(updated); } };
   // Quick approve/reject from review queue (without opening detail)
-  const doApproveEntry = async (id, notes) => { await approveEntry(id, notes); };
-  const doRejectEntry = async (id, notes) => { await rejectEntry(id, notes); };
+  const doApproveEntry = async (id, notes) => { await approveEntry(id, notes); const e = entries.find(x => x.id === id); const u = users.find(x => x.id === e?.userId); showToast("Entry approved", "success", u?.name + " — " + (e?.category || "")); };
+  const doRejectEntry = async (id, notes) => { await rejectEntry(id, notes); const e = entries.find(x => x.id === id); const u = users.find(x => x.id === e?.userId); showToast("Entry returned for edits", "error", u?.name + " will be notified"); };
 
   // Dashboard stats
   const dashStats = (() => {
@@ -1605,10 +1672,18 @@ export default function App() {
   // ══════════════════════════════════════════════════════════════════════════
   const renderPage = () => {
     if (pageLoading) return <PageLoader page={pageLoading} />;
-    if (newEntry || editEntry) return (
+    if (newEntry || editEntry) {
+      // Smart defaults: pre-fill from member's most recent entry
+      const smartEntry = editEntry || (() => {
+        const userEntries = entries.filter(e => e.userId === currentUser.id).sort((a, b) => b.date.localeCompare(a.date));
+        if (userEntries.length === 0) return null;
+        const last = userEntries[0];
+        return { category: last.category, location: last.location || "", userId: currentUser.id };
+      })();
+      return (
       <div className="fade-in"><h2 style={{ ...S.h2, marginBottom: 24 }}>{editEntry ? "Edit Entry" : "New Work Entry"}</h2>
-        <div style={S.card}><EntryForm entry={editEntry} settings={settings} users={users} currentUser={currentUser} onSave={doSave} onSubmit={doSubmit} onCancel={() => { setNewEntry(false); setEditEntry(null); }} onDelete={doDelete} mob={mob} /></div></div>
-    );
+        <div style={S.card}><EntryForm entry={smartEntry} settings={settings} users={users} currentUser={currentUser} onSave={doSave} onSubmit={doSubmit} onCancel={() => { setNewEntry(false); setEditEntry(null); }} onDelete={doDelete} mob={mob} /></div></div>
+    );}
     if (viewEntry) {
       const fresh = entries.find(e => e.id === viewEntry.id) || viewEntry;
       return <EntryDetail entry={fresh} settings={settings} users={users} currentUser={currentUser} onBack={() => setViewEntry(null)} onEdit={() => { setEditEntry(fresh); setViewEntry(null); }} onApprove={doApprove} onReject={doReject} onMarkPaid={doMarkPaid} onSecondApprove={doSecondApprove} onDuplicate={(e) => { setViewEntry(null); setEditEntry(null); setNewEntry(true); setTimeout(() => setEditEntry({ ...e, id: null, status: STATUSES.DRAFT, date: todayStr(), startTime: nowTime(), endTime: "", preImages: [], postImages: [], reviewerNotes: "", reviewedAt: "", paidAt: "" }), 50); }} mob={mob} />;
@@ -1628,15 +1703,15 @@ export default function App() {
               <StatCard label="Approved" value={dashStats.approved} icon="check" accentColor={BRAND.success} />
               <StatCard label="This Month" value={fmt(dashStats.monthReimb)} icon="dollar" accentColor={BRAND.brick} />
             </>) : (<>
-              <StatCard label="This Month" value={fmt(dashStats.monthReimb)} icon="dollar" accentColor={BRAND.brick} />
-              <StatCard label="Hours This Month" value={fmtHours(dashStats.monthHours)} icon="clock" accentColor="#2563eb" />
-              <StatCard label="Pending Payout" value={fmt(dashStats.pendingPayout)} icon="alert" accentColor={BRAND.warning} />
-              <StatCard label="Year to Date" value={fmt(dashStats.ytdReimb)} icon="chart" accentColor={BRAND.success} />
+              <StatCard label="Owed to You" value={fmt(dashStats.pendingPayout)} icon="dollar" accentColor={BRAND.success} />
+              <StatCard label="Awaiting Review" value={dashStats.pending || 0} icon="clock" accentColor={BRAND.warning} />
+              <StatCard label="This Month" value={fmt(dashStats.monthReimb)} icon="chart" accentColor={BRAND.brick} />
+              <StatCard label="Year to Date" value={fmt(dashStats.ytdReimb)} icon="check" accentColor="#2563eb" />
             </>)}
           </div>
           {isTreasurer && pendingCount > 0 && (
             <div style={{ ...S.card, background: "#FFF8F0", borderColor: "#F0D4A8", borderLeft: "4px solid " + BRAND.warning, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}><Icon name="alert" size={20} /><span style={{ fontWeight: 600 }}>{pendingCount} entry(ies) awaiting your review</span></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}><Icon name="alert" size={20} /><span style={{ fontWeight: 600 }}>{pendingCount === 1 ? "1 entry" : pendingCount + " entries"} awaiting your review</span></div>
               <button style={S.btnPrimary} onClick={() => setPage("review")}>Review Now</button>
             </div>
           )}
@@ -1673,7 +1748,7 @@ export default function App() {
           {/* Rejected entries banner for members */}
           {!isTreasurer && (() => { const rejected = myEntries.filter(e => e.status === STATUSES.REJECTED); return rejected.length > 0 ? (
             <div style={{ ...S.card, background: "#FFF5F5", borderColor: "#F0BABA", borderLeft: "4px solid " + BRAND.error, display: "flex", alignItems: mob ? "flex-start" : "center", justifyContent: "space-between", flexDirection: mob ? "column" : "row", gap: 10, marginBottom: mob ? 8 : 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}><span style={{ fontSize: 20 }}>⚠️</span><div><span style={{ fontWeight: 600, display: "block", color: BRAND.error }}>{rejected.length} entry(ies) need your attention</span><span style={{ fontSize: 13, color: BRAND.textMuted }}>The Treasurer returned these with notes. Fix and resubmit.</span></div></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}><span style={{ fontSize: 20 }}>⚠️</span><div><span style={{ fontWeight: 600, display: "block", color: BRAND.error }}>{rejected.length === 1 ? "1 entry needs" : rejected.length + " entries need"} your attention</span><span style={{ fontSize: 13, color: BRAND.textMuted }}>The Treasurer returned these with notes. Fix and resubmit.</span></div></div>
               <button style={{ ...S.btnPrimary, background: BRAND.error }} onClick={() => { setFilterStatus(STATUSES.REJECTED); nav("entries"); }}>View Rejected →</button>
             </div>
           ) : null; })()}
@@ -1760,24 +1835,41 @@ export default function App() {
     );
     if (page === "review") {
       if (!isTreasurer) { nav("dashboard"); return null; }
-      const pending = entries.filter(e => e.status === STATUSES.SUBMITTED || e.status === STATUSES.AWAITING_SECOND).sort((a, b) => a.date.localeCompare(b.date));
+      const pending = entries.filter(e => e.status === STATUSES.SUBMITTED || e.status === STATUSES.AWAITING_SECOND).sort((a, b) => b.date.localeCompare(a.date));
       return (
         <div className="fade-in">
           <h2 style={{ ...S.h2, marginBottom: 8 }}>Review Queue</h2>
-          <p style={{ margin: "0 0 24px", fontSize: 14, color: BRAND.textMuted }}>{pending.length} entries pending your review</p>
-          {pending.length === 0 ? <div style={{ ...S.card, textAlign: "center", padding: 60, color: BRAND.textLight }}>All caught up! No entries to review.</div> : (
+          <p style={{ margin: "0 0 24px", fontSize: 14, color: BRAND.textMuted }}>{pending.length} {pending.length === 1 ? "entry" : "entries"} pending your review</p>
+          {pending.length === 0 ? (
+            <div style={{ ...S.card, textAlign: "center", padding: 60 }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+              <div style={{ fontWeight: 600, color: BRAND.navy, marginBottom: 8 }}>All caught up!</div>
+              <div style={{ fontSize: 14, color: BRAND.textLight, marginBottom: 16 }}>No entries waiting for review.</div>
+              <button style={S.btnGhost} onClick={() => { setFilterStatus(STATUSES.APPROVED); nav("entries"); }}>View approved entries →</button>
+            </div>
+          ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {pending.map(e => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); return (
-                <div key={e.id} style={{ ...S.card, padding: "20px 24px", transition: "box-shadow 150ms", borderLeft: "4px solid " + BRAND.brick }} onMouseEnter={ev => ev.currentTarget.style.boxShadow = "0 4px 16px rgba(31,42,56,0.08)"} onMouseLeave={ev => ev.currentTarget.style.boxShadow = "0 1px 3px rgba(31,42,56,0.04)"}>
+              {pending.map(e => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); const isRejecting = rejectingId === e.id; return (
+                <div key={e.id} style={{ ...S.card, padding: "20px 24px", transition: "box-shadow 150ms", borderLeft: "4px solid " + (e.status === STATUSES.AWAITING_SECOND ? "#4338CA" : BRAND.brick) }} onMouseEnter={ev => ev.currentTarget.style.boxShadow = "0 4px 16px rgba(31,42,56,0.08)"} onMouseLeave={ev => ev.currentTarget.style.boxShadow = "0 1px 3px rgba(31,42,56,0.04)"}>
                   <div role="button" tabIndex={0} onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), setViewEntry(e))} style={{ display: "flex", justifyContent: "space-between", cursor: "pointer" }} onClick={() => setViewEntry(e)}>
-                    <div><div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}><span style={{ fontWeight: 700, fontSize: 16, color: BRAND.navy }}>{u?.name}</span><CategoryBadge category={e.category} /></div><div style={{ fontSize: 14, color: BRAND.charcoal, marginBottom: 4 }}>{e.description}</div><div style={{ fontSize: 13, color: BRAND.textLight }}>{formatDate(e.date)} · {fmtHours(h)}</div></div>
+                    <div><div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}><span style={{ fontWeight: 700, fontSize: 16, color: BRAND.navy }}>{u?.name}</span><CategoryBadge category={e.category} />{e.status === STATUSES.AWAITING_SECOND && <span style={{ fontSize: 11, color: "#4338CA", fontWeight: 600 }}>⚖️ 2nd approval</span>}</div><div style={{ fontSize: 14, color: BRAND.charcoal, marginBottom: 4 }}>{e.description}</div><div style={{ fontSize: 13, color: BRAND.textLight }}>{relativeDate(e.date)} · {fmtHours(h)}</div></div>
                     <div style={{ textAlign: "right" }}><div style={{ fontSize: 22, fontWeight: 800, color: BRAND.brick }}>{fmt(total)}</div><div style={{ fontSize: 12, color: BRAND.textLight }}>reimbursement</div></div>
                   </div>
-                  <div style={{ display: "flex", gap: 8, marginTop: 12, paddingTop: 12, borderTop: "1px solid " + BRAND.borderLight, justifyContent: "flex-end" }}>
-                    <button style={{ ...S.btnGhost, fontSize: 13, padding: "6px 14px" }} onClick={() => setViewEntry(e)}>View Details</button>
-                    <button style={{ ...S.btnDanger, fontSize: 13, padding: "6px 14px" }} onClick={async (ev) => { ev.stopPropagation(); const note = prompt("Rejection reason:"); if (note) await doRejectEntry(e.id, note); }}><Icon name="x" size={14} /> Reject</button>
-                    <button style={{ ...S.btnSuccess, fontSize: 13, padding: "6px 14px" }} onClick={async (ev) => { ev.stopPropagation(); await doApproveEntry(e.id, ""); }}><Icon name="check" size={14} /> Approve</button>
-                  </div>
+                  {isRejecting ? (
+                    <div className="fade-in" style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid " + BRAND.borderLight }}>
+                      <textarea autoFocus style={{ ...S.textarea, minHeight: 60, marginBottom: 8 }} value={rejectNote} onChange={ev => setRejectNote(ev.target.value)} placeholder="Tell them what needs to be fixed..." />
+                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                        <button style={{ ...S.btnGhost, fontSize: 13, padding: "6px 14px" }} onClick={() => { setRejectingId(null); setRejectNote(""); }}>Cancel</button>
+                        <button style={{ ...S.btnDanger, fontSize: 13, padding: "6px 14px", opacity: !rejectNote.trim() ? 0.5 : 1 }} disabled={!rejectNote.trim()} onClick={async () => { await doRejectEntry(e.id, rejectNote); setRejectingId(null); setRejectNote(""); }}><Icon name="x" size={14} /> Send Rejection</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", gap: 8, marginTop: 12, paddingTop: 12, borderTop: "1px solid " + BRAND.borderLight, justifyContent: "flex-end" }}>
+                      <button style={{ ...S.btnGhost, fontSize: 13, padding: "6px 14px" }} onClick={() => setViewEntry(e)}>View Details</button>
+                      <button style={{ ...S.btnDanger, fontSize: 13, padding: "6px 14px" }} onClick={(ev) => { ev.stopPropagation(); setRejectingId(e.id); setRejectNote(""); }}><Icon name="x" size={14} /> Reject</button>
+                      <button style={{ ...S.btnSuccess, fontSize: 13, padding: "6px 14px" }} onClick={async (ev) => { ev.stopPropagation(); await doApproveEntry(e.id, ""); }}><Icon name="check" size={14} /> Approve</button>
+                    </div>
+                  )}
                 </div>); })}
             </div>
           )}
@@ -1857,6 +1949,16 @@ export default function App() {
             <Icon name="plus" size={24} />
           </button>
         )}
+        {/* Toast notification */}
+        {toast && (
+          <div className="fade-in" role="status" aria-live="polite" onClick={() => setToast(null)} style={{ position: "fixed", bottom: 96, left: 16, right: 16, zIndex: 50, background: toast.type === "success" ? "#065F46" : toast.type === "error" ? "#991B1B" : BRAND.navy, color: "#fff", borderRadius: 12, padding: "14px 18px", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", cursor: "pointer", display: "flex", alignItems: "flex-start", gap: 12 }}>
+            <span style={{ fontSize: 20 }}>{toast.type === "success" ? "✅" : toast.type === "error" ? "❌" : "ℹ️"}</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{toast.message}</div>
+              {toast.detail && <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>{toast.detail}</div>}
+            </div>
+          </div>
+        )}
         {/* Bottom tab bar */}
         <nav aria-label="Main navigation" style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: BRAND.white, borderTop: "1px solid " + BRAND.border, display: "flex", zIndex: 20, paddingBottom: "env(safe-area-inset-bottom)", boxShadow: "0 -2px 16px rgba(0,0,0,0.08)" }}>
           {bottomTabs.map(t => {
@@ -1925,6 +2027,15 @@ export default function App() {
         </header>
         {!online && <div role="alert" style={{ background: "#FFF3E0", borderBottom: "1px solid #FFB74D", padding: "10px 32px", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#E65100" }}><Icon name="wifiOff" size={16} /><span>You're offline. Viewing cached data — changes require an internet connection.</span></div>}
         <main id="main-content" style={S.content}>{renderPage()}</main>
+        {toast && (
+          <div className="fade-in" role="status" aria-live="polite" onClick={() => setToast(null)} style={{ position: "fixed", bottom: 24, right: 24, zIndex: 50, background: toast.type === "success" ? "#065F46" : toast.type === "error" ? "#991B1B" : BRAND.navy, color: "#fff", borderRadius: 12, padding: "14px 20px", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", cursor: "pointer", display: "flex", alignItems: "flex-start", gap: 12, maxWidth: 400 }}>
+            <span style={{ fontSize: 20 }}>{toast.type === "success" ? "✅" : toast.type === "error" ? "❌" : "ℹ️"}</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{toast.message}</div>
+              {toast.detail && <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>{toast.detail}</div>}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
