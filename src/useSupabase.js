@@ -20,6 +20,7 @@ function mapEntry(row) {
     status: row.status,
     reviewerNotes: row.reviewer_notes || "",
     reviewedAt: row.reviewed_at || "",
+    submittedAt: row.submitted_at || "",
     paidAt: row.paid_at || "",
     createdAt: row.created_at,
   };
@@ -134,8 +135,12 @@ export function useSupabase() {
       options: { data: { name, role: "Member" } },
     });
     if (error) {
-      setAuthError(error.message);
-      return { error: error.message };
+      let msg = error.message;
+      if (msg.includes("Signups not allowed") || msg.includes("not allowed")) {
+        msg = "Registration is currently disabled. Your HOA Treasurer needs to enable email signups in Supabase Dashboard → Authentication → Providers → Email.";
+      }
+      setAuthError(msg);
+      return { error: msg };
     }
     return { user: data.user };
   }, []);
@@ -156,6 +161,7 @@ export function useSupabase() {
       post_images: formData.postImages || [],
       notes: formData.notes || null,
       status: formData.status,
+      ...(formData.status === "Submitted" ? { submitted_at: new Date().toISOString() } : {}),
     };
 
     if (existingId) {

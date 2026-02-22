@@ -32,6 +32,11 @@ const CATEGORIES = [
   "Snow Removal", "Cleaning", "Vendor Coordination", "Administrative Work",
   "Emergency Repairs"
 ];
+const CATEGORY_EMOJIS = {
+  "Landscaping": "🌿", "Plumbing": "🔧", "Electrical": "⚡",
+  "General Maintenance": "🔨", "Snow Removal": "❄️", "Cleaning": "🧹",
+  "Vendor Coordination": "📞", "Administrative Work": "📝", "Emergency Repairs": "🚨",
+};
 const STATUSES = { DRAFT: "Draft", SUBMITTED: "Submitted", APPROVED: "Approved", REJECTED: "Rejected", PAID: "Paid" };
 const ROLES = { TREASURER: "Treasurer", MEMBER: "Member" };
 const DEFAULT_SETTINGS = { hoaName: "24 Mill Street", defaultHourlyRate: 40, userRates: {}, currency: "USD" };
@@ -150,6 +155,7 @@ const Icon = ({ name, size = 18, filled = false }) => {
     camera: "M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z M15 13a3 3 0 11-6 0 3 3 0 016 0z",
     back: "M10 19l-7-7m0 0l7-7m-7 7h18",
     trash: "M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16",
+    copy: "M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2v-2m-4-12h6a2 2 0 012 2v8a2 2 0 01-2 2h-6a2 2 0 01-2-2V7a2 2 0 012-2z",
     alert: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z",
     logout: "M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1",
     dollar: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
@@ -474,9 +480,18 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
   const [errors, setErrors] = useState({});
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [formDirty, setFormDirty] = useState(false);
   const [draftId, setDraftId] = useState(entry?.id || null);
   const [autoSaveStatus, setAutoSaveStatus] = useState(""); // "", "saving", "saved"
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const set = (k, v) => { setFormDirty(true); setForm(f => ({ ...f, [k]: v })); };
+  const setEndFromDuration = (mins) => {
+    if (!form.startTime) return;
+    const [h, m] = form.startTime.split(":").map(Number);
+    const total = h * 60 + m + mins;
+    const eh = Math.floor(total / 60) % 24, em = total % 60;
+    set("endTime", String(eh).padStart(2, "0") + ":" + String(em).padStart(2, "0"));
+  };
   const hours = calcHours(form.startTime, form.endTime);
   const rate = getUserRate(users, settings, form.userId);
   const laborTotal = calcLabor(hours, rate);
@@ -535,10 +550,17 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
         <Field label="Start Time" required><input type="time" style={{ ...S.input, ...errStyle("startTime") }} value={form.startTime} onChange={e => set("startTime", e.target.value)} />{errors.startTime && <span style={{ color: BRAND.error, fontSize: 12 }}>{errors.startTime}</span>}</Field>
         <Field label="End Time" required><input type="time" style={{ ...S.input, ...errStyle("endTime") }} value={form.endTime} onChange={e => set("endTime", e.target.value)} />{errors.endTime && <span style={{ color: BRAND.error, fontSize: 12 }}>{errors.endTime}</span>}</Field>
       </div>
+      {/* Quick duration buttons */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: -8, marginBottom: 16 }}>
+        <span style={{ fontSize: 12, color: BRAND.textLight, lineHeight: "28px" }}>Quick:</span>
+        {[30, 60, 90, 120, 180, 240].map(mins => (
+          <button key={mins} type="button" onClick={() => setEndFromDuration(mins)} style={{ padding: "4px 12px", borderRadius: 14, border: "1px solid " + BRAND.borderLight, background: hours > 0 && Math.round(hours * 60) === mins ? BRAND.navy : BRAND.white, color: hours > 0 && Math.round(hours * 60) === mins ? "#fff" : BRAND.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: BRAND.sans, transition: "all 150ms" }}>{mins < 60 ? mins + "m" : (mins / 60) + "hr"}</button>
+        ))}
+      </div>
       <Field label="Category" required>
         <select style={{ ...S.select, ...errStyle("category") }} value={form.category} onChange={e => set("category", e.target.value)}>
           <option value="">Select category...</option>
-          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          {CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_EMOJIS[c] || "📋"} {c}</option>)}
         </select>{errors.category && <span style={{ color: BRAND.error, fontSize: 12 }}>{errors.category}</span>}
       </Field>
       <Field label="Task Description" required>
@@ -578,7 +600,7 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
       {/* Action bar */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: mob ? 10 : 14, marginBottom: 16 }}>
         {/* Cancel */}
-        <button onClick={onCancel} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: mob ? "16px 8px" : "20px 12px", borderRadius: 14, border: "1px solid " + BRAND.border, background: BRAND.white, cursor: "pointer", transition: "all 200ms", fontFamily: BRAND.sans, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }} onMouseEnter={ev => { ev.currentTarget.style.transform = "translateY(-2px)"; ev.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.1)"; }} onMouseLeave={ev => { ev.currentTarget.style.transform = "translateY(0)"; ev.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)"; }}>
+        <button onClick={() => formDirty ? setShowCancelConfirm(true) : onCancel()} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: mob ? "16px 8px" : "20px 12px", borderRadius: 14, border: "1px solid " + BRAND.border, background: BRAND.white, cursor: "pointer", transition: "all 200ms", fontFamily: BRAND.sans, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }} onMouseEnter={ev => { ev.currentTarget.style.transform = "translateY(-2px)"; ev.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.1)"; }} onMouseLeave={ev => { ev.currentTarget.style.transform = "translateY(0)"; ev.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)"; }}>
           <div style={{ width: 44, height: 44, borderRadius: 22, background: "#F3F4F6", display: "flex", alignItems: "center", justifyContent: "center", color: "#6B7280" }}><Icon name="x" size={22} /></div>
           <span style={{ fontSize: 13, fontWeight: 600, color: "#6B7280" }}>Cancel</span>
         </button>
@@ -603,6 +625,7 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
       </div>
       <ConfirmDialog open={showSubmitConfirm} onClose={() => setShowSubmitConfirm(false)} title="Submit Entry?" message={"Submit for review? Total: " + fmt(grandTotal)} confirmText="Submit" onConfirm={() => onSubmit({ ...form, status: STATUSES.SUBMITTED }, draftId)} />
       <ConfirmDialog open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Delete Entry?" message="This draft will be permanently deleted." confirmText="Delete" danger onConfirm={onDelete} />
+      <ConfirmDialog open={showCancelConfirm} onClose={() => setShowCancelConfirm(false)} title="Discard Changes?" message="You have unsaved changes. Are you sure you want to leave?" confirmText="Discard" danger onConfirm={onCancel} />
     </div>
   );
 };
@@ -610,7 +633,7 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
 // ═══════════════════════════════════════════════════════════════════════════
 // ENTRY DETAIL
 // ═══════════════════════════════════════════════════════════════════════════
-const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onApprove, onReject, onMarkPaid, mob }) => {
+const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onApprove, onReject, onMarkPaid, onDuplicate, mob }) => {
   const [reviewNotes, setReviewNotes] = useState(entry.reviewerNotes || "");
   const [showApproveConfirm, setShowApproveConfirm] = useState(false);
   const [showRejectConfirm, setShowRejectConfirm] = useState(false);
@@ -638,6 +661,7 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
           <div style={{ fontSize: 14, color: BRAND.textMuted }}>{formatDate(entry.date)} · {formatTime(entry.startTime)} – {formatTime(entry.endTime)} · {user?.name || "Unknown"}</div>
         </div>
         {canEdit && <button style={S.btnPrimary} onClick={onEdit}><Icon name="edit" size={16} /> Edit</button>}
+        {!canEdit && <button style={S.btnSecondary} onClick={() => onDuplicate(entry)}><Icon name="copy" size={16} /> Duplicate</button>}
       </div>
       <div style={S.card}>
         <div style={S.sectionLabel}>Task Description</div>
@@ -702,11 +726,12 @@ const EntryCard = ({entry, users, settings, onClick}) => {
   const hrs = calcHours(entry.startTime, entry.endTime);
   const rate = getUserRate(users, settings, entry.userId);
   const total = calcLabor(hrs, rate) + calcMaterialsTotal(entry.materials);
+  const photoCount = (entry.preImages?.length || 0) + (entry.postImages?.length || 0);
   return (
     <div style={{ ...S.card, cursor: "pointer", padding: "14px 16px" }} onClick={onClick}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}><CategoryBadge category={entry.category} /><StatusBadge status={entry.status} /></div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}><CategoryBadge category={entry.category} /><StatusBadge status={entry.status} />{photoCount > 0 && <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, color: BRAND.textLight, background: BRAND.bgSoft, padding: "2px 8px", borderRadius: 10 }}>📷 {photoCount}</span>}</div>
           <div style={{ fontSize: 14, fontWeight: 500, color: BRAND.charcoal, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{entry.description}</div>
         </div>
         <div style={{ textAlign: "right", marginLeft: 12 }}><div style={{ fontSize: 16, fontWeight: 700, color: BRAND.navy }}>{fmt(total)}</div></div>
@@ -753,6 +778,19 @@ const ReportsPage = ({ entries, users, settings, currentUser, mob }) => {
     <div className="fade-in">
       <h2 style={{ ...S.h2, marginBottom: 24 }}>Reports</h2>
       <div style={S.card}>
+        {/* Quick date presets */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
+          <span style={{ fontSize: 12, color: BRAND.textLight, lineHeight: "30px", marginRight: 4 }}>Quick:</span>
+          {[
+            { label: "This Month", fn: () => { const d = new Date(); setDateFrom(d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-01"); setDateTo(todayStr()); } },
+            { label: "Last Month", fn: () => { const d = new Date(); d.setMonth(d.getMonth() - 1); const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"); setDateFrom(y + "-" + m + "-01"); const end = new Date(y, d.getMonth() + 1, 0); setDateTo(end.toISOString().split("T")[0]); } },
+            { label: "This Quarter", fn: () => { const d = new Date(); const q = Math.floor(d.getMonth() / 3) * 3; setDateFrom(d.getFullYear() + "-" + String(q + 1).padStart(2, "0") + "-01"); setDateTo(todayStr()); } },
+            { label: "YTD", fn: () => { setDateFrom(new Date().getFullYear() + "-01-01"); setDateTo(todayStr()); } },
+            { label: "Last Year", fn: () => { const y = new Date().getFullYear() - 1; setDateFrom(y + "-01-01"); setDateTo(y + "-12-31"); } },
+          ].map(p => (
+            <button key={p.label} onClick={() => { p.fn(); setGenerated(true); }} style={{ padding: "5px 14px", borderRadius: 14, border: "1px solid " + BRAND.borderLight, background: BRAND.white, color: BRAND.navy, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: BRAND.sans, transition: "all 150ms" }} onMouseEnter={ev => { ev.currentTarget.style.background = BRAND.navy; ev.currentTarget.style.color = "#fff"; }} onMouseLeave={ev => { ev.currentTarget.style.background = BRAND.white; ev.currentTarget.style.color = BRAND.navy; }}>{p.label}</button>
+          ))}
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : (isTreasurer ? "1fr 1fr 1fr 1fr" : "1fr 1fr 1fr"), gap: mob ? 12 : 16, marginBottom: 20 }}>
           <Field label="From"><input type="date" style={S.input} value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></Field>
           <Field label="To"><input type="date" style={S.input} value={dateTo} onChange={e => setDateTo(e.target.value)} /></Field>
@@ -858,11 +896,6 @@ const CATEGORY_COLORS = {
   "Landscaping": "#2E7D32", "Plumbing": "#1565C0", "Electrical": "#F9A825",
   "General Maintenance": "#6D4C41", "Snow Removal": "#0097A7", "Cleaning": "#7B1FA2",
   "Vendor Coordination": "#E65100", "Administrative Work": "#455A64", "Emergency Repairs": "#C62828",
-};
-const CATEGORY_EMOJIS = {
-  "Landscaping": "🌿", "Plumbing": "🔧", "Electrical": "⚡",
-  "General Maintenance": "🔨", "Snow Removal": "❄️", "Cleaning": "🧹",
-  "Vendor Coordination": "📞", "Administrative Work": "📝", "Emergency Repairs": "🚨",
 };
 const INSIGHTS_LOADING = [
   { emoji: "🏘️", text: "Surveying the neighborhood..." },
@@ -1194,6 +1227,10 @@ export default function App() {
   const [regError, setRegError] = useState("");
   const [registering, setRegistering] = useState(false);
   const [regSuccess, setRegSuccess] = useState(false);
+  const [filterSearch, setFilterSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterCategory, setFilterCategory] = useState("all");
+  const [filterMember, setFilterMember] = useState("all");
 
   // Sync auth errors from hook
   useEffect(() => { if (authError) setLoginError(authError); }, [authError]);
@@ -1262,16 +1299,22 @@ export default function App() {
   const doApprove = async (notes) => { if (viewEntry) { const updated = await approveEntry(viewEntry.id, notes); if (updated) setViewEntry(updated); } };
   const doReject = async (notes) => { if (viewEntry) { const updated = await rejectEntry(viewEntry.id, notes); if (updated) setViewEntry(updated); } };
   const doMarkPaid = async () => { if (viewEntry) { const updated = await markPaid(viewEntry.id); if (updated) setViewEntry(updated); } };
+  // Quick approve/reject from review queue (without opening detail)
+  const doApproveEntry = async (id, notes) => { await approveEntry(id, notes); };
+  const doRejectEntry = async (id, notes) => { await rejectEntry(id, notes); };
 
   // Dashboard stats
   const dashStats = (() => {
-    if (!currentUser) return { total: 0, approved: 0, pending: 0, monthReimb: 0, paid: 0 };
+    if (!currentUser) return { total: 0, approved: 0, pending: 0, monthReimb: 0, paid: 0, ytdReimb: 0, monthHours: 0, pendingPayout: 0 };
     const relevant = isTreasurer ? entries : entries.filter(e => e.userId === currentUser.id);
     const approved = relevant.filter(e => e.status === STATUSES.APPROVED || e.status === STATUSES.PAID);
     const thisMonth = approved.filter(e => e.date.startsWith(new Date().toISOString().slice(0, 7)));
-    let monthReimb = 0;
-    thisMonth.forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getRate(e.userId); monthReimb += calcLabor(h, r) + calcMaterialsTotal(e.materials); });
-    return { total: relevant.length, approved: approved.length, pending: relevant.filter(e => e.status === STATUSES.SUBMITTED).length, monthReimb, paid: relevant.filter(e => e.status === STATUSES.PAID).length };
+    const thisYear = approved.filter(e => e.date.startsWith(String(new Date().getFullYear())));
+    let monthReimb = 0, ytdReimb = 0, monthHours = 0, pendingPayout = 0;
+    thisMonth.forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getRate(e.userId); monthReimb += calcLabor(h, r) + calcMaterialsTotal(e.materials); monthHours += h; });
+    thisYear.forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getRate(e.userId); ytdReimb += calcLabor(h, r) + calcMaterialsTotal(e.materials); });
+    relevant.filter(e => e.status === STATUSES.APPROVED).forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getRate(e.userId); pendingPayout += calcLabor(h, r) + calcMaterialsTotal(e.materials); });
+    return { total: relevant.length, approved: approved.length, pending: relevant.filter(e => e.status === STATUSES.SUBMITTED).length, monthReimb, paid: relevant.filter(e => e.status === STATUSES.PAID).length, ytdReimb, monthHours, pendingPayout };
   })();
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -1360,7 +1403,7 @@ export default function App() {
     );
     if (viewEntry) {
       const fresh = entries.find(e => e.id === viewEntry.id) || viewEntry;
-      return <EntryDetail entry={fresh} settings={settings} users={users} currentUser={currentUser} onBack={() => setViewEntry(null)} onEdit={() => { setEditEntry(fresh); setViewEntry(null); }} onApprove={doApprove} onReject={doReject} onMarkPaid={doMarkPaid} mob={mob} />;
+      return <EntryDetail entry={fresh} settings={settings} users={users} currentUser={currentUser} onBack={() => setViewEntry(null)} onEdit={() => { setEditEntry(fresh); setViewEntry(null); }} onApprove={doApprove} onReject={doReject} onMarkPaid={doMarkPaid} onDuplicate={(e) => { setViewEntry(null); setEditEntry(null); setNewEntry(true); setTimeout(() => setEditEntry({ ...e, id: null, status: STATUSES.DRAFT, date: todayStr(), startTime: nowTime(), endTime: "", preImages: [], postImages: [], reviewerNotes: "", reviewedAt: "", paidAt: "" }), 50); }} mob={mob} />;
     }
     if (page === "dashboard") {
       const recent = myEntries.slice(0, 5);
@@ -1371,15 +1414,42 @@ export default function App() {
             {!mob && <button style={S.btnPrimary} onClick={() => setNewEntry(true)}><Icon name="plus" size={16} /> New Entry</button>}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "repeat(4, 1fr)", gap: mob ? 8 : 16, marginBottom: mob ? 16 : 28 }}>
-            <StatCard label={isTreasurer ? "Total Entries" : "My Entries"} value={dashStats.total} icon="file" />
-            <StatCard label="Pending Review" value={dashStats.pending} icon="clock" accentColor={BRAND.warning} />
-            <StatCard label="Approved" value={dashStats.approved} icon="check" accentColor={BRAND.success} />
-            <StatCard label="This Month" value={fmt(dashStats.monthReimb)} icon="dollar" accentColor={BRAND.brick} />
+            {isTreasurer ? (<>
+              <StatCard label="Total Entries" value={dashStats.total} icon="file" />
+              <StatCard label="Pending Review" value={dashStats.pending} icon="clock" accentColor={BRAND.warning} />
+              <StatCard label="Approved" value={dashStats.approved} icon="check" accentColor={BRAND.success} />
+              <StatCard label="This Month" value={fmt(dashStats.monthReimb)} icon="dollar" accentColor={BRAND.brick} />
+            </>) : (<>
+              <StatCard label="This Month" value={fmt(dashStats.monthReimb)} icon="dollar" accentColor={BRAND.brick} />
+              <StatCard label="Hours This Month" value={fmtHours(dashStats.monthHours)} icon="clock" accentColor="#2563eb" />
+              <StatCard label="Pending Payout" value={fmt(dashStats.pendingPayout)} icon="alert" accentColor={BRAND.warning} />
+              <StatCard label="Year to Date" value={fmt(dashStats.ytdReimb)} icon="chart" accentColor={BRAND.success} />
+            </>)}
           </div>
           {isTreasurer && pendingCount > 0 && (
             <div style={{ ...S.card, background: "#FFF8F0", borderColor: "#F0D4A8", borderLeft: "4px solid " + BRAND.warning, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}><Icon name="alert" size={20} /><span style={{ fontWeight: 600 }}>{pendingCount} entry(ies) awaiting your review</span></div>
               <button style={S.btnPrimary} onClick={() => setPage("review")}>Review Now</button>
+            </div>
+          )}
+          {/* Rejected entries banner for members */}
+          {!isTreasurer && (() => { const rejected = myEntries.filter(e => e.status === STATUSES.REJECTED); return rejected.length > 0 ? (
+            <div style={{ ...S.card, background: "#FFF5F5", borderColor: "#F0BABA", borderLeft: "4px solid " + BRAND.error, display: "flex", alignItems: mob ? "flex-start" : "center", justifyContent: "space-between", flexDirection: mob ? "column" : "row", gap: 10, marginBottom: mob ? 8 : 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}><span style={{ fontSize: 20 }}>⚠️</span><div><span style={{ fontWeight: 600, display: "block", color: BRAND.error }}>{rejected.length} entry(ies) need your attention</span><span style={{ fontSize: 13, color: BRAND.textMuted }}>The Treasurer returned these with notes. Fix and resubmit.</span></div></div>
+              <button style={{ ...S.btnPrimary, background: BRAND.error }} onClick={() => { setFilterStatus(STATUSES.REJECTED); nav("entries"); }}>View Rejected →</button>
+            </div>
+          ) : null; })()}
+          {/* Onboarding card for new members */}
+          {myEntries.length === 0 && !isTreasurer && (
+            <div style={{ ...S.card, background: "linear-gradient(135deg, #EEF2FF 0%, #F0FDF4 100%)", borderColor: "#C7D2FE", padding: mob ? 20 : 28 }}>
+              <div style={{ fontSize: 28, marginBottom: 12 }}>👋</div>
+              <div style={{ fontFamily: BRAND.serif, fontSize: 20, fontWeight: 600, color: BRAND.navy, marginBottom: 8 }}>Welcome to {settings.hoaName}!</div>
+              <div style={{ fontSize: 14, color: BRAND.charcoal, lineHeight: 1.7, marginBottom: 16 }}>Here's how reimbursement works:<br/>
+                <strong>1.</strong> Log your work — date, time, category, and what you did<br/>
+                <strong>2.</strong> Add materials and photos if applicable<br/>
+                <strong>3.</strong> Submit for review — the Treasurer will approve or request changes<br/>
+                <strong>4.</strong> Get reimbursed once approved</div>
+              <button style={S.btnPrimary} onClick={() => setNewEntry(true)}><Icon name="plus" size={16} /> Create Your First Entry</button>
             </div>
           )}
           <div style={S.card}>
@@ -1403,23 +1473,51 @@ export default function App() {
     }
     if (page === "entries") return (
       <div className="fade-in">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <h2 style={S.h2}>{isTreasurer ? "All Entries" : "My Entries"}</h2>
           {!mob && <button style={S.btnPrimary} onClick={() => setNewEntry(true)}><Icon name="plus" size={16} /> New Entry</button>}
         </div>
-        {myEntries.length === 0 ? <div style={{ ...S.card, textAlign: "center", padding: 60, color: BRAND.textLight }}>No entries yet.</div>
-        : mob ? myEntries.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} onClick={() => setViewEntry(e)} />)
-        : (
-          <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-              <thead><tr><th style={S.th}>Date</th>{isTreasurer && <th style={S.th}>Member</th>}<th style={S.th}>Category</th><th style={S.th}>Description</th><th style={{ ...S.th, textAlign: "right" }}>Hours</th><th style={{ ...S.th, textAlign: "right" }}>Total</th><th style={S.th}>Status</th></tr></thead>
-              <tbody>{myEntries.map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); return (
-                <tr key={e.id} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms" }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
-                  <td style={S.td}>{formatDate(e.date)}</td>{isTreasurer && <td style={S.td}>{u?.name}</td>}<td style={S.td}><CategoryBadge category={e.category} /></td><td style={{ ...S.td, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</td><td style={{ ...S.td, textAlign: "right" }}>{fmtHours(h)}</td><td style={{ ...S.td, textAlign: "right", fontWeight: 600 }}>{fmt(total)}</td><td style={S.td}><StatusBadge status={e.status} /></td>
-                </tr>); })}</tbody>
-            </table>
-          </div>
-        )}
+        {/* Filter bar */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16, alignItems: "center" }}>
+          <input style={{ ...S.input, width: mob ? "100%" : 200, padding: "8px 12px", fontSize: 13 }} placeholder="🔍 Search descriptions..." value={filterSearch} onChange={e => setFilterSearch(e.target.value)} />
+          <select style={{ ...S.select, width: "auto", padding: "8px 12px", fontSize: 13, minWidth: 120 }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+            <option value="all">All Statuses</option>
+            {Object.values(STATUSES).map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select style={{ ...S.select, width: "auto", padding: "8px 12px", fontSize: 13, minWidth: 130 }} value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
+            <option value="all">All Categories</option>
+            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          {isTreasurer && (
+            <select style={{ ...S.select, width: "auto", padding: "8px 12px", fontSize: 13, minWidth: 130 }} value={filterMember} onChange={e => setFilterMember(e.target.value)}>
+              <option value="all">All Members</option>
+              {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+          )}
+          {(filterSearch || filterStatus !== "all" || filterCategory !== "all" || filterMember !== "all") && (
+            <button style={{ ...S.btnGhost, fontSize: 12, padding: "6px 10px" }} onClick={() => { setFilterSearch(""); setFilterStatus("all"); setFilterCategory("all"); setFilterMember("all"); }}>Clear filters</button>
+          )}
+        </div>
+        {(() => {
+          let filtered = myEntries;
+          if (filterSearch) { const q = filterSearch.toLowerCase(); filtered = filtered.filter(e => e.description.toLowerCase().includes(q) || e.category.toLowerCase().includes(q)); }
+          if (filterStatus !== "all") filtered = filtered.filter(e => e.status === filterStatus);
+          if (filterCategory !== "all") filtered = filtered.filter(e => e.category === filterCategory);
+          if (filterMember !== "all") filtered = filtered.filter(e => e.userId === filterMember);
+          return filtered.length === 0 ? <div style={{ ...S.card, textAlign: "center", padding: 60, color: BRAND.textLight }}>{myEntries.length === 0 ? "No entries yet." : "No entries match your filters."}</div>
+          : mob ? filtered.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} onClick={() => setViewEntry(e)} />)
+          : (
+            <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                <thead><tr><th style={S.th}>Date</th>{isTreasurer && <th style={S.th}>Member</th>}<th style={S.th}>Category</th><th style={S.th}>Description</th><th style={{ ...S.th, textAlign: "right" }}>Hours</th><th style={{ ...S.th, textAlign: "right" }}>Total</th><th style={S.th}>Status</th></tr></thead>
+                <tbody>{filtered.map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); return (
+                  <tr key={e.id} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms" }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
+                    <td style={S.td}>{formatDate(e.date)}</td>{isTreasurer && <td style={S.td}>{u?.name}</td>}<td style={S.td}><CategoryBadge category={e.category} /></td><td style={{ ...S.td, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</td><td style={{ ...S.td, textAlign: "right" }}>{fmtHours(h)}</td><td style={{ ...S.td, textAlign: "right", fontWeight: 600 }}>{fmt(total)}</td><td style={S.td}><StatusBadge status={e.status} /></td>
+                  </tr>); })}</tbody>
+              </table>
+            </div>
+          );
+        })()}
       </div>
     );
     if (page === "review") {
@@ -1432,10 +1530,15 @@ export default function App() {
           {pending.length === 0 ? <div style={{ ...S.card, textAlign: "center", padding: 60, color: BRAND.textLight }}>All caught up! No entries to review.</div> : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {pending.map(e => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); return (
-                <div key={e.id} style={{ ...S.card, cursor: "pointer", padding: "20px 24px", transition: "box-shadow 150ms", borderLeft: "4px solid " + BRAND.brick }} onClick={() => setViewEntry(e)} onMouseEnter={ev => ev.currentTarget.style.boxShadow = "0 4px 16px rgba(31,42,56,0.08)"} onMouseLeave={ev => ev.currentTarget.style.boxShadow = "0 1px 3px rgba(31,42,56,0.04)"}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <div key={e.id} style={{ ...S.card, padding: "20px 24px", transition: "box-shadow 150ms", borderLeft: "4px solid " + BRAND.brick }} onMouseEnter={ev => ev.currentTarget.style.boxShadow = "0 4px 16px rgba(31,42,56,0.08)"} onMouseLeave={ev => ev.currentTarget.style.boxShadow = "0 1px 3px rgba(31,42,56,0.04)"}>
+                  <div style={{ display: "flex", justifyContent: "space-between", cursor: "pointer" }} onClick={() => setViewEntry(e)}>
                     <div><div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}><span style={{ fontWeight: 700, fontSize: 16, color: BRAND.navy }}>{u?.name}</span><CategoryBadge category={e.category} /></div><div style={{ fontSize: 14, color: BRAND.charcoal, marginBottom: 4 }}>{e.description}</div><div style={{ fontSize: 13, color: BRAND.textLight }}>{formatDate(e.date)} · {fmtHours(h)}</div></div>
                     <div style={{ textAlign: "right" }}><div style={{ fontSize: 22, fontWeight: 800, color: BRAND.brick }}>{fmt(total)}</div><div style={{ fontSize: 12, color: BRAND.textLight }}>reimbursement</div></div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginTop: 12, paddingTop: 12, borderTop: "1px solid " + BRAND.borderLight, justifyContent: "flex-end" }}>
+                    <button style={{ ...S.btnGhost, fontSize: 13, padding: "6px 14px" }} onClick={() => setViewEntry(e)}>View Details</button>
+                    <button style={{ ...S.btnDanger, fontSize: 13, padding: "6px 14px" }} onClick={async (ev) => { ev.stopPropagation(); const note = prompt("Rejection reason:"); if (note) await doRejectEntry(e.id, note); }}><Icon name="x" size={14} /> Reject</button>
+                    <button style={{ ...S.btnSuccess, fontSize: 13, padding: "6px 14px" }} onClick={async (ev) => { ev.stopPropagation(); await doApproveEntry(e.id, ""); }}><Icon name="check" size={14} /> Approve</button>
                   </div>
                 </div>); })}
             </div>
