@@ -37,7 +37,7 @@ const CATEGORY_EMOJIS = {
   "General Maintenance": "🔨", "Snow Removal": "❄️", "Cleaning": "🧹",
   "Vendor Coordination": "📞", "Administrative Work": "📝", "Emergency Repairs": "🚨",
 };
-const STATUSES = { DRAFT: "Draft", SUBMITTED: "Submitted", APPROVED: "Approved", AWAITING_SECOND: "Awaiting 2nd Approval", REJECTED: "Rejected", PAID: "Paid", TRASH: "Trash" };
+const STATUSES = { DRAFT: "Draft", SUBMITTED: "Submitted", APPROVED: "Approved", AWAITING_SECOND: "Awaiting 2nd Approval", REJECTED: "Rejected", NEEDS_INFO: "Needs Info", PAID: "Paid", TRASH: "Trash" };
 const ROLES = { TREASURER: "Treasurer", MEMBER: "Member" };
 const DEFAULT_SETTINGS = { hoaName: "24 Mill Street", defaultHourlyRate: 40, userRates: {}, currency: "USD" };
 const MOBILE_BP = 768;
@@ -196,16 +196,18 @@ const StatusBadge = ({ status }) => {
     Trash: { bg: "#FFF1F1", text: "#7f1d1d", border: "#FCA5A520" },
     Approved: { bg: "#E8F0E6", text: BRAND.green, border: "#B5CCAE" },
     "Awaiting 2nd Approval": { bg: "#EEF2FF", text: "#4338CA", border: "#C7D2FE" },
-    Rejected: { bg: "#FDEAEA", text: BRAND.error, border: "#F0BABA" },
-    Paid: { bg: "#E8EDF5", text: "#3B5998", border: "#B8C8E0" },
+    Rejected:             { bg: "#FDEAEA", text: BRAND.error,   border: "#F0BABA" },
+    "Needs Info":         { bg: "#FFF7ED", text: "#C2410C",     border: "#FED7AA" },
+    Paid:                 { bg: "#E8EDF5", text: "#3B5998",     border: "#B8C8E0" },
   };
   const c = map[status] || map.Draft;
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, fontFamily: BRAND.sans, background: c.bg, color: c.text, border: "1px solid " + c.border, letterSpacing: "0.02em" }}>
-      {status === "Approved" && <Icon name="check" size={12} />}
-      {status === "Paid" && <Icon name="dollar" size={12} />}
-      {status === "Rejected" && <Icon name="x" size={12} />}
-      {status === "Submitted" && <Icon name="clock" size={12} />}
+      {status === "Approved"   && <Icon name="check" size={12} />}
+      {status === "Paid"       && <Icon name="dollar" size={12} />}
+      {status === "Rejected"   && <Icon name="x" size={12} />}
+      {status === "Submitted"  && <Icon name="clock" size={12} />}
+      {status === "Needs Info" && <span style={{ fontSize: 11 }}>💬</span>}
       {status}
     </span>
   );
@@ -790,8 +792,8 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
   const laborTotal = calcLabor(hours, rate);
   const matTotal = calcMaterialsTotal(entry.materials);
   const grandTotal = laborTotal + matTotal;
-  const canEdit = (entry.userId === currentUser.id || isTreasurer) && [STATUSES.DRAFT, STATUSES.REJECTED].includes(entry.status);
-  const canReview = isTreasurer && [STATUSES.SUBMITTED, STATUSES.AWAITING_SECOND].includes(entry.status);
+  const canEdit = (entry.userId === currentUser.id || isTreasurer) && [STATUSES.DRAFT, STATUSES.REJECTED, STATUSES.NEEDS_INFO].includes(entry.status);
+  const canReview = isTreasurer && [STATUSES.SUBMITTED, STATUSES.AWAITING_SECOND, STATUSES.NEEDS_INFO].includes(entry.status);
   const canMarkPaid = isTreasurer && entry.status === STATUSES.APPROVED;
   const needsSecondApproval = entry.status === STATUSES.AWAITING_SECOND;
   const canSecondApprove = isTreasurer && needsSecondApproval;
@@ -851,9 +853,20 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
       </div>
       {/* Reviewer notes — shown to member (read-only) when set */}
       {!isTreasurer && entry.reviewerNotes && (
-        <div style={{ ...S.card, borderColor: entry.status === STATUSES.REJECTED ? "#F0BABA" : BRAND.borderLight, borderLeft: "4px solid " + (entry.status === STATUSES.REJECTED ? BRAND.brick : BRAND.success) }}>
-          <div style={S.sectionLabel}>Reviewer Notes</div>
-          <div style={{ padding: 14, background: BRAND.bgSoft, borderRadius: 6, fontSize: 14 }}>{entry.reviewerNotes}</div>
+        <div style={{ ...S.card,
+          borderColor: entry.status === STATUSES.NEEDS_INFO ? "#FED7AA" : entry.status === STATUSES.REJECTED ? "#F0BABA" : BRAND.borderLight,
+          borderLeft: "4px solid " + (entry.status === STATUSES.NEEDS_INFO ? "#C2410C" : entry.status === STATUSES.REJECTED ? BRAND.brick : BRAND.success),
+          background: entry.status === STATUSES.NEEDS_INFO ? "#FFF7ED" : BRAND.white
+        }}>
+          <div style={{ ...S.sectionLabel, color: entry.status === STATUSES.NEEDS_INFO ? "#C2410C" : BRAND.textMuted }}>
+            {entry.status === STATUSES.NEEDS_INFO ? "💬 Additional info requested" : "Reviewer Notes"}
+          </div>
+          <div style={{ padding: 14, background: entry.status === STATUSES.NEEDS_INFO ? "#FFF7ED" : BRAND.bgSoft, borderRadius: 6, fontSize: 14 }}>{entry.reviewerNotes}</div>
+          {entry.status === STATUSES.NEEDS_INFO && (
+            <div style={{ marginTop: 8, fontSize: 13, color: "#9A3412", fontWeight: 600, padding: "0 14px 14px" }}>
+              ↑ Add the requested details, then re-submit.
+            </div>
+          )}
         </div>
       )}
       {/* ── Treasurer Action Bar ── */}
@@ -2145,11 +2158,29 @@ export default function App() {
     currentUser, users, entries, settings, loading, authError,
     login, logout: sbLogout, register, resetPassword, changePassword,
     saveEntry, deleteEntry, trashEntry, restoreEntry, approveEntry, firstApprove, secondApprove, rejectEntry, markPaid,
+    needsInfoEntry, bulkApprove,
     saveSettings, addUser, removeUser, updateUserRate,
     setAuthError, fetchCommunityStats, refresh,
   } = useSupabase();
 
   const [page, setPage] = useState("dashboard");
+  // Undo stack — last action that can be reversed
+  const [undoStack, setUndoStack] = useState([]); // [{label, action, timeout}]
+  const pushUndo = (label, undoFn) => {
+    // Clear previous undo if any
+    setUndoStack(prev => {
+      prev.forEach(u => clearTimeout(u.timeout));
+      const tid = setTimeout(() => setUndoStack(p => p.filter(u => u.label !== label)), 6000);
+      return [{ label, undoFn, timeout: tid }];
+    });
+  };
+  const popUndo = async () => {
+    const [top, ...rest] = undoStack;
+    if (!top) return;
+    clearTimeout(top.timeout);
+    setUndoStack(rest);
+    await top.undoFn();
+  };
   const [viewEntry, setViewEntry] = useState(null);
   const [editEntry, setEditEntry] = useState(null);
   const [newEntry, setNewEntry] = useState(false);
@@ -2192,13 +2223,19 @@ export default function App() {
   const [filterSearch, setFilterSearch] = useState("");
   const [permDeleteTarget, setPermDeleteTarget] = useState(null); // for trash permanent delete confirm
   const [cachedInsightsStats, setCachedInsightsStats] = useState(null); // cache between tab visits
+  const [selectedIds, setSelectedIds] = useState(new Set()); // bulk selection in review queue
+  const [moreSheetOpen, setMoreSheetOpen] = useState(false); // mobile "More" bottom sheet
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterMember, setFilterMember] = useState("all");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
+  const [sortField, setSortField] = useState("date");   // date | member | category | total | status | hours
+  const [sortDir, setSortDir] = useState("desc");       // asc | desc
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectNote, setRejectNote] = useState("");
+  const [needsInfoId, setNeedsInfoId] = useState(null);
+  const [needsInfoNote, setNeedsInfoNote] = useState("");
   const [toast, setToast] = useState(null); // { message, type, detail }
   const [previewAsId, setPreviewAsId] = useState(null); // non-null = Treasurer previewing as a member
 
@@ -2218,7 +2255,7 @@ export default function App() {
   const myEntries = useMemo(() =>
     entries.filter(e => isTreasurer || e.userId === viewAs?.id).sort((a, b) => b.date.localeCompare(a.date)),
   [entries, isTreasurer, viewAs?.id]);
-  const pendingCount = entries.filter(e => e.status === STATUSES.SUBMITTED || e.status === STATUSES.AWAITING_SECOND).length;
+  const pendingCount = entries.filter(e => e.status === STATUSES.SUBMITTED || e.status === STATUSES.AWAITING_SECOND || e.status === STATUSES.NEEDS_INFO).length;
 
   // Helper: get rate for a user
   const getRate = (userId) => getUserRate(users, settings, userId);
@@ -2386,6 +2423,12 @@ export default function App() {
   // Quick approve/reject from review queue (without opening detail)
   const doApproveEntry = async (id, notes) => { await approveEntry(id, notes); const e = entries.find(x => x.id === id); const u = users.find(x => x.id === e?.userId); showToast("Entry approved", "success", u?.name + " — " + (e?.category || "")); };
   const doRejectEntry = async (id, notes) => { await rejectEntry(id, notes); const e = entries.find(x => x.id === id); const u = users.find(x => x.id === e?.userId); showToast("Entry returned for edits", "error", u?.name + " will be notified"); };
+  const doNeedsInfo = async (id, notes) => { await needsInfoEntry(id, notes); const e = entries.find(x => x.id === id); const u = users.find(x => x.id === e?.userId); showToast("Needs Info requested", "info", u?.name + " will be notified to add details"); };
+  const doBulkApprove = async (ids) => {
+    const results = await bulkApprove(ids);
+    showToast(results.length + " " + (results.length === 1 ? "entry" : "entries") + " approved", "success", "");
+    return results;
+  };
 
   // Dashboard stats — memoized so it only recalculates when entries/users/settings change
   const dashStats = useMemo(() => {
@@ -2517,7 +2560,7 @@ export default function App() {
     { id: "dashboard", label: "Home", icon: "home", iconFilled: "homeFilled", color: "#2E7D32", tint: "#2E7D3218" },
     { id: "entries", label: "Entries", icon: "clipboard", iconFilled: "clipboardFilled", color: "#1565C0", tint: "#1565C018" },
     { id: "review", label: "Review", icon: "shieldCheck", iconFilled: "shieldCheckFilled", color: BRAND.brick, tint: BRAND.brick + "18", badge: pendingCount },
-    { id: "trash", label: "Trash", icon: "trash", iconFilled: "trash", color: "#7f1d1d", tint: "#7f1d1d18", badge: trashCount || 0 },
+    { id: "__more__", label: "More", icon: "settings", iconFilled: "settings", color: BRAND.navy, tint: BRAND.navy + "18", badge: trashCount || 0 },
   ] : [
     { id: "dashboard", label: "Home", icon: "home", iconFilled: "homeFilled", color: "#2E7D32", tint: "#2E7D3218" },
     { id: "entries", label: "Entries", icon: "clipboard", iconFilled: "clipboardFilled", color: "#1565C0", tint: "#1565C018" },
@@ -2747,8 +2790,48 @@ export default function App() {
           : (
             <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-                <thead><tr><th scope="col" style={S.th}>Date</th>{isTreasurer && <th scope="col" style={S.th}>Member</th>}<th scope="col" style={S.th}>Category</th><th scope="col" style={S.th}>Description</th><th scope="col" style={{ ...S.th, textAlign: "right" }}>Hours</th><th scope="col" style={{ ...S.th, textAlign: "right" }}>Total</th><th scope="col" style={S.th}>Status</th></tr></thead>
-                <tbody>{filtered.map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); return (
+                <thead><tr>
+                  {[
+                    { key: "date",     label: "Date",        align: "left" },
+                    ...(isTreasurer ? [{ key: "member", label: "Member", align: "left" }] : []),
+                    { key: "category", label: "Category",    align: "left" },
+                    { key: "desc",     label: "Description", align: "left", noSort: true },
+                    { key: "hours",    label: "Hours",       align: "right" },
+                    { key: "total",    label: "Total",       align: "right" },
+                    { key: "status",   label: "Status",      align: "left" },
+                  ].map(col => (
+                    <th key={col.key} scope="col" style={{ ...S.th, textAlign: col.align, cursor: col.noSort ? "default" : "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+                      onClick={col.noSort ? undefined : () => { if (sortField === col.key) setSortDir(d => d === "asc" ? "desc" : "asc"); else { setSortField(col.key); setSortDir("asc"); } }}>
+                      {col.label}
+                      {!col.noSort && (
+                        <span style={{ marginLeft: 4, opacity: sortField === col.key ? 1 : 0.3, fontSize: 11 }}>
+                          {sortField === col.key ? (sortDir === "asc" ? "▲" : "▼") : "⇅"}
+                        </span>
+                      )}
+                    </th>
+                  ))}
+                </tr></thead>
+                <tbody>{(() => {
+                  const sorted = [...filtered].sort((a, b) => {
+                    const ua = users.find(u => u.id === a.userId);
+                    const ub = users.find(u => u.id === b.userId);
+                    const ha = calcHours(a.startTime, a.endTime);
+                    const hb = calcHours(b.startTime, b.endTime);
+                    const ra = getUserRate(users, settings, a.userId);
+                    const rb = getUserRate(users, settings, b.userId);
+                    const ta = calcLabor(ha, ra) + calcMaterialsTotal(a.materials);
+                    const tb = calcLabor(hb, rb) + calcMaterialsTotal(b.materials);
+                    let cmp = 0;
+                    if (sortField === "date")     cmp = a.date.localeCompare(b.date);
+                    else if (sortField === "member")   cmp = (ua?.name || "").localeCompare(ub?.name || "");
+                    else if (sortField === "category") cmp = a.category.localeCompare(b.category);
+                    else if (sortField === "hours")    cmp = ha - hb;
+                    else if (sortField === "total")    cmp = ta - tb;
+                    else if (sortField === "status")   cmp = a.status.localeCompare(b.status);
+                    return sortDir === "asc" ? cmp : -cmp;
+                  });
+                  return sorted;
+                })().map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); return (
                   <tr key={e.id} tabIndex={0} role="row" onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), setViewEntry(e))} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms" }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
                     <td style={S.td}>{formatDate(e.date)}</td>{isTreasurer && <td style={S.td}>{u?.name}</td>}<td style={S.td}><CategoryBadge category={e.category} /></td><td style={{ ...S.td, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</td><td style={{ ...S.td, textAlign: "right" }}>{fmtHours(h)}</td><td style={{ ...S.td, textAlign: "right", fontWeight: 600 }}>{fmt(total)}</td><td style={S.td}><StatusBadge status={e.status} /></td>
                   </tr>); })}</tbody>
@@ -2760,11 +2843,56 @@ export default function App() {
     );
     if (page === "review") {
       if (!isTreasurer || previewAsId) { nav("dashboard"); return null; }
-      const pending = entries.filter(e => e.status === STATUSES.SUBMITTED || e.status === STATUSES.AWAITING_SECOND).sort((a, b) => b.date.localeCompare(a.date));
+      const pending = entries.filter(e => e.status === STATUSES.SUBMITTED || e.status === STATUSES.AWAITING_SECOND || e.status === STATUSES.NEEDS_INFO).sort((a, b) => b.date.localeCompare(a.date));
+      // Only first-approval entries are bulk-selectable (not dual-approval ones)
+      const bulkEligible = pending.filter(e => e.status === STATUSES.SUBMITTED);
+      const allSelected = bulkEligible.length > 0 && bulkEligible.every(e => selectedIds.has(e.id));
+      const someSelected = selectedIds.size > 0;
+      const bulkTotal = [...selectedIds].reduce((acc, id) => {
+        const e = entries.find(x => x.id === id);
+        if (!e) return acc;
+        const h = calcHours(e.startTime, e.endTime);
+        const r = getUserRate(users, settings, e.userId);
+        return acc + calcLabor(h, r) + calcMaterialsTotal(e.materials);
+      }, 0);
       return (
         <div className="fade-in">
-          <h2 style={{ ...S.h2, marginBottom: 8 }}>Review Queue</h2>
-          <p style={{ margin: "0 0 24px", fontSize: 14, color: BRAND.textMuted }}>{pending.length} {pending.length === 1 ? "entry" : "entries"} pending your review</p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <h2 style={{ ...S.h2, marginBottom: 4 }}>Review Queue</h2>
+              <p style={{ margin: 0, fontSize: 14, color: BRAND.textMuted }}>{pending.length} {pending.length === 1 ? "entry" : "entries"} pending your review</p>
+            </div>
+            {pending.length > 0 && (
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                {bulkEligible.length > 1 && (
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: BRAND.textMuted, cursor: "pointer", userSelect: "none" }}>
+                    <input type="checkbox" checked={allSelected} onChange={() => {
+                      if (allSelected) setSelectedIds(new Set());
+                      else setSelectedIds(new Set(bulkEligible.map(e => e.id)));
+                    }} style={{ width: 16, height: 16, accentColor: BRAND.navy, cursor: "pointer" }} />
+                    Select all ({bulkEligible.length})
+                  </label>
+                )}
+                {someSelected && (
+                  <button
+                    style={{ ...S.btnSuccess, fontSize: 13, padding: "8px 16px", gap: 6 }}
+                    onClick={async () => {
+                      const ids = [...selectedIds];
+                      setSelectedIds(new Set());
+                      await doBulkApprove(ids);
+                      pushUndo("Approved " + ids.length + " entries", async () => {
+                        // Undo: reject each back to Submitted with note
+                        for (const id of ids) await rejectEntry(id, "Undone — moved back to Submitted for re-review");
+                        showToast("Bulk approve undone", "info");
+                      });
+                    }}
+                  >
+                    <Icon name="check" size={14} /> Approve {selectedIds.size} selected · {fmt(bulkTotal)}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
           {pending.length === 0 ? (
             <div style={{ ...S.card, textAlign: "center", padding: 60 }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
@@ -2774,28 +2902,69 @@ export default function App() {
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {pending.map(e => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); const isRejecting = rejectingId === e.id; return (
-                <div key={e.id} style={{ ...S.card, padding: "20px 24px", transition: "box-shadow 150ms", borderLeft: "4px solid " + (e.status === STATUSES.AWAITING_SECOND ? "#4338CA" : BRAND.brick) }} onMouseEnter={ev => ev.currentTarget.style.boxShadow = "0 4px 16px rgba(31,42,56,0.08)"} onMouseLeave={ev => ev.currentTarget.style.boxShadow = "0 1px 3px rgba(31,42,56,0.04)"}>
-                  <div role="button" tabIndex={0} onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), setViewEntry(e))} style={{ display: "flex", justifyContent: "space-between", cursor: "pointer" }} onClick={() => setViewEntry(e)}>
-                    <div><div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}><span style={{ fontWeight: 700, fontSize: 16, color: BRAND.navy }}>{u?.name}</span><CategoryBadge category={e.category} />{e.status === STATUSES.AWAITING_SECOND && <span style={{ fontSize: 11, color: "#4338CA", fontWeight: 600 }}>⚖️ 2nd approval</span>}</div><div style={{ fontSize: 14, color: BRAND.charcoal, marginBottom: 4 }}>{e.description}</div><div style={{ fontSize: 13, color: BRAND.textLight }}>{relativeDate(e.date)} · {fmtHours(h)}</div></div>
-                    <div style={{ textAlign: "right" }}><div style={{ fontSize: 22, fontWeight: 800, color: BRAND.brick }}>{fmt(total)}</div><div style={{ fontSize: 12, color: BRAND.textLight }}>reimbursement</div></div>
+              {pending.map(e => {
+                const u = users.find(u => u.id === e.userId);
+                const h = calcHours(e.startTime, e.endTime);
+                const r = getUserRate(users, settings, e.userId);
+                const total = calcLabor(h, r) + calcMaterialsTotal(e.materials);
+                const isRejecting = rejectingId === e.id;
+                const isNeedsInfo = needsInfoId === e.id;
+                const isSelected = selectedIds.has(e.id);
+                const isBulkEligible = e.status === STATUSES.SUBMITTED;
+                const submittedAgo = e.submittedAt ? timeAgo(e.submittedAt) : null;
+                return (
+                <div key={e.id} style={{ ...S.card, padding: "20px 24px", transition: "box-shadow 150ms, border-color 150ms", borderLeft: "4px solid " + (isSelected ? BRAND.navy : e.status === STATUSES.AWAITING_SECOND ? "#4338CA" : BRAND.brick), outline: isSelected ? "2px solid " + BRAND.navy + "30" : "none" }} onMouseEnter={ev => ev.currentTarget.style.boxShadow = "0 4px 16px rgba(31,42,56,0.08)"} onMouseLeave={ev => ev.currentTarget.style.boxShadow = "0 1px 3px rgba(31,42,56,0.04)"}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                    {isBulkEligible && (
+                      <div style={{ paddingTop: 4, flexShrink: 0 }}>
+                        <input type="checkbox" checked={isSelected} onChange={() => {
+                          setSelectedIds(prev => { const s = new Set(prev); if (s.has(e.id)) s.delete(e.id); else s.add(e.id); return s; });
+                        }} style={{ width: 16, height: 16, accentColor: BRAND.navy, cursor: "pointer" }} />
+                      </div>
+                    )}
+                    <div role="button" tabIndex={0} onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), setViewEntry(e))} style={{ flex: 1, cursor: "pointer", minWidth: 0 }} onClick={() => setViewEntry(e)}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+                        <span style={{ fontWeight: 700, fontSize: 16, color: BRAND.navy }}>{u?.name}</span>
+                        <CategoryBadge category={e.category} />
+                        {e.status === STATUSES.AWAITING_SECOND && <span style={{ fontSize: 11, color: "#4338CA", fontWeight: 600 }}>⚖️ 2nd approval</span>}
+                        {submittedAgo && <span style={{ fontSize: 11, color: BRAND.textLight }}>submitted {submittedAgo}</span>}
+                      </div>
+                      <div style={{ fontSize: 14, color: BRAND.charcoal, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</div>
+                      <div style={{ fontSize: 13, color: BRAND.textLight }}>{relativeDate(e.date)} · {fmtHours(h)}</div>
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: BRAND.brick }}>{fmt(total)}</div>
+                      <div style={{ fontSize: 12, color: BRAND.textLight }}>reimbursement</div>
+                    </div>
                   </div>
                   {isRejecting ? (
                     <div className="fade-in" style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid " + BRAND.borderLight }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.charcoal, marginBottom: 6 }}>Rejection reason <span style={{ color: BRAND.error }}>*</span></div>
                       <textarea autoFocus style={{ ...S.textarea, minHeight: 60, marginBottom: 8 }} value={rejectNote} onChange={ev => setRejectNote(ev.target.value)} placeholder="Tell them what needs to be fixed..." />
                       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                         <button style={{ ...S.btnGhost, fontSize: 13, padding: "6px 14px" }} onClick={() => { setRejectingId(null); setRejectNote(""); }}>Cancel</button>
-                        <button style={{ ...S.btnDanger, fontSize: 13, padding: "6px 14px", opacity: !rejectNote.trim() ? 0.5 : 1 }} disabled={!rejectNote.trim()} onClick={async () => { await doRejectEntry(e.id, rejectNote); setRejectingId(null); setRejectNote(""); }}><Icon name="x" size={14} /> Send Rejection</button>
+                        <button style={{ ...S.btnDanger, fontSize: 13, padding: "6px 14px", opacity: !rejectNote.trim() ? 0.5 : 1 }} disabled={!rejectNote.trim()} onClick={async () => { await doRejectEntry(e.id, rejectNote); pushUndo("Rejection sent", async () => { await restoreEntry(e.id, "Submitted"); showToast("Rejection undone — restored to queue", "info"); }); setRejectingId(null); setRejectNote(""); }}><Icon name="x" size={14} /> Send Rejection</button>
+                      </div>
+                    </div>
+                  ) : isNeedsInfo ? (
+                    <div className="fade-in" style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid " + BRAND.borderLight }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.charcoal, marginBottom: 6 }}>What information do you need? <span style={{ color: BRAND.error }}>*</span></div>
+                      <textarea autoFocus style={{ ...S.textarea, minHeight: 60, marginBottom: 8 }} value={needsInfoNote} onChange={ev => setNeedsInfoNote(ev.target.value)} placeholder="e.g. Please attach the receipt for materials..." />
+                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                        <button style={{ ...S.btnGhost, fontSize: 13, padding: "6px 14px" }} onClick={() => { setNeedsInfoId(null); setNeedsInfoNote(""); }}>Cancel</button>
+                        <button style={{ ...S.btnSecondary, fontSize: 13, padding: "6px 14px", opacity: !needsInfoNote.trim() ? 0.5 : 1 }} disabled={!needsInfoNote.trim()} onClick={async () => { await doNeedsInfo(e.id, needsInfoNote); setNeedsInfoId(null); setNeedsInfoNote(""); }}>💬 Request Info</button>
                       </div>
                     </div>
                   ) : (
-                    <div style={{ display: "flex", gap: 8, marginTop: 12, paddingTop: 12, borderTop: "1px solid " + BRAND.borderLight, justifyContent: "flex-end" }}>
+                    <div style={{ display: "flex", gap: 8, marginTop: 12, paddingTop: 12, borderTop: "1px solid " + BRAND.borderLight, justifyContent: "flex-end", flexWrap: "wrap" }}>
                       <button style={{ ...S.btnGhost, fontSize: 13, padding: "6px 14px" }} onClick={() => setViewEntry(e)}>View Details</button>
+                      <button style={{ ...S.btnGhost, fontSize: 13, padding: "6px 14px", color: "#0284c7", borderColor: "#0284c7" + "40" }} onClick={(ev) => { ev.stopPropagation(); setNeedsInfoId(e.id); setNeedsInfoNote(""); }}>💬 Needs Info</button>
                       <button style={{ ...S.btnDanger, fontSize: 13, padding: "6px 14px" }} onClick={(ev) => { ev.stopPropagation(); setRejectingId(e.id); setRejectNote(""); }}><Icon name="x" size={14} /> Reject</button>
-                      <button style={{ ...S.btnSuccess, fontSize: 13, padding: "6px 14px" }} onClick={async (ev) => { ev.stopPropagation(); await doApproveEntry(e.id, ""); }}><Icon name="check" size={14} /> Approve</button>
+                      <button style={{ ...S.btnSuccess, fontSize: 13, padding: "6px 14px" }} onClick={async (ev) => { ev.stopPropagation(); await doApproveEntry(e.id, ""); pushUndo("Approved: " + (u?.name || ""), async () => { await rejectEntry(e.id, "Undone — returned for re-review"); showToast("Approval undone", "info"); }); }}><Icon name="check" size={14} /> Approve</button>
                     </div>
                   )}
-                </div>); })}
+                </div>);
+              })}
             </div>
           )}
         </div>
@@ -3018,15 +3187,48 @@ export default function App() {
             <Icon name="plus" size={24} />
           </button>
         )}
+        {/* More bottom sheet */}
+        {moreSheetOpen && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 80 }} onClick={() => setMoreSheetOpen(false)}>
+            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: BRAND.white, borderRadius: "20px 20px 0 0", padding: "0 0 calc(env(safe-area-inset-bottom) + 16px)", boxShadow: "0 -8px 40px rgba(0,0,0,0.18)" }} onClick={e => e.stopPropagation()}>
+              <div style={{ width: 40, height: 4, background: BRAND.borderLight, borderRadius: 2, margin: "12px auto 16px" }} />
+              <div style={{ padding: "0 20px", marginBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: BRAND.textLight, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>Treasurer Tools</div>
+                {[
+                  { id: "reports",  label: "Reports",            emoji: "📊", desc: "PDF/CSV export" },
+                  { id: "insights", label: "Community Insights",  emoji: "✨", desc: "Spending trends" },
+                  { id: "settings", label: "Settings",            emoji: "⚙️",  desc: "HOA name, rates, members" },
+                  { id: "trash",    label: "Trash",               emoji: "🗑",  desc: trashCount > 0 ? trashCount + " item" + (trashCount > 1 ? "s" : "") : "Empty", badge: trashCount || 0 },
+                ].map(item => (
+                  <button key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, width: "100%", padding: "14px 16px", borderRadius: 12, border: "none", background: "none", cursor: "pointer", fontFamily: BRAND.sans, marginBottom: 4, textAlign: "left" }}
+                    onMouseEnter={ev => ev.currentTarget.style.background = BRAND.bgSoft}
+                    onMouseLeave={ev => ev.currentTarget.style.background = "none"}
+                    onClick={() => { setMoreSheetOpen(false); nav(item.id); }}>
+                    <span style={{ fontSize: 28, width: 36, textAlign: "center" }}>{item.emoji}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: BRAND.charcoal }}>{item.label}</div>
+                      <div style={{ fontSize: 12, color: BRAND.textLight }}>{item.desc}</div>
+                    </div>
+                    {item.badge > 0 && <span style={{ background: BRAND.brick, color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>{item.badge}</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
         <ChangePasswordModal />
         {/* Toast notification */}
         {toast && (
-          <div className="fade-in" role="status" aria-live="polite" onClick={() => setToast(null)} style={{ position: "fixed", bottom: 96, left: 16, right: 16, zIndex: 50, background: toast.type === "success" ? "#065F46" : toast.type === "error" ? "#991B1B" : BRAND.navy, color: "#fff", borderRadius: 12, padding: "14px 18px", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", cursor: "pointer", display: "flex", alignItems: "flex-start", gap: 12 }}>
+          <div className="fade-in" role="status" aria-live="polite" style={{ position: "fixed", bottom: 96, left: 16, right: 16, zIndex: 50, background: toast.type === "success" ? "#065F46" : toast.type === "error" ? "#991B1B" : BRAND.navy, color: "#fff", borderRadius: 12, padding: "14px 18px", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", display: "flex", alignItems: "flex-start", gap: 12 }}>
             <span style={{ fontSize: 20 }}>{toast.type === "success" ? "✅" : toast.type === "error" ? "❌" : "ℹ️"}</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, fontSize: 14 }}>{toast.message}</div>
               {toast.detail && <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>{toast.detail}</div>}
             </div>
+            {undoStack.length > 0 && (
+              <button onClick={popUndo} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: BRAND.sans, whiteSpace: "nowrap", flexShrink: 0 }}>Undo</button>
+            )}
+            <button onClick={() => setToast(null)} aria-label="Dismiss" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "0 0 0 4px", flexShrink: 0 }}>×</button>
           </div>
         )}
         {/* Bottom tab bar */}
@@ -3034,7 +3236,7 @@ export default function App() {
           {bottomTabs.map(t => {
             const active = isActive(t.id);
             return (
-            <button key={t.id} aria-label={t.label + (t.badge > 0 ? ", " + t.badge + " pending" : "")} aria-current={active ? "page" : undefined} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "14px 4px 12px", background: "none", border: "none", cursor: "pointer", color: active ? t.color : BRAND.textLight, fontFamily: BRAND.sans, fontSize: 11, fontWeight: active ? 700 : 500, position: "relative", transition: "color 200ms" }} onClick={() => nav(t.id)}>
+            <button key={t.id} aria-label={t.label + (t.badge > 0 ? ", " + t.badge + " items" : "")} aria-current={active ? "page" : undefined} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "14px 4px 12px", background: "none", border: "none", cursor: "pointer", color: active ? t.color : BRAND.textLight, fontFamily: BRAND.sans, fontSize: 11, fontWeight: active ? 700 : 500, position: "relative", transition: "color 200ms" }} onClick={() => t.id === "__more__" ? setMoreSheetOpen(true) : nav(t.id)}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 56, height: 36, borderRadius: 18, background: active ? t.tint : "transparent", transition: "background 250ms" }}>
                 <Icon name={active ? t.iconFilled : t.icon} size={28} />
               </div>
@@ -3114,12 +3316,16 @@ export default function App() {
         <main id="main-content" style={S.content}>{renderPage()}</main>
         <ChangePasswordModal />
         {toast && (
-          <div className="fade-in" role="status" aria-live="polite" onClick={() => setToast(null)} style={{ position: "fixed", bottom: 24, right: 24, zIndex: 50, background: toast.type === "success" ? "#065F46" : toast.type === "error" ? "#991B1B" : BRAND.navy, color: "#fff", borderRadius: 12, padding: "14px 20px", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", cursor: "pointer", display: "flex", alignItems: "flex-start", gap: 12, maxWidth: 400 }}>
+          <div className="fade-in" role="status" aria-live="polite" style={{ position: "fixed", bottom: 24, right: 24, zIndex: 50, background: toast.type === "success" ? "#065F46" : toast.type === "error" ? "#991B1B" : BRAND.navy, color: "#fff", borderRadius: 12, padding: "14px 20px", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", display: "flex", alignItems: "flex-start", gap: 12, maxWidth: 420 }}>
             <span style={{ fontSize: 20 }}>{toast.type === "success" ? "✅" : toast.type === "error" ? "❌" : "ℹ️"}</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, fontSize: 14 }}>{toast.message}</div>
               {toast.detail && <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>{toast.detail}</div>}
             </div>
+            {undoStack.length > 0 && (
+              <button onClick={popUndo} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: BRAND.sans, whiteSpace: "nowrap", flexShrink: 0 }}>Undo</button>
+            )}
+            <button onClick={() => setToast(null)} aria-label="Dismiss" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "0 0 0 4px", flexShrink: 0 }}>×</button>
           </div>
         )}
       </div>

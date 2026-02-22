@@ -172,6 +172,20 @@ export function useSupabase() {
     return { user: data.user };
   }, []);
 
+  const resetPassword = useCallback(async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + "/?reset=1",
+    });
+    if (error) return { error: error.message };
+    return { ok: true };
+  }, []);
+
+  const changePassword = useCallback(async (newPassword) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) return { error: error.message };
+    return { ok: true };
+  }, []);
+
   // ── ENTRIES ────────────────────────────────────────────────────────────
   // Helper: append to audit log
   const appendAuditLog = (existingLog, action, details, changes) => {
@@ -341,6 +355,39 @@ export function useSupabase() {
     return mapped;
   }, [currentUser]);
 
+  const needsInfoEntry = useCallback(async (id, reviewerNotes) => {
+    const { data: current } = await supabase.from("entries").select("audit_log, status").eq("id", id).single();
+    const log = appendAuditLog(current?.audit_log, "Needs Info",
+      null,
+      [{ field: "Status", from: current?.status || "Submitted", to: "Needs Info" },
+       { field: "Reviewer note", from: "—", to: reviewerNotes || "No details given" }]);
+    const { data, error } = await supabase.from("entries").update({
+      status: "Needs Info", reviewer_notes: reviewerNotes || null, reviewed_at: new Date().toISOString(), audit_log: log,
+    }).eq("id", id).select().single();
+    if (error) { console.error("NeedsInfo error:", error); return null; }
+    const mapped = mapEntry(data);
+    setEntries(prev => prev.map(e => e.id === id ? mapped : e));
+    return mapped;
+  }, [currentUser]);
+
+  const bulkApprove = useCallback(async (ids) => {
+    const results = [];
+    for (const id of ids) {
+      const { data: current } = await supabase.from("entries").select("audit_log, status").eq("id", id).single();
+      const log = appendAuditLog(current?.audit_log, "Approved (bulk)", null,
+        [{ field: "Status", from: current?.status || "Submitted", to: "Approved" }]);
+      const { data, error } = await supabase.from("entries").update({
+        status: "Approved", reviewer_notes: null, reviewed_at: new Date().toISOString(), audit_log: log,
+      }).eq("id", id).select().single();
+      if (!error && data) {
+        const mapped = mapEntry(data);
+        setEntries(prev => prev.map(e => e.id === id ? mapped : e));
+        results.push(mapped);
+      }
+    }
+    return results;
+  }, [currentUser]);
+
   const trashEntry = useCallback(async (id, comment, action) => {
     const { data: current } = await supabase.from("entries").select("audit_log").eq("id", id).single();
     const { data: currentFull } = await supabase.from("entries").select("status").eq("id", id).single();
@@ -456,9 +503,10 @@ export function useSupabase() {
     // State
     currentUser, users, entries, settings, loading, authError,
     // Auth
-    login, logout, register,
+    login, logout, register, resetPassword, changePassword,
     // Entries
     saveEntry, deleteEntry, trashEntry, restoreEntry, approveEntry, firstApprove, secondApprove, rejectEntry, markPaid,
+    needsInfoEntry, bulkApprove,
     // Settings & Users
     saveSettings, addUser, removeUser, updateUserRate,
     // Misc
