@@ -616,7 +616,22 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
       </Field>
       <Field label="Task Description" required>
         <textarea style={{ ...S.textarea, ...errStyle("description") }} value={form.description} onChange={e => set("description", e.target.value)} placeholder="Describe the work performed..." />
-        {errors.description && <span role="alert" style={{ color: BRAND.error, fontSize: 13 }}>{errors.description}</span>}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+          {errors.description
+            ? <span role="alert" style={{ color: BRAND.error, fontSize: 13 }}>{errors.description}</span>
+            : <span style={{ fontSize: 12, color: BRAND.textLight }}>Min 10 characters</span>
+          }
+          <span style={{
+            fontSize: 12, fontWeight: 600,
+            color: form.description.trim().length === 0 ? BRAND.textLight
+                 : form.description.trim().length < 10  ? BRAND.warning
+                 : BRAND.success,
+          }}>
+            {form.description.trim().length < 10
+              ? form.description.trim().length + " / 10"
+              : form.description.length + " chars ✓"}
+          </span>
+        </div>
       </Field>
       <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: mob ? 12 : 16 }}>
         <Field label="Location"><input style={S.input} value={form.location} onChange={e => set("location", e.target.value)} placeholder="e.g. Unit 3B" /></Field>
@@ -653,7 +668,16 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
           <div><div style={{ fontSize: 12, color: BRAND.textLight }}>Materials</div><div style={{ fontSize: 18, fontWeight: 700, color: BRAND.navy }}>{fmt(matTotal)}</div></div>
           <div><div style={{ fontSize: 12, color: BRAND.textLight }}>Total</div><div style={{ fontSize: 22, fontWeight: 800, color: BRAND.brick }}>{fmt(grandTotal)}</div></div>
         </div>
-        <div style={{ fontSize: 11, color: BRAND.textLight, marginTop: 10 }}>Billed in 30-min increments, rounded up.</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, flexWrap: "wrap", gap: 4 }}>
+          <div style={{ fontSize: 11, color: BRAND.textLight }}>Billed in 30-min increments, rounded up.</div>
+          <div style={{ fontSize: 11, color: BRAND.textLight }}>
+            Rate: <strong style={{ color: BRAND.navy }}>{fmt(rate)}/hr</strong>
+            {isTreasurer && form.userId && users.find(u => u.id === form.userId)?.hourlyRate
+              ? <span style={{ color: BRAND.textLight }}> (custom rate)</span>
+              : <span style={{ color: BRAND.textLight }}> (default rate)</span>
+            }
+          </div>
+        </div>
       </div>
 
       {/* Sticky autosave status bar */}
@@ -2119,7 +2143,7 @@ export default function App() {
   const online = useOnline();
   const {
     currentUser, users, entries, settings, loading, authError,
-    login, logout: sbLogout, register,
+    login, logout: sbLogout, register, resetPassword, changePassword,
     saveEntry, deleteEntry, trashEntry, restoreEntry, approveEntry, firstApprove, secondApprove, rejectEntry, markPaid,
     saveSettings, addUser, removeUser, updateUserRate,
     setAuthError, fetchCommunityStats, refresh,
@@ -2136,7 +2160,28 @@ export default function App() {
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
   const [pageLoading, setPageLoading] = useState(null); // null = not loading, string = target page
-  const [authMode, setAuthMode] = useState("login"); // "login" or "register"
+  const [authMode, setAuthMode] = useState(() => {
+    // If redirected back from password-reset email, go straight to reset form
+    if (typeof window !== "undefined" && window.location.search.includes("reset=1")) return "reset";
+    return "login";
+  }); // "login" | "register" | "forgot" | "reset"
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [newPwConfirm, setNewPwConfirm] = useState("");
+  const [newPwError, setNewPwError] = useState("");
+  const [newPwLoading, setNewPwLoading] = useState(false);
+  const [newPwDone, setNewPwDone] = useState(false);
+  // Change-password modal (for logged-in users)
+  const [showChangePw, setShowChangePw] = useState(false);
+  const [changePwCurrent, setChangePwCurrent] = useState("");
+  const [changePwNew, setChangePwNew] = useState("");
+  const [changePwConfirm, setChangePwConfirm] = useState("");
+  const [changePwError, setChangePwError] = useState("");
+  const [changePwLoading, setChangePwLoading] = useState(false);
+  const [changePwDone, setChangePwDone] = useState(false);
   const [regName, setRegName] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
@@ -2150,6 +2195,8 @@ export default function App() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterMember, setFilterMember] = useState("all");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectNote, setRejectNote] = useState("");
   const [toast, setToast] = useState(null); // { message, type, detail }
@@ -2202,6 +2249,60 @@ export default function App() {
     setRegSuccess(true);
   };
   const handleLogout = async () => { await sbLogout(); setLoginEmail(""); setLoginPassword(""); setLoginError(""); setPage("dashboard"); setViewEntry(null); setEditEntry(null); setNewEntry(false); };
+
+  const handleForgotPassword = async () => {
+    setForgotError("");
+    const email = forgotEmail.trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setForgotError("Please enter a valid email address."); return; }
+    setForgotLoading(true);
+    const result = await resetPassword(email);
+    setForgotLoading(false);
+    if (result.error) { setForgotError(result.error); return; }
+    setForgotSent(true);
+  };
+
+  const [resetNewPass, setResetNewPass] = useState("");
+  const [resetConfPass, setResetConfPass] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError]   = useState("");
+  const [resetDone, setResetDone]     = useState(false);
+
+  const handleResetPassword = async () => {
+    setResetError("");
+    if (!resetNewPass || resetNewPass.length < 6) { setResetError("Password must be at least 6 characters."); return; }
+    if (resetNewPass !== resetConfPass) { setResetError("Passwords do not match."); return; }
+    setResetLoading(true);
+    const result = await changePassword(resetNewPass);
+    setResetLoading(false);
+    if (result.error) { setResetError(result.error); return; }
+    setResetDone(true);
+    // Clean up URL
+    window.history.replaceState({}, document.title, window.location.pathname);
+  };
+
+  // Change Password modal (for logged-in users)
+  const [showChangePass, setShowChangePass]     = useState(false);
+  const [cpCurrent, setCpCurrent]               = useState("");
+  const [cpNew, setCpNew]                       = useState("");
+  const [cpConfirm, setCpConfirm]               = useState("");
+  const [cpLoading, setCpLoading]               = useState(false);
+  const [cpError, setCpError]                   = useState("");
+  const [cpDone, setCpDone]                     = useState(false);
+
+  const handleChangePassword = async () => {
+    setCpError("");
+    if (!cpNew || cpNew.length < 6) { setCpError("New password must be at least 6 characters."); return; }
+    if (cpNew !== cpConfirm)         { setCpError("Passwords do not match."); return; }
+    setCpLoading(true);
+    // Re-authenticate first then update
+    const reauth = await login(currentUser.email, cpCurrent);
+    if (!reauth) { setCpLoading(false); setCpError("Current password is incorrect."); return; }
+    const result = await changePassword(cpNew);
+    setCpLoading(false);
+    if (result.error) { setCpError(result.error); return; }
+    setCpDone(true);
+    setTimeout(() => { setShowChangePass(false); setCpCurrent(""); setCpNew(""); setCpConfirm(""); setCpError(""); setCpDone(false); }, 2000);
+  };
   // Track when each page was last visited so we can skip the loading animation
   const lastVisitedRef = useRef({});
   const nav = (p) => {
@@ -2316,13 +2417,59 @@ export default function App() {
               <button style={{ flex: 1, padding: "10px 0", borderRadius: 6, border: "none", fontFamily: BRAND.sans, fontSize: 14, fontWeight: 600, cursor: "pointer", background: authMode === "login" ? BRAND.white : "transparent", color: authMode === "login" ? BRAND.navy : BRAND.textMuted, boxShadow: authMode === "login" ? "0 1px 3px rgba(0,0,0,0.08)" : "none", transition: "all 150ms" }} onClick={() => { setAuthMode("login"); setRegError(""); setRegSuccess(false); }}>Sign In</button>
               <button style={{ flex: 1, padding: "10px 0", borderRadius: 6, border: "none", fontFamily: BRAND.sans, fontSize: 14, fontWeight: 600, cursor: "pointer", background: authMode === "register" ? BRAND.white : "transparent", color: authMode === "register" ? BRAND.navy : BRAND.textMuted, boxShadow: authMode === "register" ? "0 1px 3px rgba(0,0,0,0.08)" : "none", transition: "all 150ms" }} onClick={() => { setAuthMode("register"); setLoginError(""); }}>Register</button>
             </div>
-            {authMode === "login" ? (
+            {authMode === "forgot" ? (
+              <div>
+                <button style={{ ...S.btnGhost, fontSize: 13, marginBottom: 20, padding: "4px 0" }} onClick={() => { setAuthMode("login"); setForgotError(""); setForgotSent(false); }}>← Back to Sign In</button>
+                {forgotSent ? (
+                  <div style={{ textAlign: "center", padding: "20px 0" }}>
+                    <div style={{ fontSize: 44, marginBottom: 12 }}>📬</div>
+                    <div style={{ fontSize: 17, fontWeight: 600, color: BRAND.navy, marginBottom: 8, fontFamily: BRAND.serif }}>Check your inbox</div>
+                    <div style={{ fontSize: 14, color: BRAND.textMuted, lineHeight: 1.7, marginBottom: 24 }}>We sent a reset link to <strong>{forgotEmail}</strong>. Click it to set a new password. Check spam if it doesn't arrive within a minute.</div>
+                    <button style={{ ...S.btnGhost, fontSize: 13 }} onClick={() => { setForgotSent(false); setForgotEmail(""); }}>Try a different email</button>
+                  </div>
+                ) : (
+                  <form onSubmit={e => { e.preventDefault(); handleForgotPassword(); }}>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: BRAND.navy, marginBottom: 6, fontFamily: BRAND.serif }}>Reset your password</div>
+                    <div style={{ fontSize: 13, color: BRAND.textMuted, marginBottom: 20 }}>Enter your email and we'll send you a reset link.</div>
+                    <label style={S.label} htmlFor="forgot-email">Email Address</label>
+                    <input id="forgot-email" type="email" autoComplete="email" style={{ ...S.input, marginBottom: forgotError ? 8 : 20, fontSize: 15, padding: "12px 16px" }} value={forgotEmail} onChange={e => { setForgotEmail(e.target.value); setForgotError(""); }} placeholder="you@example.com" autoFocus />
+                    {forgotError && <div style={{ color: BRAND.error, fontSize: 13, marginBottom: 12, display: "flex", alignItems: "flex-start", gap: 6 }}><Icon name="alert" size={14} /><span>{forgotError}</span></div>}
+                    <button type="submit" style={{ ...S.btnPrimary, width: "100%", justifyContent: "center", padding: "12px 20px", fontSize: 15, borderRadius: 8, opacity: forgotLoading ? 0.6 : 1 }} disabled={forgotLoading}>{forgotLoading ? "Sending..." : "Send Reset Link"}</button>
+                  </form>
+                )}
+              </div>
+            ) : authMode === "reset" ? (
+              <div>
+                {resetDone ? (
+                  <div style={{ textAlign: "center", padding: "20px 0" }}>
+                    <div style={{ width: 48, height: 48, borderRadius: 24, background: BRAND.success + "15", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", color: BRAND.success }}><Icon name="check" size={24} /></div>
+                    <div style={{ fontSize: 17, fontWeight: 600, color: BRAND.navy, marginBottom: 8, fontFamily: BRAND.serif }}>Password updated!</div>
+                    <div style={{ fontSize: 14, color: BRAND.textMuted, marginBottom: 24 }}>You can now sign in with your new password.</div>
+                    <button style={{ ...S.btnPrimary, width: "100%", justifyContent: "center", padding: "12px 20px", fontSize: 15, borderRadius: 8 }} onClick={() => setAuthMode("login")}>Go to Sign In</button>
+                  </div>
+                ) : (
+                  <form onSubmit={e => { e.preventDefault(); handleResetPassword(); }}>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: BRAND.navy, marginBottom: 6, fontFamily: BRAND.serif }}>Choose a new password</div>
+                    <div style={{ fontSize: 13, color: BRAND.textMuted, marginBottom: 20 }}>Pick something strong that you haven't used before.</div>
+                    <label style={S.label} htmlFor="reset-new">New Password</label>
+                    <input id="reset-new" type="password" autoComplete="new-password" style={{ ...S.input, marginBottom: 16, fontSize: 15, padding: "12px 16px" }} value={resetNewPass} onChange={e => { setResetNewPass(e.target.value); setResetError(""); }} placeholder="Min 6 characters" autoFocus />
+                    <label style={S.label} htmlFor="reset-confirm">Confirm New Password</label>
+                    <input id="reset-confirm" type="password" autoComplete="new-password" style={{ ...S.input, marginBottom: resetError ? 8 : 20, fontSize: 15, padding: "12px 16px", borderColor: resetError ? BRAND.error : BRAND.border }} value={resetConfPass} onChange={e => { setResetConfPass(e.target.value); setResetError(""); }} placeholder="Repeat new password" />
+                    {resetError && <div style={{ color: BRAND.error, fontSize: 13, marginBottom: 12, display: "flex", alignItems: "flex-start", gap: 6 }}><Icon name="alert" size={14} /><span>{resetError}</span></div>}
+                    <button type="submit" style={{ ...S.btnPrimary, width: "100%", justifyContent: "center", padding: "12px 20px", fontSize: 15, borderRadius: 8, opacity: resetLoading ? 0.6 : 1 }} disabled={resetLoading}>{resetLoading ? "Updating..." : "Update Password"}</button>
+                  </form>
+                )}
+              </div>
+            ) : authMode === "login" ? (
               <form onSubmit={e => { e.preventDefault(); handleLogin(); }} autoComplete="on">
                 <label style={S.label} htmlFor="login-email">Email Address</label>
                 <input id="login-email" name="email" type="email" autoComplete="username" style={{ ...S.input, marginBottom: 16, fontSize: 15, padding: "12px 16px" }} value={loginEmail} onChange={e => { setLoginEmail(e.target.value); setLoginError(""); }} placeholder="you@example.com" autoFocus />
                 <label style={S.label} htmlFor="login-password">Password</label>
-                <input id="login-password" name="password" type="password" autoComplete="current-password" style={{ ...S.input, marginBottom: loginError ? 8 : 20, fontSize: 15, padding: "12px 16px", borderColor: loginError ? BRAND.error : BRAND.border }} value={loginPassword} onChange={e => { setLoginPassword(e.target.value); setLoginError(""); }} placeholder="Enter your password" />
-                {loginError && <div style={{ color: BRAND.error, fontSize: 13, marginBottom: 16, display: "flex", alignItems: "flex-start", gap: 6 }}><Icon name="alert" size={14} /><span>{loginError}</span></div>}
+                <input id="login-password" name="password" type="password" autoComplete="current-password" style={{ ...S.input, marginBottom: loginError ? 8 : 12, fontSize: 15, padding: "12px 16px", borderColor: loginError ? BRAND.error : BRAND.border }} value={loginPassword} onChange={e => { setLoginPassword(e.target.value); setLoginError(""); }} placeholder="Enter your password" />
+                {loginError && <div style={{ color: BRAND.error, fontSize: 13, marginBottom: 8, display: "flex", alignItems: "flex-start", gap: 6 }}><Icon name="alert" size={14} /><span>{loginError}</span></div>}
+                <div style={{ textAlign: "right", marginBottom: 20 }}>
+                  <button type="button" style={{ background: "none", border: "none", color: BRAND.navy, fontSize: 13, cursor: "pointer", fontFamily: BRAND.sans, textDecoration: "underline", padding: 0 }} onClick={() => { setAuthMode("forgot"); setForgotEmail(loginEmail); setForgotError(""); setForgotSent(false); }}>Forgot password?</button>
+                </div>
                 <button type="submit" style={{ ...S.btnPrimary, width: "100%", justifyContent: "center", padding: "12px 20px", fontSize: 15, borderRadius: 8, opacity: loggingIn ? 0.6 : 1 }} disabled={loggingIn}>{loggingIn ? "Signing in..." : "Sign In"}</button>
               </form>
             ) : regSuccess ? (
@@ -2484,7 +2631,14 @@ export default function App() {
           )}
           <div style={S.card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}><h3 style={S.h3}>Recent Entries</h3><button style={S.btnGhost} onClick={() => setPage("entries")}>View all →</button></div>
-            {recent.length === 0 ? <div style={{ textAlign: "center", padding: 40, color: BRAND.textLight }}>No entries yet. Create your first work entry.</div>
+            {recent.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "32px 20px" }}>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: BRAND.navy, marginBottom: 6 }}>No entries yet</div>
+                <div style={{ fontSize: 13, color: BRAND.textLight, marginBottom: 16 }}>{isTreasurer ? "Entries will appear here once members submit work." : "Log your first work session to get started."}</div>
+                {!isTreasurer && <button style={S.btnPrimary} onClick={() => setNewEntry(true)}><Icon name="plus" size={15} /> Log Work</button>}
+              </div>
+            )
             : mob ? recent.map(e => <EntryCard key={e.id + "-" + page} entry={e} users={users} settings={settings} currentUser={viewAs} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => doApproveEntry(e.id, "")} onReject={(e) => setViewEntry(e)} onDelete={(e) => doTrashFromList(e, "")} />)
             : (
               <div style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 8, overflow: "hidden" }}>
@@ -2509,7 +2663,7 @@ export default function App() {
         </div>
         {/* Filter bar */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16, alignItems: "center" }}>
-          <input style={{ ...S.input, width: mob ? "100%" : 200, padding: "8px 12px", fontSize: 13 }} placeholder="🔍 Search descriptions..." value={filterSearch} onChange={e => setFilterSearch(e.target.value)} />
+          <input style={{ ...S.input, width: mob ? "100%" : 200, padding: "8px 12px", fontSize: 13 }} placeholder="🔍 Search entries, members, locations..." value={filterSearch} onChange={e => setFilterSearch(e.target.value)} />
           <select style={{ ...S.select, width: "auto", padding: "8px 12px", fontSize: 13, minWidth: 120 }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
             <option value="all">All Statuses</option>
             {Object.values(STATUSES).map(s => <option key={s} value={s}>{s}</option>)}
@@ -2524,11 +2678,24 @@ export default function App() {
               {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           )}
-          {(filterSearch || filterStatus !== "all" || filterCategory !== "all" || filterMember !== "all") && (() => {
-            const activeCount = [filterSearch, filterStatus !== "all", filterCategory !== "all", filterMember !== "all"].filter(Boolean).length;
+          {/* Date range quick presets */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <input type="date" style={{ ...S.input, padding: "7px 10px", fontSize: 12, width: "auto" }} value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} title="From date" />
+            <span style={{ fontSize: 12, color: BRAND.textLight }}>–</span>
+            <input type="date" style={{ ...S.input, padding: "7px 10px", fontSize: 12, width: "auto" }} value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} title="To date" />
+            {[
+              { label: "This Month", fn: () => { const d = new Date(); setFilterDateFrom(d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-01"); setFilterDateTo(new Date().toISOString().split("T")[0]); } },
+              { label: "Last Month", fn: () => { const d = new Date(); d.setMonth(d.getMonth()-1); const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"); setFilterDateFrom(y+"-"+m+"-01"); const end=new Date(y,d.getMonth()+1,0); setFilterDateTo(end.toISOString().split("T")[0]); } },
+              { label: "YTD", fn: () => { setFilterDateFrom(new Date().getFullYear()+"-01-01"); setFilterDateTo(new Date().toISOString().split("T")[0]); } },
+            ].map(p => (
+              <button key={p.label} onClick={p.fn} style={{ padding: "5px 10px", borderRadius: 12, border: "1px solid "+BRAND.borderLight, background: BRAND.white, color: BRAND.navy, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: BRAND.sans, whiteSpace: "nowrap" }}>{p.label}</button>
+            ))}
+          </div>
+          {(filterSearch || filterStatus !== "all" || filterCategory !== "all" || filterMember !== "all" || filterDateFrom || filterDateTo) && (() => {
+            const activeCount = [filterSearch, filterStatus !== "all", filterCategory !== "all", filterMember !== "all", filterDateFrom, filterDateTo].filter(Boolean).length;
             return (
               <button style={{ ...S.btnGhost, fontSize: 12, padding: "6px 10px", display: "flex", alignItems: "center", gap: 6 }}
-                onClick={() => { setFilterSearch(""); setFilterStatus("all"); setFilterCategory("all"); setFilterMember("all"); }}>
+                onClick={() => { setFilterSearch(""); setFilterStatus("all"); setFilterCategory("all"); setFilterMember("all"); setFilterDateFrom(""); setFilterDateTo(""); }}>
                 <span style={{ background: BRAND.brick, color: "#fff", borderRadius: 10, fontSize: 11, fontWeight: 700, padding: "1px 6px", minWidth: 18, textAlign: "center" }}>{activeCount}</span>
                 Clear filters
               </button>
@@ -2537,11 +2704,45 @@ export default function App() {
         </div>
         {(() => {
           let filtered = myEntries;
-          if (filterSearch) { const q = filterSearch.toLowerCase(); filtered = filtered.filter(e => e.description.toLowerCase().includes(q) || e.category.toLowerCase().includes(q)); }
+          if (filterDateFrom) filtered = filtered.filter(e => e.date >= filterDateFrom);
+          if (filterDateTo)   filtered = filtered.filter(e => e.date <= filterDateTo);
+          if (filterSearch) {
+            const q = filterSearch.toLowerCase();
+            filtered = filtered.filter(e => {
+              const u = users.find(u => u.id === e.userId);
+              return (
+                e.description.toLowerCase().includes(q) ||
+                e.category.toLowerCase().includes(q) ||
+                (e.location || "").toLowerCase().includes(q) ||
+                (e.notes || "").toLowerCase().includes(q) ||
+                (u?.name || "").toLowerCase().includes(q) ||
+                (e.materials || []).some(m => (m.name || "").toLowerCase().includes(q))
+              );
+            });
+          }
           if (filterStatus !== "all") filtered = filtered.filter(e => e.status === filterStatus);
           if (filterCategory !== "all") filtered = filtered.filter(e => e.category === filterCategory);
           if (filterMember !== "all") filtered = filtered.filter(e => e.userId === filterMember);
-          return filtered.length === 0 ? <div style={{ ...S.card, textAlign: "center", padding: 60, color: BRAND.textLight }}>{myEntries.length === 0 ? "No entries yet." : "No entries match your filters."}</div>
+          const hasActiveFilter = filterSearch || filterStatus !== "all" || filterCategory !== "all" || filterMember !== "all" || filterDateFrom || filterDateTo;
+          if (filtered.length === 0) {
+            if (myEntries.length === 0) return (
+              <div style={{ ...S.card, textAlign: "center", padding: "48px 32px" }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
+                <div style={{ fontWeight: 600, color: BRAND.navy, marginBottom: 8, fontSize: 16 }}>No entries yet</div>
+                <div style={{ fontSize: 14, color: BRAND.textLight, marginBottom: 20 }}>{isTreasurer ? "Work entries from all members will appear here once submitted." : "Start by logging your first work session."}</div>
+                {!isTreasurer && <button style={S.btnPrimary} onClick={() => setNewEntry(true)}><Icon name="plus" size={16} /> Create First Entry</button>}
+              </div>
+            );
+            return (
+              <div style={{ ...S.card, textAlign: "center", padding: "48px 32px" }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
+                <div style={{ fontWeight: 600, color: BRAND.navy, marginBottom: 8, fontSize: 16 }}>No results</div>
+                <div style={{ fontSize: 14, color: BRAND.textLight, marginBottom: 20 }}>No entries match your current filters. Try broadening your search.</div>
+                <button style={S.btnSecondary} onClick={() => { setFilterSearch(""); setFilterStatus("all"); setFilterCategory("all"); setFilterMember("all"); setFilterDateFrom(""); setFilterDateTo(""); }}>Clear all filters</button>
+              </div>
+            );
+          }
+          return filtered.length === 0 ? null :
           : mob ? filtered.map(e => <EntryCard key={e.id + "-" + page} entry={e} users={users} settings={settings} currentUser={viewAs} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => doApproveEntry(e.id, "")} onReject={(e) => setViewEntry(e)} onDelete={(e) => doTrashFromList(e, "")} />)
           : (
             <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
@@ -2706,6 +2907,39 @@ export default function App() {
     </div>
   ) : null;
 
+  // ── CHANGE PASSWORD MODAL ────────────────────────────────────────────────
+  const ChangePasswordModal = () => (
+    <Modal open={showChangePass} onClose={() => { setShowChangePass(false); setCpCurrent(""); setCpNew(""); setCpConfirm(""); setCpError(""); setCpDone(false); }} title="Change Password">
+      {cpDone ? (
+        <div style={{ textAlign: "center", padding: "16px 0" }}>
+          <div style={{ width: 44, height: 44, borderRadius: 22, background: BRAND.success + "15", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", color: BRAND.success }}><Icon name="check" size={22} /></div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: BRAND.navy, marginBottom: 6, fontFamily: BRAND.serif }}>Password changed!</div>
+          <div style={{ fontSize: 13, color: BRAND.textMuted }}>Your new password is active.</div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label style={S.label}>Current Password</label>
+            <input type="password" autoComplete="current-password" style={S.input} value={cpCurrent} onChange={e => { setCpCurrent(e.target.value); setCpError(""); }} placeholder="Your current password" autoFocus />
+          </div>
+          <div>
+            <label style={S.label}>New Password</label>
+            <input type="password" autoComplete="new-password" style={S.input} value={cpNew} onChange={e => { setCpNew(e.target.value); setCpError(""); }} placeholder="Min 6 characters" />
+          </div>
+          <div>
+            <label style={S.label}>Confirm New Password</label>
+            <input type="password" autoComplete="new-password" style={{ ...S.input, borderColor: cpError && cpNew !== cpConfirm ? BRAND.error : BRAND.border }} value={cpConfirm} onChange={e => { setCpConfirm(e.target.value); setCpError(""); }} placeholder="Repeat new password" />
+          </div>
+          {cpError && <div style={{ color: BRAND.error, fontSize: 13, display: "flex", alignItems: "flex-start", gap: 6 }}><Icon name="alert" size={14} /><span>{cpError}</span></div>}
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 4 }}>
+            <button style={S.btnSecondary} onClick={() => { setShowChangePass(false); setCpCurrent(""); setCpNew(""); setCpConfirm(""); setCpError(""); }}>Cancel</button>
+            <button style={{ ...S.btnPrimary, opacity: cpLoading ? 0.6 : 1 }} disabled={cpLoading} onClick={handleChangePassword}>{cpLoading ? "Updating..." : "Update Password"}</button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+
   if (mob) {
     return (
       <div style={{ minHeight: "100vh", fontFamily: BRAND.sans, background: BRAND.bgSoft, color: BRAND.charcoal, paddingBottom: 88 }} onTouchStart={onPullStart} onTouchMove={onPullMove} onTouchEnd={onPullEnd}>
@@ -2760,6 +2994,7 @@ export default function App() {
                   </select>
                 </div>
               )}
+              <button style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 6, fontSize: 14, background: "transparent", color: "#9B978F", cursor: "pointer", border: "none", width: "100%", textAlign: "left", fontFamily: BRAND.sans }} onClick={() => { setDrawerOpen(false); setShowChangePass(true); }}>🔒 Change Password</button>
               <button style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 12px", borderRadius: 6, fontSize: 15, background: "transparent", color: "#9B978F", cursor: "pointer", border: "none", width: "100%", textAlign: "left", fontFamily: BRAND.sans }} onClick={handleLogout}><Icon name="logout" size={20} /> Sign Out</button>
             </div>
           </div>
@@ -2783,6 +3018,7 @@ export default function App() {
             <Icon name="plus" size={24} />
           </button>
         )}
+        <ChangePasswordModal />
         {/* Toast notification */}
         {toast && (
           <div className="fade-in" role="status" aria-live="polite" onClick={() => setToast(null)} style={{ position: "fixed", bottom: 96, left: 16, right: 16, zIndex: 50, background: toast.type === "success" ? "#065F46" : toast.type === "error" ? "#991B1B" : BRAND.navy, color: "#fff", borderRadius: 12, padding: "14px 18px", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", cursor: "pointer", display: "flex", alignItems: "flex-start", gap: 12 }}>
@@ -2854,6 +3090,7 @@ export default function App() {
               </select>
             </div>
           )}
+          <button style={{ ...S.navItem(false), padding: "7px 12px", fontSize: 12, color: "#7A766E" }} onClick={() => setShowChangePass(true)}>🔒 Change Password</button>
           <button style={{ ...S.navItem(false), padding: "8px 12px", fontSize: 13 }} onClick={handleLogout}><Icon name="logout" size={16} /> Sign Out</button>
         </div>
       </aside>
@@ -2875,6 +3112,7 @@ export default function App() {
         {!online && <div role="alert" style={{ background: "#FFF3E0", borderBottom: "1px solid #FFB74D", padding: "10px 32px", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#E65100" }}><Icon name="wifiOff" size={16} /><span>You're offline. Viewing cached data — changes require an internet connection.</span></div>}
         <PreviewBanner />
         <main id="main-content" style={S.content}>{renderPage()}</main>
+        <ChangePasswordModal />
         {toast && (
           <div className="fade-in" role="status" aria-live="polite" onClick={() => setToast(null)} style={{ position: "fixed", bottom: 24, right: 24, zIndex: 50, background: toast.type === "success" ? "#065F46" : toast.type === "error" ? "#991B1B" : BRAND.navy, color: "#fff", borderRadius: 12, padding: "14px 20px", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", cursor: "pointer", display: "flex", alignItems: "flex-start", gap: 12, maxWidth: 400 }}>
             <span style={{ fontSize: 20 }}>{toast.type === "success" ? "✅" : toast.type === "error" ? "❌" : "ℹ️"}</span>
