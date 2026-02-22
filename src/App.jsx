@@ -856,13 +856,16 @@ const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onAp
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ENTRY CARD (Mobile list replacement for tables — swipeable)
-// Swipe LEFT  → reveal Edit action (Draft/Rejected) or View (others)
-// Swipe RIGHT → reveal Submit (Draft) or Approve/Reject (Treasurer, Submitted)
+//
+// TREASURER  — swipe LEFT only → Approve / Decline / Delete
+// MEMBER     — swipe LEFT  → Edit (Draft/Rejected) or View
+//              swipe RIGHT → Submit (Draft only)
 // ═══════════════════════════════════════════════════════════════════════════
-const SWIPE_THRESHOLD = 60;   // px to trigger reveal
-const SWIPE_MAX      = 80;    // max px of travel
+const SWIPE_THRESHOLD     = 60;   // px to commit reveal
+const SWIPE_MAX_MEMBER    = 80;   // px travel for single-button reveal
+const SWIPE_MAX_TREASURER = 180;  // px travel for three-button reveal
 
-const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSubmit, onApprove, onReject }) => {
+const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSubmit, onApprove, onReject, onDelete }) => {
   const u = users.find(u => u.id === entry.userId);
   const hrs   = calcHours(entry.startTime, entry.endTime);
   const rate  = getUserRate(users, settings, entry.userId);
@@ -870,9 +873,20 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
   const photoCount = (entry.preImages?.length || 0) + (entry.postImages?.length || 0);
 
   const isTreasurer = currentUser?.role === ROLES.TREASURER;
-  const canEdit   = [STATUSES.DRAFT, STATUSES.REJECTED].includes(entry.status) && (entry.userId === currentUser?.id || isTreasurer);
-  const canSubmit = entry.status === STATUSES.DRAFT && entry.userId === currentUser?.id;
-  const canReview = isTreasurer && entry.status === STATUSES.SUBMITTED;
+
+  // ── what actions apply to this card ───────────────────────────────────
+  const canSubmit  = !isTreasurer && entry.status === STATUSES.DRAFT && entry.userId === currentUser?.id;
+  const canEdit    = !isTreasurer && [STATUSES.DRAFT, STATUSES.REJECTED].includes(entry.status) && entry.userId === currentUser?.id;
+  // Treasurer can approve/decline Submitted or Awaiting 2nd entries
+  const canApprove = isTreasurer && [STATUSES.SUBMITTED, STATUSES.AWAITING_SECOND].includes(entry.status);
+  const canDecline = isTreasurer && [STATUSES.SUBMITTED, STATUSES.AWAITING_SECOND].includes(entry.status);
+  // Treasurer can delete any entry (Draft, Rejected, etc.) — not Approved/Paid
+  const canTreasDelete = isTreasurer && ![STATUSES.APPROVED, STATUSES.PAID].includes(entry.status);
+
+  const swipeMax = isTreasurer ? SWIPE_MAX_TREASURER : SWIPE_MAX_MEMBER;
+  // Treasurer: only left swipe allowed
+  const allowSwipeRight = !isTreasurer && canSubmit;
+  const allowSwipeLeft  = isTreasurer ? (canApprove || canTreasDelete) : (canEdit || true); // members can always view
 
   // ── swipe state ────────────────────────────────────────────────────────
   const touchStartX = useRef(null);
@@ -893,23 +907,22 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
     if (touchStartX.current === null) return;
     const dx = e.touches[0].clientX - touchStartX.current;
     const dy = e.touches[0].clientY - touchStartY.current;
-    // ignore mostly-vertical scrolls
-    if (!swiping && Math.abs(dy) > Math.abs(dx)) return;
+    if (!swiping && Math.abs(dy) > Math.abs(dx)) return; // vertical scroll — ignore
     setSwiping(true);
-    e.preventDefault(); // prevent scroll while swiping
-    const clamped = Math.max(-SWIPE_MAX, Math.min(SWIPE_MAX, dx));
-    setOffsetX(clamped);
+    e.preventDefault();
+    // clamp: block disallowed directions
+    const lo = allowSwipeLeft  ? -swipeMax : 0;
+    const hi = allowSwipeRight ? swipeMax  : 0;
+    setOffsetX(Math.max(lo, Math.min(hi, dx)));
   };
 
   const onTouchEnd = () => {
     if (!swiping) { touchStartX.current = null; return; }
-    if (offsetX < -SWIPE_THRESHOLD) {
-      // Swiped left → show right-side action (edit or view)
-      setOffsetX(-SWIPE_MAX);
+    if (offsetX < -SWIPE_THRESHOLD && allowSwipeLeft) {
+      setOffsetX(-swipeMax);
       setRevealed("left");
-    } else if (offsetX > SWIPE_THRESHOLD) {
-      // Swiped right → show left-side action (submit or approve)
-      setOffsetX(SWIPE_MAX);
+    } else if (offsetX > SWIPE_THRESHOLD && allowSwipeRight) {
+      setOffsetX(swipeMax);
       setRevealed("right");
     } else {
       reset();
@@ -917,38 +930,43 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
     touchStartX.current = null;
   };
 
-  // tap on card body while revealed → reset
-  const handleCardClick = () => {
-    if (revealed) { reset(); return; }
-    onClick();
-  };
+  const handleCardClick = () => { if (revealed) { reset(); return; } onClick(); };
 
-  // ── action colours ─────────────────────────────────────────────────────
-  const leftBg  = canEdit ? BRAND.navy : "#4B5563";      // swipe-left reveals: Edit
-  const rightBg = canSubmit ? BRAND.green                // swipe-right reveals: Submit
-                : canReview ? BRAND.success : "#4B5563"; // or Approve
+  // ── backdrop colours ───────────────────────────────────────────────────
+  // Left-swipe backdrop (right side of card) — danger zone for treasurer
+  const leftSwipeBg = isTreasurer ? "#7f1d1d" : (canEdit ? BRAND.navy : "#4B5563");
 
   return (
     <div style={{ position: "relative", overflow: "hidden", borderRadius: 12, marginBottom: 10 }}>
-      {/* ── LEFT action backdrop (swipe-right to reveal) ── */}
-      <div aria-hidden="true" style={{
-        position: "absolute", inset: 0, display: "flex", alignItems: "center",
-        paddingLeft: 20, background: rightBg, borderRadius: 12,
-      }}>
-        <span style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>
-          {canSubmit ? "✅ Submit" : canReview ? "✅ Approve" : ""}
-        </span>
-      </div>
 
-      {/* ── RIGHT action backdrop (swipe-left to reveal) ── */}
-      <div aria-hidden="true" style={{
-        position: "absolute", inset: 0, display: "flex", alignItems: "center",
-        justifyContent: "flex-end", paddingRight: 20, background: leftBg, borderRadius: 12,
-      }}>
-        <span style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>
-          {canEdit ? "✏️ Edit" : "👁 View"}
-        </span>
-      </div>
+      {/* ── SWIPE-RIGHT backdrop (Member submit only) ── */}
+      {allowSwipeRight && (
+        <div aria-hidden="true" style={{
+          position: "absolute", inset: 0, display: "flex", alignItems: "center",
+          paddingLeft: 20, background: BRAND.green, borderRadius: 12,
+        }}>
+          <span style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>✅ Submit</span>
+        </div>
+      )}
+
+      {/* ── SWIPE-LEFT backdrop ── */}
+      {allowSwipeLeft && (
+        <div aria-hidden="true" style={{
+          position: "absolute", inset: 0, display: "flex", alignItems: "center",
+          justifyContent: "flex-end", paddingRight: 20, background: leftSwipeBg, borderRadius: 12,
+          gap: 8,
+        }}>
+          {isTreasurer ? (
+            <>
+              {canApprove  && <span style={{ color: "#fff", fontSize: 12, fontWeight: 700 }}>✅ Approve</span>}
+              {canDecline  && <span style={{ color: "#fff", fontSize: 12, fontWeight: 700 }}>❌ Decline</span>}
+              {canTreasDelete && <span style={{ color: "#fff", fontSize: 12, fontWeight: 700 }}>🗑 Delete</span>}
+            </>
+          ) : (
+            <span style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>{canEdit ? "✏️ Edit" : "👁 View"}</span>
+          )}
+        </div>
+      )}
 
       {/* ── CARD (slides) ── */}
       <div
@@ -995,40 +1013,63 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
           <div style={{ fontSize: 13, color: BRAND.textLight }}>
             {relativeDate(entry.date)} · {fmtHours(hrs)}{u ? " · " + u.name : ""}
           </div>
-          {/* hint dots shown when not swiped */}
-          {!revealed && (canSubmit || canEdit || canReview) && (
-            <div aria-hidden="true" style={{ display: "flex", gap: 3, opacity: 0.3 }}>
-              <span style={{ width: 5, height: 5, borderRadius: "50%", background: BRAND.charcoal }} />
-              <span style={{ width: 5, height: 5, borderRadius: "50%", background: BRAND.charcoal }} />
-              <span style={{ width: 5, height: 5, borderRadius: "50%", background: BRAND.charcoal }} />
+          {/* swipe hint: ‹ for left-swipeable, › for right-swipeable */}
+          {!revealed && (
+            <div aria-hidden="true" style={{ fontSize: 16, opacity: 0.2, letterSpacing: -2, lineHeight: 1 }}>
+              {allowSwipeRight && <span>›</span>}
+              {allowSwipeLeft  && <span>‹</span>}
             </div>
           )}
         </div>
       </div>
 
-      {/* ── REVEALED ACTION BUTTONS (tap to fire) ── */}
-      {revealed === "right" && (canSubmit || canReview) && (
+      {/* ── REVEALED: swipe-right → Submit (Member, Draft) ── */}
+      {revealed === "right" && canSubmit && (
         <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, display: "flex", alignItems: "center", paddingLeft: 12, zIndex: 2 }}>
           <button
-            style={{ background: "#fff", color: rightBg, border: "2px solid " + rightBg, borderRadius: 8, padding: "6px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
-            onClick={(e) => { e.stopPropagation(); reset(); canSubmit ? onSubmit(entry) : onApprove(entry); }}
+            style={{ background: "#fff", color: BRAND.green, border: "2px solid " + BRAND.green, borderRadius: 8, padding: "7px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+            onClick={(e) => { e.stopPropagation(); reset(); onSubmit(entry); }}
           >
-            {canSubmit ? "Submit" : "Approve"}
+            Submit
           </button>
-          {canReview && onReject && (
+        </div>
+      )}
+
+      {/* ── REVEALED: swipe-left (Treasurer) → Approve / Decline / Delete ── */}
+      {revealed === "left" && isTreasurer && (
+        <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, display: "flex", alignItems: "center", gap: 6, paddingRight: 10, zIndex: 2 }}>
+          {canApprove && (
             <button
-              style={{ background: "#fff", color: BRAND.brick, border: "2px solid " + BRAND.brick, borderRadius: 8, padding: "6px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer", marginLeft: 6 }}
+              style={{ background: BRAND.success, color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+              onClick={(e) => { e.stopPropagation(); reset(); onApprove(entry); }}
+            >
+              ✅ Approve
+            </button>
+          )}
+          {canDecline && (
+            <button
+              style={{ background: BRAND.brick, color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
               onClick={(e) => { e.stopPropagation(); reset(); onReject(entry); }}
             >
-              Reject
+              ❌ Decline
+            </button>
+          )}
+          {canTreasDelete && (
+            <button
+              style={{ background: "#7f1d1d", color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+              onClick={(e) => { e.stopPropagation(); reset(); onDelete(entry); }}
+            >
+              🗑
             </button>
           )}
         </div>
       )}
-      {revealed === "left" && (
+
+      {/* ── REVEALED: swipe-left (Member) → Edit or View ── */}
+      {revealed === "left" && !isTreasurer && (
         <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, display: "flex", alignItems: "center", paddingRight: 12, zIndex: 2 }}>
           <button
-            style={{ background: "#fff", color: leftBg, border: "2px solid " + leftBg, borderRadius: 8, padding: "6px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+            style={{ background: "#fff", color: canEdit ? BRAND.navy : "#4B5563", border: "2px solid " + (canEdit ? BRAND.navy : "#4B5563"), borderRadius: 8, padding: "7px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
             onClick={(e) => { e.stopPropagation(); reset(); canEdit ? onEdit(entry) : onClick(); }}
           >
             {canEdit ? "Edit" : "View"}
@@ -1930,7 +1971,7 @@ export default function App() {
           <div style={S.card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}><h3 style={S.h3}>Recent Entries</h3><button style={S.btnGhost} onClick={() => setPage("entries")}>View all →</button></div>
             {recent.length === 0 ? <div style={{ textAlign: "center", padding: 40, color: BRAND.textLight }}>No entries yet. Create your first work entry.</div>
-            : mob ? recent.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} currentUser={currentUser} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => setViewEntry(e)} onReject={(e) => setViewEntry(e)} />)
+            : mob ? recent.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} currentUser={currentUser} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => doApproveEntry(e.id, "")} onReject={(e) => setViewEntry(e)} onDelete={async (e) => { if (window.confirm("Delete this entry? This cannot be undone.")) { await deleteEntry(e.id); showToast("Entry deleted", "success"); } }} />)
             : (
               <div style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 8, overflow: "hidden" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
@@ -1980,7 +2021,7 @@ export default function App() {
           if (filterCategory !== "all") filtered = filtered.filter(e => e.category === filterCategory);
           if (filterMember !== "all") filtered = filtered.filter(e => e.userId === filterMember);
           return filtered.length === 0 ? <div style={{ ...S.card, textAlign: "center", padding: 60, color: BRAND.textLight }}>{myEntries.length === 0 ? "No entries yet." : "No entries match your filters."}</div>
-          : mob ? filtered.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} currentUser={currentUser} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => setViewEntry(e)} onReject={(e) => setViewEntry(e)} />)
+          : mob ? filtered.map(e => <EntryCard key={e.id} entry={e} users={users} settings={settings} currentUser={currentUser} onClick={() => setViewEntry(e)} onEdit={(e) => { setEditEntry(e); }} onSubmit={(e) => doSubmit(e, e.id)} onApprove={(e) => doApproveEntry(e.id, "")} onReject={(e) => setViewEntry(e)} onDelete={async (e) => { if (window.confirm("Delete this entry? This cannot be undone.")) { await deleteEntry(e.id); showToast("Entry deleted", "success"); } }} />)
           : (
             <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
