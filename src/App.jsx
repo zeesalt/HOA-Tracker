@@ -317,7 +317,6 @@ export default function App() {
   };
   // Track when each page was last visited so we can skip the loading animation
   const lastVisitedRef = useRef({});
-  const [showNavGuard, setShowNavGuard] = useState(null); // target page for dirty-form confirmation
   const hasUnsavedForm = newEntry || editEntry || newPurchase || editPurchase;
 
   const nav = (p) => {
