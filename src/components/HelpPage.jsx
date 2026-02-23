@@ -10,7 +10,7 @@ import {
   Icon, StatusBadge, catColors, CategoryBadge, RoleBadge,
   S, Field, Modal, ConfirmDialog, StatCard,
   ImageUploader, MaterialsEditor,
-} from "./shared";
+} from "../shared";
 
 export const HelpPage = ({ currentUser, settings, mob, onNav }) => {
   const isTreasurer = currentUser?.role === ROLES.TREASURER;

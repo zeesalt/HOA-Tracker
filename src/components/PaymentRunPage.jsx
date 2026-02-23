@@ -10,7 +10,7 @@ import {
   Icon, StatusBadge, catColors, CategoryBadge, RoleBadge,
   S, Field, Modal, ConfirmDialog, StatCard,
   ImageUploader, MaterialsEditor,
-} from "./shared";
+} from "../shared";
 
 export const PaymentRunPage = ({ entries, purchaseEntries, users, settings, onMarkPaid, onMarkPurchasePaid, mob }) => {
   const approvedWork = entries.filter(e => e.status === STATUSES.APPROVED).map(e => ({ ...e, _type: "work" }));

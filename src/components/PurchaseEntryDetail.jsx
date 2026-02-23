@@ -10,7 +10,7 @@ import {
   Icon, StatusBadge, catColors, CategoryBadge, RoleBadge,
   S, Field, Modal, ConfirmDialog, StatCard,
   ImageUploader, MaterialsEditor,
-} from "./shared";
+} from "../shared";
 import { WorkflowStepper } from "./WorkflowStepper";
 export const PurchaseEntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onApprove, onReject, onMarkPaid, mob }) => {
   const user = users.find(u => u.id === entry.userId);
@@ -20,6 +20,7 @@ export const PurchaseEntryDetail = ({ entry, settings, users, currentUser, onBac
   const canReview = isTreasurer && entry.status === "Submitted";
   const [reviewNotes, setReviewNotes] = useState("");
   const [showRejectConfirm, setShowRejectConfirm] = useState(false);
+  const [processing, setProcessing] = useState(false);
   const mileageRate = entry.mileageRate || settings?.mileageRate || IRS_MILEAGE_RATE;
 
   return (
@@ -112,17 +113,17 @@ export const PurchaseEntryDetail = ({ entry, settings, users, currentUser, onBac
             <>
               <div style={{ flex: 1 }} />
               <input style={{ ...S.input, flex: 2, minWidth: 200, maxWidth: 400, fontSize: 13 }} value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} placeholder="Reviewer notes (optional)..." />
-              <button style={{ ...S.btnGhost, color: BRAND.error, border: "1px solid " + BRAND.error + "40" }} onClick={() => setShowRejectConfirm(true)}><Icon name="x" size={16} /> Reject</button>
-              <button style={S.btnPrimary} onClick={() => onApprove(reviewNotes)}><Icon name="check" size={16} /> Approve</button>
+              <button style={{ ...S.btnGhost, color: BRAND.error, border: "1px solid " + BRAND.error + "40", opacity: processing ? 0.6 : 1 }} disabled={processing} onClick={() => setShowRejectConfirm(true)}><Icon name="x" size={16} /> Reject</button>
+              <button style={{ ...S.btnPrimary, opacity: processing ? 0.6 : 1 }} disabled={processing} onClick={async () => { setProcessing(true); await onApprove(reviewNotes); setProcessing(false); }}><Icon name="check" size={16} /> {processing ? "Approving..." : "Approve"}</button>
             </>
           )}
           {isTreasurer && entry.status === "Approved" && (
-            <button style={{ ...S.btnPrimary, background: BRAND.success }} onClick={() => onMarkPaid && onMarkPaid({ method: "Check" })}><Icon name="dollar" size={16} /> Mark Paid</button>
+            <button style={{ ...S.btnPrimary, background: BRAND.success, opacity: processing ? 0.6 : 1 }} disabled={processing} onClick={async () => { setProcessing(true); await (onMarkPaid && onMarkPaid({ method: "Check" })); setProcessing(false); }}><Icon name="dollar" size={16} /> {processing ? "Processing..." : "Mark Paid"}</button>
           )}
         </div>
       </div>
 
-      <ConfirmDialog open={showRejectConfirm} onClose={() => setShowRejectConfirm(false)} onConfirm={() => { onReject(reviewNotes); setShowRejectConfirm(false); }} title="Reject Purchase Entry?" message="This will return the entry to the member for edits." confirmText="Reject" danger />
+      <ConfirmDialog open={showRejectConfirm} onClose={() => setShowRejectConfirm(false)} onConfirm={async () => { setProcessing(true); await onReject(reviewNotes); setShowRejectConfirm(false); setProcessing(false); }} title="Reject Purchase Entry?" message="This will return the entry to the member for edits." confirmText="Reject" danger />
     </div>
   );
 };

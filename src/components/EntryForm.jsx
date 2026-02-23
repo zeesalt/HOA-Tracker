@@ -10,7 +10,7 @@ import {
   Icon, StatusBadge, catColors, CategoryBadge, RoleBadge,
   S, Field, Modal, ConfirmDialog, StatCard,
   ImageUploader, MaterialsEditor,
-} from "./shared";
+} from "../shared";
 
 export const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSubmit, onDelete, disableAutoSave, mob }) => {
   const isTreasurer = currentUser.role === ROLES.TREASURER;
@@ -28,7 +28,8 @@ export const EntryForm = ({ entry, settings, users, currentUser, onSave, onCance
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [formDirty, setFormDirty] = useState(false);
   const [draftId, setDraftId] = useState(entry?.id || null);
-  const [autoSaveStatus, setAutoSaveStatus] = useState(""); // "", "saving", "saved"
+  const [autoSaveStatus, setAutoSaveStatus] = useState(""); // "", "saving", "saved", "failed"
+  const [autoSaveFailCount, setAutoSaveFailCount] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const draftIdRef = useRef(draftId);
 
@@ -94,9 +95,22 @@ export const EntryForm = ({ entry, settings, users, currentUser, onSave, onCance
         if (autoSaveAbortRef.current) { setAutoSaveStatus(""); return; }
         if (result && !draftIdRef.current) { setDraftId(result.id); draftIdRef.current = result.id; }
         setAutoSaveStatus("saved");
+        setAutoSaveFailCount(0);
+        // Clear any localStorage backup on success
+        try { localStorage.removeItem("hoa_draft_backup_" + (form.userId || currentUser.id)); } catch {}
         setTimeout(() => setAutoSaveStatus(""), 2000);
       } catch (e) {
-        setAutoSaveStatus("");
+        setAutoSaveFailCount(prev => {
+          const next = prev + 1;
+          if (next >= 3) {
+            setAutoSaveStatus("failed");
+            // Emergency backup to localStorage
+            try { localStorage.setItem("hoa_draft_backup_" + (form.userId || currentUser.id), JSON.stringify({ ...data, _backupAt: new Date().toISOString() })); } catch {}
+          } else {
+            setAutoSaveStatus("");
+          }
+          return next;
+        });
       }
     }, 3000);
     return () => clearTimeout(timer);
@@ -242,15 +256,22 @@ export const EntryForm = ({ entry, settings, users, currentUser, onSave, onCance
           position: "sticky", top: 0, zIndex: 8,
           display: "flex", alignItems: "center", gap: 8,
           padding: "8px 14px", marginBottom: 12, borderRadius: 8,
-          background: autoSaveStatus === "saved" ? "#E8F5E9" : "#FFF8E1",
-          border: "1px solid " + (autoSaveStatus === "saved" ? "#A5D6A7" : "#FFD54F"),
+          background: autoSaveStatus === "saved" ? "#E8F5E9" : autoSaveStatus === "failed" ? "#FFF0F0" : "#FFF8E1",
+          border: "1px solid " + (autoSaveStatus === "saved" ? "#A5D6A7" : autoSaveStatus === "failed" ? "#FFCDD2" : "#FFD54F"),
           fontSize: 13, fontWeight: 600,
-          color: autoSaveStatus === "saved" ? BRAND.success : "#795548",
+          color: autoSaveStatus === "saved" ? BRAND.success : autoSaveStatus === "failed" ? BRAND.error : "#795548",
           fontFamily: BRAND.sans,
         }}>
           {autoSaveStatus === "saving" && <span style={{ display: "inline-block", animation: "spin 1s linear infinite" }}>⟳</span>}
           {autoSaveStatus === "saved"  && <span style={{ display: "inline-block", animation: "saveCheck 350ms cubic-bezier(0.34,1.56,0.64,1)" }}>✓</span>}
-          {autoSaveStatus === "saving" ? "Saving draft..." : "Draft saved"}
+          {autoSaveStatus === "failed" && <span>⚠️</span>}
+          {autoSaveStatus === "saving" ? "Saving draft..." : autoSaveStatus === "failed" ? "Autosave failed. Check your connection. Work saved locally." : "Draft saved"}
+          {autoSaveStatus === "failed" && (
+            <button onClick={() => { setAutoSaveFailCount(0); setAutoSaveStatus(""); }}
+              style={{ marginLeft: "auto", background: "none", border: "1px solid " + BRAND.error + "40", borderRadius: 6, padding: "3px 10px", fontSize: 12, fontWeight: 600, color: BRAND.error, cursor: "pointer", fontFamily: BRAND.sans }}>
+              Retry
+            </button>
+          )}
         </div>
       )}
 

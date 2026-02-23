@@ -10,7 +10,7 @@ import {
   Icon, StatusBadge, catColors, CategoryBadge, RoleBadge,
   S, Field, Modal, ConfirmDialog, StatCard,
   ImageUploader, MaterialsEditor,
-} from "./shared";
+} from "../shared";
 import { WorkflowStepper } from "./WorkflowStepper";
 export const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onApprove, onReject, onTrash, onRestore, onMarkPaid, onDuplicate, onSecondApprove, onDelete, onComment, mob }) => {
   const [reviewNotes, setReviewNotes] = useState(entry.reviewerNotes || "");
@@ -28,6 +28,7 @@ export const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdi
   const [paidAnimating, setPaidAnimating] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
+  const [processing, setProcessing] = useState(false);
   const commentEndRef = useRef(null);
 
   const fireApproveRipple = () => {
@@ -142,7 +143,8 @@ export const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdi
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: (showDeclinePanel || showTrashPanel) ? 12 : 0 }}>
               {canReview && (
                 <button
-                  style={{ ...S.btnSuccess, position: "relative", overflow: "hidden" }}
+                  style={{ ...S.btnSuccess, position: "relative", overflow: "hidden", opacity: processing ? 0.6 : 1 }}
+                  disabled={processing}
                   onClick={() => { fireApproveRipple(); setShowApproveConfirm(true); }}
                 >
                   {approveRipple && (
@@ -155,7 +157,8 @@ export const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdi
               )}
               {canDecline && !showDeclinePanel && (
                 <button
-                  style={{ ...S.btnDanger, animation: declineShake ? "shake 300ms ease-in-out" : "none" }}
+                  style={{ ...S.btnDanger, animation: declineShake ? "shake 300ms ease-in-out" : "none", opacity: processing ? 0.6 : 1 }}
+                  disabled={processing}
                   onClick={() => { fireDeclineShake(); setTimeout(() => { setShowDeclinePanel(true); setShowTrashPanel(false); }, 150); }}
                 >
                   <Icon name="x" size={16} /> Decline
@@ -186,10 +189,10 @@ export const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdi
                 placeholder="Explain what needs to be fixed. The member will see this note." autoFocus />
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
                 <button style={{ ...S.btnGhost, fontSize: 13 }} onClick={() => { setShowDeclinePanel(false); setDeclineNote(""); }}>Cancel</button>
-                <button style={{ ...S.btnDanger, fontSize: 13, opacity: declineNote.trim() ? 1 : 0.5 }}
-                  disabled={!declineNote.trim()}
-                  onClick={() => { onReject(declineNote); setShowDeclinePanel(false); setDeclineNote(""); }}>
-                  <Icon name="x" size={14} /> Confirm Decline
+                <button style={{ ...S.btnDanger, fontSize: 13, opacity: declineNote.trim() && !processing ? 1 : 0.5 }}
+                  disabled={!declineNote.trim() || processing}
+                  onClick={async () => { setProcessing(true); await onReject(declineNote); setShowDeclinePanel(false); setDeclineNote(""); setProcessing(false); }}>
+                  <Icon name="x" size={14} /> {processing ? "Declining..." : "Confirm Decline"}
                 </button>
               </div>
             </div>
@@ -227,7 +230,7 @@ export const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdi
             <div><div style={{ fontWeight: 600, color: "#4338CA", marginBottom: 4 }}>⚖️ Awaiting Second Approval</div><div style={{ fontSize: 13, color: BRAND.textMuted }}>This entry ({fmt(grandTotal)}) exceeds the {fmt(settings.dualApprovalThreshold)} threshold. A second board member must approve.</div>
               {entry.reviewedAt && <div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 4 }}>First approved on {formatDate(entry.reviewedAt.split("T")[0])}</div>}
             </div>
-            <button style={{ ...S.btnSuccess, whiteSpace: "nowrap" }} onClick={() => onSecondApprove(entry.id)}><Icon name="check" size={16} /> Second Approve</button>
+            <button style={{ ...S.btnSuccess, whiteSpace: "nowrap", opacity: processing ? 0.6 : 1 }} disabled={processing} onClick={async () => { setProcessing(true); await onSecondApprove(entry.id); setProcessing(false); }}><Icon name="check" size={16} /> {processing ? "Approving..." : "Second Approve"}</button>
           </div>
         </div>
       )}
@@ -240,7 +243,8 @@ export const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdi
           </div>
           <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
             <button
-              style={{ ...S.btnPrimary, background: "#3B5998", position: "relative", overflow: "hidden", transition: "transform 150ms ease" }}
+              style={{ ...S.btnPrimary, background: "#3B5998", position: "relative", overflow: "hidden", transition: "transform 150ms ease", opacity: processing ? 0.6 : 1 }}
+              disabled={processing}
               onMouseDown={e => { e.currentTarget.style.transform = "scale(0.96)"; }}
               onMouseUp={e => { e.currentTarget.style.transform = "scale(1)"; setPaidAnimating(true); setTimeout(() => setPaidAnimating(false), 800); setShowPaidConfirm(true); }}
               onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; }}
@@ -431,8 +435,8 @@ export const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdi
           </div>
         );
       })()}
-      <ConfirmDialog open={showApproveConfirm} onClose={() => setShowApproveConfirm(false)} title={dualRequired ? "First Approval" : "Approve?"} message={dualRequired ? "This entry (" + fmt(grandTotal) + ") exceeds the dual-approval threshold. A second board member will need to approve before it's final." : "Approve " + fmt(grandTotal) + " for " + (user?.name || "member") + "?"} confirmText={dualRequired ? "First Approve" : "Approve"} onConfirm={() => onApprove(reviewNotes)} />
-      <ConfirmDialog open={showPaidConfirm} onClose={() => setShowPaidConfirm(false)} title="Mark as Paid?" message={"Confirm payment of " + fmt(grandTotal) + " to " + (user?.name || "member") + " via " + payMethod + (payRef ? " (#" + payRef + ")" : "") + "?"} confirmText="Mark Paid" onConfirm={() => onMarkPaid({ method: payMethod, reference: payRef })} />
+      <ConfirmDialog open={showApproveConfirm} onClose={() => setShowApproveConfirm(false)} title={dualRequired ? "First Approval" : "Approve?"} message={dualRequired ? "This entry (" + fmt(grandTotal) + ") exceeds the dual-approval threshold. A second board member will need to approve before it's final." : "Approve " + fmt(grandTotal) + " for " + (user?.name || "member") + "?"} confirmText={dualRequired ? "First Approve" : "Approve"} onConfirm={async () => { setProcessing(true); await onApprove(reviewNotes); setProcessing(false); }} />
+      <ConfirmDialog open={showPaidConfirm} onClose={() => setShowPaidConfirm(false)} title="Mark as Paid?" message={"Confirm payment of " + fmt(grandTotal) + " to " + (user?.name || "member") + " via " + payMethod + (payRef ? " (#" + payRef + ")" : "") + "?"} confirmText="Mark Paid" onConfirm={async () => { setProcessing(true); await onMarkPaid({ method: payMethod, reference: payRef }); setProcessing(false); }} />
     </div>
   );
 };

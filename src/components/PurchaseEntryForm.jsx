@@ -10,7 +10,7 @@ import {
   Icon, StatusBadge, catColors, CategoryBadge, RoleBadge,
   S, Field, Modal, ConfirmDialog, StatCard,
   ImageUploader, MaterialsEditor,
-} from "./shared";
+} from "../shared";
 
 export const PurchaseEntryForm = ({ entry, settings, currentUser, onSave, onCancel, onSubmit, onDelete, mob }) => {
   const [form, setForm] = useState({

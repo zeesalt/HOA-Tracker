@@ -10,7 +10,7 @@ import {
   Icon, StatusBadge, catColors, CategoryBadge, RoleBadge,
   S, Field, Modal, ConfirmDialog, StatCard,
   ImageUploader, MaterialsEditor,
-} from "./shared";
+} from "../shared";
 
 export const NotificationPanel = ({ entries, purchaseEntries, users, settings, onView, onViewPurchase, onClose, onReviewAll, mob }) => {
   const pendingWork = entries.filter(e => e.status === STATUSES.SUBMITTED).map(e => ({ ...e, _type: "work" }));

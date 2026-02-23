@@ -10,7 +10,7 @@ import {
   Icon, StatusBadge, catColors, CategoryBadge, RoleBadge,
   S, Field, Modal, ConfirmDialog, StatCard,
   ImageUploader, MaterialsEditor,
-} from "./shared";
+} from "../shared";
 
 const SWIPE_THRESHOLD     = 60;   // px to commit reveal
 const SWIPE_MAX_MEMBER    = 80;   // px travel for single-button reveal (View/Edit only)

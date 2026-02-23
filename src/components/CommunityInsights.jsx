@@ -10,7 +10,7 @@ import {
   Icon, StatusBadge, catColors, CategoryBadge, RoleBadge,
   S, Field, Modal, ConfirmDialog, StatCard, AnimatedBar,
   ImageUploader, MaterialsEditor,
-} from "./shared";
+} from "../shared";
 
 const CATEGORY_COLORS = {
   "Landscaping": "#2E7D32", "Plumbing": "#1565C0", "Electrical": "#F9A825",
