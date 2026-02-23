@@ -129,6 +129,99 @@ function getUserRate(users, settings, userId) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ANIMATION HOOKS & COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Count-up hook: animates from 0 to a numeric target over `duration` ms
+function useCountUp(target, duration = 900) {
+  const [display, setDisplay] = useState(target);
+  const rafRef = useRef(null);
+  const prevTarget = useRef(target);
+  useEffect(() => {
+    // Only animate if the value actually changed and reduced-motion isn't set
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setDisplay(target); return; }
+    if (prevTarget.current === target) return;
+    prevTarget.current = target;
+    const start = Date.now();
+    const from = 0;
+    const step = () => {
+      const elapsed = Date.now() - start;
+      const pct = Math.min(elapsed / duration, 1);
+      // Ease-out cubic
+      const eased = 1 - Math.pow(1 - pct, 3);
+      setDisplay(from + (target - from) * eased);
+      if (pct < 1) rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [target, duration]);
+  return display;
+}
+
+// Animated progress bar — renders at 0% then transitions to real value on mount
+function AnimatedBar({ pct, color, height = 12, radius = 6, style = {} }) {
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setWidth(pct));
+    return () => cancelAnimationFrame(id);
+  }, [pct]);
+  return (
+    <div style={{ height, background: BRAND.bgSoft, borderRadius: radius, overflow: "hidden", ...style }}>
+      <div style={{ height: "100%", borderRadius: radius, width: width + "%", minWidth: width > 0 ? height / 2 : 0, background: color, transition: "width 700ms cubic-bezier(0.22,1,0.36,1)" }} />
+    </div>
+  );
+}
+
+// Confetti burst — mounts briefly then self-removes
+const CONFETTI_COLORS = ["#8E3B2E","#1F2A38","#2E7D32","#F59E0B","#1565C0","#7B1FA2","#00838F"];
+function ConfettiBurst({ onDone }) {
+  const pieces = useMemo(() => Array.from({ length: 18 }, (_, i) => ({
+    id: i,
+    color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+    x: (Math.random() - 0.5) * 320,
+    y: -(80 + Math.random() * 200),
+    r: Math.random() * 540 - 270,
+    w: 8 + Math.random() * 8,
+    h: 5 + Math.random() * 5,
+    delay: Math.random() * 180,
+  })), []);
+  useEffect(() => { const t = setTimeout(onDone, 1100); return () => clearTimeout(t); }, [onDone]);
+  return (
+    <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: 9999, pointerEvents: "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      {pieces.map(p => (
+        <div key={p.id} style={{
+          position: "absolute", top: "50%", left: "50%",
+          width: p.w, height: p.h,
+          background: p.color, borderRadius: 2,
+          "--cx": p.x + "px", "--cy": p.y + "px", "--cr": p.r + "deg",
+          animation: `confettiFly 900ms cubic-bezier(0.25,0.46,0.45,0.94) ${p.delay}ms forwards`,
+          opacity: 0,
+        }} />
+      ))}
+    </div>
+  );
+}
+
+// Photo lightbox — full-screen overlay with zoom-in transition
+function PhotoLightbox({ src, alt, onClose }) {
+  useEffect(() => {
+    const handler = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+  return (
+    <div role="dialog" aria-label="Photo preview" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <img
+        src={src} alt={alt}
+        onClick={e => e.stopPropagation()}
+        style={{ maxWidth: "90vw", maxHeight: "85vh", borderRadius: 10, boxShadow: "0 24px 80px rgba(0,0,0,0.5)", animation: "lightboxIn 220ms cubic-bezier(0.34,1.56,0.64,1)" }}
+      />
+      <button onClick={onClose} aria-label="Close photo" style={{ position: "absolute", top: 20, right: 20, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", width: 40, height: 40, borderRadius: 20, fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // ICON COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 const Icon = ({ name, size = 18, filled = false }) => {
@@ -379,17 +472,31 @@ const ConfirmDialog = ({ open, onClose, onConfirm, title, message, confirmText, 
 );
 
 // Dashboard Card — with navy top accent line
-const StatCard = ({ label, value, icon, accentColor }) => (
-  <div style={{ ...S.cardAccent, padding: "20px 24px", display: "flex", alignItems: "center", gap: 16, marginBottom: 0 }}>
-    <div style={{ width: 44, height: 44, borderRadius: 8, background: (accentColor || BRAND.navy) + "10", display: "flex", alignItems: "center", justifyContent: "center", color: accentColor || BRAND.navy }}>
-      <Icon name={icon} size={22} />
+const StatCard = ({ label, value, icon, accentColor }) => {
+  // Parse numeric value for count-up; preserve formatting prefix/suffix
+  const numMatch = typeof value === "string" ? value.match(/^(\$?)([0-9,.]+)(\s*.*)$/) : null;
+  const numericTarget = numMatch ? parseFloat(numMatch[2].replace(/,/g, "")) : (typeof value === "number" ? value : null);
+  const counted = useCountUp(numericTarget !== null ? numericTarget : 0, 850);
+  let displayValue = value;
+  if (numericTarget !== null && numMatch) {
+    const prefix = numMatch[1];
+    const suffix = numMatch[3] || "";
+    displayValue = prefix + (Number.isInteger(numericTarget) ? Math.round(counted).toLocaleString("en-US") : counted.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })) + suffix;
+  } else if (typeof value === "number") {
+    displayValue = Math.round(counted);
+  }
+  return (
+    <div style={{ ...S.cardAccent, padding: "20px 24px", display: "flex", alignItems: "center", gap: 16, marginBottom: 0 }}>
+      <div style={{ width: 44, height: 44, borderRadius: 8, background: (accentColor || BRAND.navy) + "10", display: "flex", alignItems: "center", justifyContent: "center", color: accentColor || BRAND.navy }}>
+        <Icon name={icon} size={22} />
+      </div>
+      <div>
+        <div style={{ fontSize: 12, color: BRAND.textLight, fontWeight: 500, marginBottom: 2, fontFamily: BRAND.sans }}>{label}</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: BRAND.navy, fontFamily: BRAND.sans }}>{displayValue}</div>
+      </div>
     </div>
-    <div>
-      <div style={{ fontSize: 12, color: BRAND.textLight, fontWeight: 500, marginBottom: 2, fontFamily: BRAND.sans }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: BRAND.navy, fontFamily: BRAND.sans }}>{value}</div>
-    </div>
-  </div>
-);
+  );
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // IMAGE COMPRESSION + UPLOADER
@@ -1142,7 +1249,7 @@ const PurchaseEntryDetail = ({ entry, settings, users, currentUser, onBack, onEd
           <div style={{ marginBottom: 16 }}>
             <div style={S.sectionLabel}>Receipts</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-              {entry.receiptUrls.map((url, i) => <img key={i} src={url} alt={"Receipt " + (i + 1)} style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, border: "1px solid " + BRAND.borderLight, cursor: "pointer" }} onClick={() => window.open(url)} />)}
+              {entry.receiptUrls.map((url, i) => <img key={i} src={url} alt={"Receipt " + (i + 1)} style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, border: "1px solid " + BRAND.borderLight, cursor: "pointer", transition: "transform 150ms, box-shadow 150ms" }} onMouseEnter={ev => { ev.currentTarget.style.transform = "scale(1.06)"; ev.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.18)"; }} onMouseLeave={ev => { ev.currentTarget.style.transform = "scale(1)"; ev.currentTarget.style.boxShadow = "none"; }} onClick={() => onLightbox ? onLightbox(url, "Receipt " + (i + 1)) : window.open(url)} />)}
             </div>
           </div>
         )}
@@ -1150,7 +1257,7 @@ const PurchaseEntryDetail = ({ entry, settings, users, currentUser, onBack, onEd
           <div style={{ marginBottom: 16 }}>
             <div style={S.sectionLabel}>Photos</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-              {entry.photoUrls.map((url, i) => <img key={i} src={url} alt={"Photo " + (i + 1)} style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, border: "1px solid " + BRAND.borderLight, cursor: "pointer" }} onClick={() => window.open(url)} />)}
+              {entry.photoUrls.map((url, i) => <img key={i} src={url} alt={"Photo " + (i + 1)} style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, border: "1px solid " + BRAND.borderLight, cursor: "pointer", transition: "transform 150ms, box-shadow 150ms" }} onMouseEnter={ev => { ev.currentTarget.style.transform = "scale(1.06)"; ev.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.18)"; }} onMouseLeave={ev => { ev.currentTarget.style.transform = "scale(1)"; ev.currentTarget.style.boxShadow = "none"; }} onClick={() => onLightbox ? onLightbox(url, "Photo " + (i + 1)) : window.open(url)} />)}
             </div>
           </div>
         )}
@@ -1295,7 +1402,7 @@ const WorkflowStepper = ({ status, mob }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // ENTRY DETAIL
 // ═══════════════════════════════════════════════════════════════════════════
-const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onApprove, onReject, onTrash, onRestore, onMarkPaid, onDuplicate, onSecondApprove, onDelete, onComment, mob }) => {
+const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onApprove, onReject, onTrash, onRestore, onMarkPaid, onDuplicate, onSecondApprove, onDelete, onComment, onLightbox, mob }) => {
   const [reviewNotes, setReviewNotes] = useState(entry.reviewerNotes || "");
   const [showApproveConfirm, setShowApproveConfirm] = useState(false);
   const [showPaidConfirm, setShowPaidConfirm] = useState(false);
@@ -3004,9 +3111,8 @@ const CommunityInsights = ({ fetchStats, settings, mob, cachedStats, onStatsCach
                     <span style={{ fontSize: 13, fontWeight: 600, color: BRAND.navy }}>{monthName(m.month)} {m.month.slice(0, 4)}</span>
                     <span style={{ fontSize: 14, fontWeight: 700, color: BRAND.brick }}>{fmt(total)}</span>
                   </div>
-                  <div style={{ height: 20, background: BRAND.bgSoft, borderRadius: 10, overflow: "hidden" }}>
-                    <div style={{ height: "100%", borderRadius: 10, width: pct + "%", minWidth: pct > 0 ? 8 : 0, background: "linear-gradient(90deg, #1565C0, #0097A7)", transition: "width 600ms ease-out" }} />
-                  </div>
+                  <AnimatedBar pct={pct} color="url(#monthGrad)" height={20} radius={10} style={{ background: BRAND.bgSoft }} />
+                  <svg width={0} height={0}><defs><linearGradient id="monthGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stopColor="#1565C0" /><stop offset="100%" stopColor="#0097A7" /></linearGradient></defs></svg>
                   <div style={{ fontSize: 11, color: BRAND.textLight, marginTop: 2 }}>{m.entry_count} entries · {m.member_count} member{m.member_count > 1 ? "s" : ""}</div>
                 </div>
               );
@@ -3038,9 +3144,7 @@ const CommunityInsights = ({ fetchStats, settings, mob, cachedStats, onStatsCach
                       <span style={{ fontSize: 11, color: BRAND.textLight, marginLeft: 6 }}>{sharePct}%</span>
                     </div>
                   </div>
-                  <div style={{ height: 14, background: color + "15", borderRadius: 7, overflow: "hidden" }}>
-                    <div style={{ height: "100%", borderRadius: 7, width: pct + "%", minWidth: pct > 0 ? 6 : 0, background: color, transition: "width 600ms ease-out", opacity: 0.85 }} />
-                  </div>
+                  <AnimatedBar pct={pct} color={color} height={14} radius={7} style={{ background: color + "15" }} />
                   <div style={{ display: "flex", gap: 12, fontSize: 11, color: BRAND.textLight, marginTop: 3 }}>
                     <span>Labor: {fmt(data.labor)}</span><span>Materials: {fmt(data.materials)}</span><span>{data.count} entries</span>
                   </div>
@@ -3878,6 +3982,12 @@ export default function App() {
       @keyframes validShake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
       @keyframes paidCount { from { opacity: 0; transform: translateY(4px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
       @keyframes springBack { 0% { transform: translateX(var(--snap-x, 0px)); } 60% { transform: translateX(calc(var(--snap-x, 0px) * -0.08)); } 100% { transform: translateX(0); } }
+      @keyframes approveFlash { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: 0; } }
+      @keyframes confettiFly { 0% { transform: translate(0,0) rotate(0deg) scale(1); opacity: 1; } 100% { transform: translate(var(--cx),var(--cy)) rotate(var(--cr)) scale(0.4); opacity: 0; } }
+      @keyframes fabRing { 0% { transform: scale(1); opacity: 0.7; } 100% { transform: scale(2.2); opacity: 0; } }
+      @keyframes toastProgress { from { width: 100%; } to { width: 0%; } }
+      @keyframes lightboxIn { from { opacity: 0; transform: scale(0.88); } to { opacity: 1; transform: scale(1); } }
+      @keyframes countUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
       .fade-in { animation: fadeIn 200ms ease-out; }
       .page-enter { animation: slideInRight 220ms cubic-bezier(0.25,0.46,0.45,0.94); }
       .page-exit { animation: slideOutLeft 180ms ease-in forwards; }
@@ -3986,6 +4096,10 @@ export default function App() {
   const [needsInfoId, setNeedsInfoId] = useState(null);
   const [needsInfoNote, setNeedsInfoNote] = useState("");
   const [toast, setToast] = useState(null); // { message, type, detail }
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [flashApproveId, setFlashApproveId] = useState(null); // id of entry being approve-flashed
+  const [lightboxSrc, setLightboxSrc] = useState(null); // { src, alt }
+  const [fabPulsed, setFabPulsed] = useState(() => { try { return !!localStorage.getItem("hoa_fab_pulsed"); } catch { return false; } });
   const [previewAsId, setPreviewAsId] = useState(null); // non-null = Treasurer previewing as a member
 
   // Sync auth errors from hook
@@ -4138,6 +4252,7 @@ export default function App() {
     const total = calcLabor(calcHours(formData.startTime, formData.endTime), getRate(formData.userId || currentUser.id)) + calcMaterialsTotal(formData.materials);
     setEditEntry(null); setNewEntry(false); setPage("entries");
     showToast("Entry submitted!", "success", fmt(total) + " for " + formData.category + " — Treasurer will review shortly");
+    setShowConfetti(true);
   };
   const doDelete = async () => { if (editEntry) { await deleteEntry(editEntry.id); setEditEntry(null); setPage("entries"); } };
   const doApprove = async (notes) => {
@@ -4231,7 +4346,14 @@ export default function App() {
     if (updated) showToast("Moved to Trash", "success", (u?.name || "Member") + " — " + entry.category);
   };
   // Quick approve/reject from review queue (without opening detail)
-  const doApproveEntry = async (id, notes) => { await approveEntry(id, notes); const e = entries.find(x => x.id === id); const u = users.find(x => x.id === e?.userId); showToast("Entry approved", "success", u?.name + " — " + (e?.category || "")); };
+  const doApproveEntry = async (id, notes) => {
+    setFlashApproveId(id);
+    setTimeout(async () => {
+      await approveEntry(id, notes);
+      setFlashApproveId(null);
+      const e = entries.find(x => x.id === id); const u = users.find(x => x.id === e?.userId); showToast("Entry approved", "success", u?.name + " — " + (e?.category || ""));
+    }, 380);
+  };
   const doRejectEntry = async (id, notes) => { await rejectEntry(id, notes); const e = entries.find(x => x.id === id); const u = users.find(x => x.id === e?.userId); showToast("Entry returned for edits", "error", u?.name + " will be notified"); };
   const doNeedsInfo = async (id, notes) => { await needsInfoEntry(id, notes); const e = entries.find(x => x.id === id); const u = users.find(x => x.id === e?.userId); showToast("Needs Info requested", "info", u?.name + " will be notified to add details"); };
   const doBulkApprove = async (ids) => {
@@ -4429,7 +4551,7 @@ export default function App() {
     }
     if (viewEntry) {
       const fresh = entries.find(e => e.id === viewEntry.id) || viewEntry;
-      return <EntryDetail entry={fresh} settings={settings} users={users} currentUser={viewAs} onBack={() => setViewEntry(null)} onEdit={() => { setEditEntry(fresh); setViewEntry(null); }} onApprove={doApprove} onReject={doDecline} onTrash={doTrash} onRestore={doRestore} onMarkPaid={doMarkPaid} onComment={doComment} onSecondApprove={doSecondApprove} onDelete={async (e) => { await deleteEntry(e.id); setViewEntry(null); showToast("Entry deleted", "success"); }} onDuplicate={(e) => { setViewEntry(null); setEditEntry(null); setNewEntry(true); setTimeout(() => setEditEntry({ ...e, id: null, status: STATUSES.DRAFT, date: todayStr(), startTime: nowTime(), endTime: "", preImages: [], postImages: [], reviewerNotes: "", reviewedAt: "", paidAt: "" }), 50); }} mob={mob} />;
+      return <EntryDetail entry={fresh} settings={settings} users={users} currentUser={viewAs} onBack={() => setViewEntry(null)} onEdit={() => { setEditEntry(fresh); setViewEntry(null); }} onApprove={doApprove} onReject={doDecline} onTrash={doTrash} onRestore={doRestore} onMarkPaid={doMarkPaid} onComment={doComment} onSecondApprove={doSecondApprove} onLightbox={(src, alt) => setLightboxSrc({ src, alt })} onDelete={async (e) => { await deleteEntry(e.id); setViewEntry(null); showToast("Entry deleted", "success"); }} onDuplicate={(e) => { setViewEntry(null); setEditEntry(null); setNewEntry(true); setTimeout(() => setEditEntry({ ...e, id: null, status: STATUSES.DRAFT, date: todayStr(), startTime: nowTime(), endTime: "", preImages: [], postImages: [], reviewerNotes: "", reviewedAt: "", paidAt: "" }), 50); }} mob={mob} />;
     }
     if (page === "dashboard") {
       const recent = myEntries.slice(0, 5);
@@ -4501,38 +4623,8 @@ export default function App() {
                   </div>
                   <span style={{ fontSize: 14, fontWeight: 700, color: barColor }}>{pct.toFixed(0)}% used</span>
                 </div>
-                <div style={{ height: 12, background: BRAND.bgSoft, borderRadius: 6, overflow: "hidden", marginBottom: 8 }}>
-                  <div style={{ height: "100%", borderRadius: 6, width: pct + "%", background: barColor, transition: "width 600ms ease-out" }} />
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                  <span style={{ color: BRAND.textMuted }}>{fmt(ytdSpent)} spent</span>
-                  <span style={{ color: BRAND.textLight }}>{fmt(settings.annualBudget - ytdSpent)} remaining of {fmt(settings.annualBudget)}</span>
-                </div>
-                {isWarning && !isDanger && <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: BRAND.warning }}>⚠️ Budget is at {pct.toFixed(0)}% — approaching the annual limit.</div>}
-                {isDanger && <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: BRAND.error }}>🚨 Budget exceeded! Approved reimbursements surpass the annual budget.</div>}
-              </div>
-            );
-          })()}
-          {/* Annual Budget Progress Bar */}
-          {isTreasurer && settings.annualBudget > 0 && (() => {
-            const yr = String(new Date().getFullYear());
-            let ytdSpent = 0;
-            entries.filter(e => (e.status === STATUSES.APPROVED || e.status === STATUSES.PAID) && e.date.startsWith(yr)).forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getRate(e.userId); ytdSpent += calcLabor(h, r) + calcMaterialsTotal(e.materials); });
-            const pct = Math.min((ytdSpent / settings.annualBudget) * 100, 100);
-            const isWarning = pct >= 80;
-            const isDanger = pct >= 100;
-            const barColor = isDanger ? BRAND.error : isWarning ? BRAND.warning : "#2E7D32";
-            return (
-              <div style={{ ...S.card, padding: "18px 24px", marginBottom: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 18 }}>💰</span>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: BRAND.navy }}>{yr} Reimbursement Budget</span>
-                  </div>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: barColor }}>{pct.toFixed(0)}% used</span>
-                </div>
-                <div style={{ height: 12, background: BRAND.bgSoft, borderRadius: 6, overflow: "hidden", marginBottom: 8 }}>
-                  <div style={{ height: "100%", borderRadius: 6, width: pct + "%", background: barColor, transition: "width 600ms ease-out" }} />
+              <div style={{ marginBottom: 8 }}>
+                  <AnimatedBar pct={pct} color={barColor} height={12} radius={6} />
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
                   <span style={{ color: BRAND.textMuted }}>{fmt(ytdSpent)} spent</span>
@@ -4803,7 +4895,7 @@ export default function App() {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                   <thead><tr><th scope="col" style={S.th}>Date</th>{isTreasurer && <th scope="col" style={S.th}>Member</th>}<th scope="col" style={S.th}>Category</th><th scope="col" style={S.th}>Description</th><th scope="col" style={{ ...S.th, textAlign: "right" }}>Total</th><th scope="col" style={S.th}>Status</th></tr></thead>
                   <tbody>{recent.map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); return (
-                    <tr key={e.id} tabIndex={0} role="row" onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), setViewEntry(e))} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms" }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
+                    <tr key={e.id} tabIndex={0} role="row" onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), setViewEntry(e))} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms", animation: `cardSlideIn 200ms ease-out ${Math.min(i, 8) * 25}ms both` }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
                       <td style={S.td}>{formatDate(e.date)}</td>{isTreasurer && <td style={S.td}>{u?.name}</td>}<td style={S.td}><CategoryBadge category={e.category} /></td><td style={{ ...S.td, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</td><td style={{ ...S.td, textAlign: "right", fontWeight: 600 }}>{fmt(total)}</td><td style={S.td}><StatusBadge status={e.status} /></td>
                     </tr>); })}</tbody>
                 </table>
@@ -5096,7 +5188,7 @@ export default function App() {
                   });
                   return sorted;
                 })().map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); return (
-                  <tr key={e.id} tabIndex={0} role="row" onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), setViewEntry(e))} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms" }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
+                  <tr key={e.id} tabIndex={0} role="row" onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), setViewEntry(e))} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms", animation: `cardSlideIn 220ms ease-out ${Math.min(i, 8) * 30}ms both` }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
                     <td style={S.td}>{formatDate(e.date)}</td>{isTreasurer && <td style={S.td}>{u?.name}</td>}<td style={S.td}><CategoryBadge category={e.category} /></td><td style={{ ...S.td, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</td><td style={{ ...S.td, textAlign: "right" }}>{fmtHours(h)}</td><td style={{ ...S.td, textAlign: "right", fontWeight: 600 }}>{fmt(total)}</td><td style={S.td}><StatusBadge status={e.status} /></td>
                   </tr>); })}</tbody>
               </table>
@@ -5182,7 +5274,8 @@ export default function App() {
                 const isBulkEligible = !isPurchase && e.status === STATUSES.SUBMITTED;
                 const submittedAgo = e.submittedAt ? timeAgo(e.submittedAt) : null;
                 return (
-                <div key={e.id} style={{ ...S.card, padding: "20px 24px", transition: "box-shadow 150ms, border-color 150ms", borderLeft: "4px solid " + (isSelected ? BRAND.navy : isPurchase ? "#0E7490" : e.status === STATUSES.AWAITING_SECOND ? "#4338CA" : BRAND.brick), outline: isSelected ? "2px solid " + BRAND.navy + "30" : "none" }} onMouseEnter={ev => ev.currentTarget.style.boxShadow = "0 4px 16px rgba(31,42,56,0.08)"} onMouseLeave={ev => ev.currentTarget.style.boxShadow = "0 1px 3px rgba(31,42,56,0.04)"}>
+                <div key={e.id} style={{ ...S.card, padding: "20px 24px", transition: "box-shadow 150ms, border-color 150ms", borderLeft: "4px solid " + (isSelected ? BRAND.navy : isPurchase ? "#0E7490" : e.status === STATUSES.AWAITING_SECOND ? "#4338CA" : BRAND.brick), outline: isSelected ? "2px solid " + BRAND.navy + "30" : "none", position: "relative", overflow: "hidden" }} onMouseEnter={ev => ev.currentTarget.style.boxShadow = "0 4px 16px rgba(31,42,56,0.08)"} onMouseLeave={ev => ev.currentTarget.style.boxShadow = "0 1px 3px rgba(31,42,56,0.04)"}>
+                  {flashApproveId === e.id && <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "#2E7D32", borderRadius: "inherit", animation: "approveFlash 380ms ease-out forwards", pointerEvents: "none", zIndex: 2 }} />}
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                     {isBulkEligible && (
                       <div style={{ paddingTop: 4, flexShrink: 0 }}>
@@ -5456,7 +5549,10 @@ export default function App() {
         {(pullY > 0 || pullRefreshing) && (
           <div style={{ position: "fixed", top: 56, left: 0, right: 0, zIndex: 19, display: "flex", alignItems: "center", justifyContent: "center", height: Math.max(pullY, pullRefreshing ? 40 : 0), overflow: "hidden", transition: pullRefreshing ? "none" : "height 200ms ease", background: BRAND.bgSoft, borderBottom: "1px solid " + BRAND.borderLight }}>
             <div style={{ fontSize: 13, color: BRAND.textMuted, display: "flex", alignItems: "center", gap: 6 }}>
-              {pullRefreshing ? "↻ Refreshing..." : pullY >= PULL_THRESHOLD ? "↑ Release to refresh" : "↓ Pull to refresh"}
+              {pullRefreshing
+                ? <><span style={{ display: "inline-block", animation: "spin 600ms linear infinite", fontSize: 16 }}>↻</span> Refreshing...</>
+                : pullY >= PULL_THRESHOLD ? "↑ Release to refresh" : "↓ Pull to refresh"
+              }
             </div>
           </div>
         )}
@@ -5477,7 +5573,10 @@ export default function App() {
                 </button>
               </div>
             )}
-            <button aria-label="Create new entry" style={{ position: "fixed", bottom: 160, right: 20, width: 56, height: 56, borderRadius: 28, background: BRAND.brick, color: "#fff", border: "none", boxShadow: "0 4px 16px rgba(142,59,46,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 15, transform: newEntryType === "chooser" ? "rotate(45deg)" : "none", transition: "transform 200ms" }} onClick={() => setNewEntryType(t => t === "chooser" ? null : "chooser")}>
+            <button aria-label="Create new entry" style={{ position: "fixed", bottom: 160, right: 20, width: 56, height: 56, borderRadius: 28, background: BRAND.brick, color: "#fff", border: "none", boxShadow: "0 4px 16px rgba(142,59,46,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 15, transform: newEntryType === "chooser" ? "rotate(45deg)" : "none", transition: "transform 200ms" }} onClick={() => { if (!fabPulsed) { setFabPulsed(true); try { localStorage.setItem("hoa_fab_pulsed", "1"); } catch {} } setNewEntryType(t => t === "chooser" ? null : "chooser"); }}>
+              {!fabPulsed && entries.length === 0 && (
+                <span aria-hidden="true" style={{ position: "absolute", inset: -4, borderRadius: 32, border: "2px solid " + BRAND.brick, animation: "fabRing 1.6s ease-out 3", pointerEvents: "none" }} />
+              )}
               <Icon name="plus" size={24} />
             </button>
           </>
@@ -5488,6 +5587,8 @@ export default function App() {
         )}
         <ChangePasswordModal />
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} isTreasurer={isTreasurer} mob={mob} hoaName={settings?.hoaName || "24 Mill Street HOA"} />}
+        {showConfetti && <ConfettiBurst onDone={() => setShowConfetti(false)} />}
+        {lightboxSrc && <PhotoLightbox src={lightboxSrc.src} alt={lightboxSrc.alt} onClose={() => setLightboxSrc(null)} />}
         {/* Toast notification */}
         {toast && (
           <div className="toast-enter" role="status" aria-live="polite" style={{ position: "fixed", bottom: 96, left: 16, right: 16, zIndex: 50, background: toast.type === "success" ? "#065F46" : toast.type === "error" ? "#991B1B" : BRAND.navy, color: "#fff", borderRadius: 12, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,0.25)" }}>
@@ -5508,9 +5609,14 @@ export default function App() {
                 <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.55)", animation: "undoBar 6000ms linear forwards", transformOrigin: "left" }} />
               </div>
             )}
+            {/* Toast auto-dismiss progress bar */}
+            {undoStack.length === 0 && (
+              <div style={{ height: 3, background: "rgba(255,255,255,0.15)", position: "relative" }}>
+                <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.4)", animation: "toastProgress 4000ms linear forwards", transformOrigin: "left" }} />
+              </div>
+            )}
           </div>
         )}
-        {/* Bottom tab bar */}
         <nav aria-label="Main navigation" style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: BRAND.white, borderTop: "1px solid " + BRAND.border, display: "flex", zIndex: 20, paddingBottom: "env(safe-area-inset-bottom)", boxShadow: "0 -2px 16px rgba(0,0,0,0.08)" }}>
           {bottomTabs.map(t => {
             const active = isActive(t.id);
@@ -5595,6 +5701,8 @@ export default function App() {
         <main id="main-content" style={S.content}><div key={page} className="page-enter">{renderPage()}</div></main>
         <ChangePasswordModal />
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} isTreasurer={isTreasurer} mob={mob} hoaName={settings?.hoaName || "24 Mill Street HOA"} />}
+        {showConfetti && <ConfettiBurst onDone={() => setShowConfetti(false)} />}
+        {lightboxSrc && <PhotoLightbox src={lightboxSrc.src} alt={lightboxSrc.alt} onClose={() => setLightboxSrc(null)} />}
         {toast && (
           <div className="toast-enter" role="status" aria-live="polite" style={{ position: "fixed", bottom: 24, right: 24, zIndex: 50, background: toast.type === "success" ? "#065F46" : toast.type === "error" ? "#991B1B" : BRAND.navy, color: "#fff", borderRadius: 12, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", maxWidth: 420 }}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 20px" }}>
@@ -5611,6 +5719,11 @@ export default function App() {
             {undoStack.length > 0 && (
               <div style={{ height: 3, background: "rgba(255,255,255,0.15)", position: "relative" }}>
                 <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.55)", animation: "undoBar 6000ms linear forwards" }} />
+              </div>
+            )}
+            {undoStack.length === 0 && (
+              <div style={{ height: 3, background: "rgba(255,255,255,0.15)", position: "relative" }}>
+                <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.4)", animation: "toastProgress 4000ms linear forwards", transformOrigin: "left" }} />
               </div>
             )}
           </div>
