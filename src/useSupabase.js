@@ -82,6 +82,9 @@ function mapSettings(row) {
     annualBudget: Number(row.annual_budget) || 0,
     dualApprovalThreshold: Number(row.dual_approval_threshold) || 0,
     mileageRate: row.mileage_rate != null ? Number(row.mileage_rate) : 0.725,
+    logoUrl: row.logo_url || "",
+    primaryColor: row.primary_color || "",
+    accentColor: row.accent_color || "",
   };
 }
 
@@ -91,7 +94,7 @@ export function useSupabase() {
   const [users, setUsers] = useState([]);
   const [entries, setEntries] = useState([]);
   const [purchaseEntries, setPurchaseEntries] = useState([]);
-  const [settings, setSettings] = useState({ hoaName: "24 Mill Street", defaultHourlyRate: 40, currency: "USD", inviteCode: "", inviteExpiresAt: null, mileageRate: 0.725 });
+  const [settings, setSettings] = useState({ hoaName: "", defaultHourlyRate: 40, currency: "USD", inviteCode: "", inviteExpiresAt: null, mileageRate: 0.725, logoUrl: "", primaryColor: "", accentColor: "" });
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState("");
 
@@ -638,6 +641,9 @@ export function useSupabase() {
       annual_budget: newSettings.annualBudget || 0,
       dual_approval_threshold: newSettings.dualApprovalThreshold || 0,
       mileage_rate: newSettings.mileageRate != null ? newSettings.mileageRate : 0.725,
+      logo_url: newSettings.logoUrl || null,
+      primary_color: newSettings.primaryColor || null,
+      accent_color: newSettings.accentColor || null,
     }).eq("id", 1);
     if (error) { console.error("Settings error:", error); return false; }
     setSettings(newSettings);

@@ -4,25 +4,50 @@ import { useSupabase } from "./useSupabase";
 // ═══════════════════════════════════════════════════════════════════════════
 // BRAND TOKENS
 // ═══════════════════════════════════════════════════════════════════════════
-const BRAND = {
-  navy: "#1F2A38",
-  beige: "#D9D3C8",
-  bgSoft: "#F5F2ED",
-  charcoal: "#222222",
-  brick: "#8E3B2E",
-  brickDark: "#7A3226",
-  green: "#2F4F3E",
-  success: "#2E7D32",
-  warning: "#ED6C02",
-  error: "#C62828",
-  border: "#E0E0E0",
+// Base palette — overrideable via HOA settings
+const BASE_BRAND = {
+  navy:        "#1F2A38",
+  brick:       "#8E3B2E",
+  brickDark:   "#7A3226",
+  beige:       "#D9D3C8",
+  bgSoft:      "#F5F2ED",
+  charcoal:    "#222222",
+  green:       "#2F4F3E",
+  success:     "#2E7D32",
+  warning:     "#ED6C02",
+  error:       "#C62828",
+  border:      "#E0E0E0",
   borderLight: "#EDE9E3",
-  white: "#FFFFFF",
-  textMuted: "#6B6560",
-  textLight: "#736D66",
-  serif: "'Cormorant Garamond', Georgia, 'Times New Roman', serif",
-  sans: "'Inter', system-ui, -apple-system, sans-serif",
+  white:       "#FFFFFF",
+  textMuted:   "#6B6560",
+  textLight:   "#736D66",
+  serif:  "'Cormorant Garamond', Georgia, 'Times New Roman', serif",
+  sans:   "'Inter', system-ui, -apple-system, sans-serif",
 };
+
+// Derive a darkened variant for hover states
+function darken(hex, amt = 20) {
+  const n = parseInt(hex.replace("#",""), 16);
+  const r = Math.max(0, (n >> 16) - amt);
+  const g = Math.max(0, ((n >> 8) & 0xff) - amt);
+  const b = Math.max(0, (n & 0xff) - amt);
+  return "#" + [r,g,b].map(x => x.toString(16).padStart(2,"0")).join("");
+}
+
+function buildBrand(settings) {
+  const primary = settings?.primaryColor || BASE_BRAND.navy;
+  const accent  = settings?.accentColor  || BASE_BRAND.brick;
+  return {
+    ...BASE_BRAND,
+    navy:      primary,
+    brick:     accent,
+    brickDark: darken(accent, 20),
+  };
+}
+
+// Module-level BRAND used by components defined outside the App function.
+// Gets patched at runtime once settings load.
+let BRAND = { ...BASE_BRAND };
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -39,7 +64,7 @@ const CATEGORY_EMOJIS = {
 };
 const STATUSES = { DRAFT: "Draft", SUBMITTED: "Submitted", APPROVED: "Approved", AWAITING_SECOND: "Awaiting 2nd Approval", REJECTED: "Rejected", NEEDS_INFO: "Needs Info", PAID: "Paid", TRASH: "Trash" };
 const ROLES = { TREASURER: "Treasurer", MEMBER: "Member" };
-const DEFAULT_SETTINGS = { hoaName: "24 Mill Street", defaultHourlyRate: 40, userRates: {}, currency: "USD" };
+const DEFAULT_SETTINGS = { hoaName: "", defaultHourlyRate: 40, userRates: {}, currency: "USD", logoUrl: "", primaryColor: "", accentColor: "" };
 const MOBILE_BP = 768;
 const IRS_MILEAGE_RATE = 0.725; // IRS standard mileage rate 2026 ($/mile) — update annually
 
@@ -2226,7 +2251,7 @@ const ReportsPage = ({ entries, purchaseEntries, users, settings, currentUser, m
 </style>
 </head><body>
   <div class="header">
-    <h1>${settings.hoaName}</h1>
+    ${settings.logoUrl ? `<div style="display:flex;align-items:center;gap:14px;margin-bottom:8px"><img src="${settings.logoUrl}" alt="${settings.hoaName} logo" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid #ddd"/><h1>${settings.hoaName}</h1></div>` : `<h1>${settings.hoaName}</h1>`}
     <div style="font-size:15px;color:#555;margin-top:2px;font-family:Arial,sans-serif">Reimbursement Report</div>
     <div class="meta">
       <span><strong>Period:</strong> ${periodLabel}</span>
@@ -2587,7 +2612,7 @@ const HelpPage = ({ currentUser, settings, mob, onNav }) => {
   const [openSection, setOpenSection] = useState(null);
   const toggle = (id) => setOpenSection(s => s === id ? null : id);
 
-  const hoaName = settings?.hoaName || "24 Mill Street";
+  const hoaName = settings?.hoaName || "HOA Work Tracker";
 
   const WORKFLOW = [
     { emoji: "✏️", label: "Log Work", sub: "Create a draft", bg: "#EFF6FF", color: "#1565C0" },
@@ -3669,8 +3694,220 @@ const NotificationPanel = ({ entries, purchaseEntries, users, settings, onView, 
   );
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// HOA LOGO — renders logo image or a lettered fallback avatar
+// ═══════════════════════════════════════════════════════════════════════════
+const HoaLogo = ({ logoUrl, hoaName, size = 40, borderRadius = 6, style = {} }) => {
+  const initials = (hoaName || "HOA")
+    .split(" ").filter(Boolean).slice(0, 2)
+    .map(w => w[0].toUpperCase()).join("");
+  if (logoUrl) {
+    return (
+      <img
+        src={logoUrl}
+        alt={hoaName + " logo"}
+        style={{ width: size, height: size, borderRadius, objectFit: "cover", background: BRAND.beige, flexShrink: 0, ...style }}
+      />
+    );
+  }
+  return (
+    <div style={{ width: size, height: size, borderRadius, background: BRAND.brick, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, ...style }}>
+      <span style={{ fontFamily: BRAND.serif, fontWeight: 700, fontSize: Math.round(size * 0.38), color: "#fff", lineHeight: 1, letterSpacing: "-0.02em" }}>{initials}</span>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SETUP WIZARD — shown to Treasurer when hoaName is blank (fresh install)
+// ═══════════════════════════════════════════════════════════════════════════
+const SetupWizard = ({ onComplete, mob }) => {
+  const [step, setStep]         = useState(1);
+  const [hoaName, setHoaName]   = useState("");
+  const [logoUrl, setLogoUrl]   = useState("");
+  const [primary, setPrimary]   = useState(BASE_BRAND.navy);
+  const [accent, setAccent]     = useState(BASE_BRAND.brick);
+  const [inviteCode, setInviteCode] = useState("");
+  const [saving, setSaving]     = useState(false);
+  const [nameErr, setNameErr]   = useState("");
+  const logoInputRef            = useRef(null);
+
+  const handleLogoFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = await compressImage(file, 400, 0.85);
+    setLogoUrl(url);
+  };
+
+  const handleFinish = async () => {
+    if (!hoaName.trim()) { setNameErr("HOA name is required"); setStep(1); return; }
+    setSaving(true);
+    await onComplete({
+      hoaName: hoaName.trim(),
+      logoUrl,
+      primaryColor: primary !== BASE_BRAND.navy ? primary : "",
+      accentColor:  accent  !== BASE_BRAND.brick ? accent  : "",
+      inviteCode:   inviteCode.trim().toUpperCase(),
+      defaultHourlyRate: 40,
+      mileageRate: 0.725,
+      currency: "USD",
+      annualBudget: 0,
+      dualApprovalThreshold: 0,
+      inviteExpiresAt: null,
+    });
+    setSaving(false);
+  };
+
+  const previewBrand = buildBrand({ primaryColor: primary, accentColor: accent });
+
+  const steps = ["Name & Logo", "Colors", "Member Access"];
+
+  return (
+    <div style={{ minHeight: "100dvh", display: "flex", alignItems: "safe center", justifyContent: "center", background: BASE_BRAND.bgSoft, fontFamily: BASE_BRAND.sans, padding: mob ? "24px 16px" : 40 }}>
+      <div className="fade-in" style={{ width: "100%", maxWidth: 480 }}>
+        {/* Header */}
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🏘️</div>
+          <h1 style={{ fontFamily: BASE_BRAND.serif, fontSize: mob ? 26 : 32, fontWeight: 600, color: BASE_BRAND.navy, margin: "0 0 8px" }}>Set Up Your HOA</h1>
+          <p style={{ fontSize: 14, color: BASE_BRAND.textMuted, margin: 0 }}>Takes about 2 minutes. You can change everything later in Settings.</p>
+        </div>
+
+        {/* Step indicators */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 28, justifyContent: "center" }}>
+          {steps.map((label, i) => {
+            const done = i + 1 < step;
+            const active = i + 1 === step;
+            return (
+              <div key={label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, background: done ? BASE_BRAND.success : active ? previewBrand.brick : BASE_BRAND.borderLight, color: done || active ? "#fff" : BASE_BRAND.textMuted, transition: "all 250ms", animation: active ? "stepPop 400ms cubic-bezier(0.34,1.56,0.64,1)" : "none" }}>
+                  {done ? "✓" : i + 1}
+                </div>
+                {i < steps.length - 1 && <div style={{ width: mob ? 20 : 40, height: 2, background: done ? BASE_BRAND.success : BASE_BRAND.borderLight, transition: "background 400ms", borderRadius: 1 }} />}
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ background: BASE_BRAND.white, border: "1px solid " + BASE_BRAND.borderLight, borderRadius: 14, padding: mob ? 24 : 32, boxShadow: "0 4px 24px rgba(31,42,56,0.07)" }}>
+
+          {/* ── STEP 1: Name & Logo ── */}
+          {step === 1 && (
+            <div className="fade-in">
+              <h2 style={{ fontFamily: BASE_BRAND.serif, fontSize: 20, fontWeight: 600, color: BASE_BRAND.navy, margin: "0 0 20px" }}>What's your HOA called?</h2>
+              <Field label="HOA Name" required>
+                <input
+                  autoFocus
+                  style={{ ...S.input, borderColor: nameErr ? BASE_BRAND.error : BASE_BRAND.border }}
+                  value={hoaName}
+                  onChange={e => { setHoaName(e.target.value); setNameErr(""); }}
+                  placeholder="e.g. Maple Grove HOA"
+                />
+                {nameErr && <div style={{ fontSize: 12, color: BASE_BRAND.error, marginTop: 4 }}>{nameErr}</div>}
+              </Field>
+
+              <Field label="Logo (optional)">
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <HoaLogo logoUrl={logoUrl} hoaName={hoaName || "HOA"} size={64} borderRadius={10} />
+                  <div style={{ flex: 1 }}>
+                    <input ref={logoInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleLogoFile} />
+                    <button type="button" style={{ ...S.btnSecondary, fontSize: 13, width: "100%" }} onClick={() => logoInputRef.current?.click()}>
+                      📷 {logoUrl ? "Change Logo" : "Upload Logo"}
+                    </button>
+                    {logoUrl && (
+                      <button type="button" style={{ ...S.btnGhost, fontSize: 12, marginTop: 6, width: "100%", color: BASE_BRAND.error }} onClick={() => setLogoUrl("")}>
+                        Remove
+                      </button>
+                    )}
+                    <div style={{ fontSize: 11, color: BASE_BRAND.textLight, marginTop: 4 }}>PNG or JPG, shown in the header and reports</div>
+                  </div>
+                </div>
+              </Field>
+
+              <button style={{ ...S.btnPrimary, width: "100%", justifyContent: "center", background: previewBrand.brick }} onClick={() => { if (!hoaName.trim()) { setNameErr("HOA name is required"); return; } setStep(2); }}>
+                Next: Choose Colors →
+              </button>
+            </div>
+          )}
+
+          {/* ── STEP 2: Colors ── */}
+          {step === 2 && (
+            <div className="fade-in">
+              <h2 style={{ fontFamily: BASE_BRAND.serif, fontSize: 20, fontWeight: 600, color: BASE_BRAND.navy, margin: "0 0 6px" }}>Brand colors</h2>
+              <p style={{ fontSize: 13, color: BASE_BRAND.textMuted, margin: "0 0 20px" }}>These tint the sidebar, buttons, and report headers. Skip to use the defaults.</p>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+                <Field label="Primary (sidebar, headings)">
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input type="color" value={primary} onChange={e => setPrimary(e.target.value)} style={{ width: 44, height: 36, padding: 2, border: "1px solid " + BASE_BRAND.border, borderRadius: 6, cursor: "pointer", background: "none" }} />
+                    <input style={{ ...S.input, fontFamily: "monospace", fontSize: 13 }} value={primary} onChange={e => { if (/^#[0-9a-fA-F]{0,6}$/.test(e.target.value)) setPrimary(e.target.value); }} maxLength={7} />
+                  </div>
+                </Field>
+                <Field label="Accent (buttons, links)">
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input type="color" value={accent} onChange={e => setAccent(e.target.value)} style={{ width: 44, height: 36, padding: 2, border: "1px solid " + BASE_BRAND.border, borderRadius: 6, cursor: "pointer", background: "none" }} />
+                    <input style={{ ...S.input, fontFamily: "monospace", fontSize: 13 }} value={accent} onChange={e => { if (/^#[0-9a-fA-F]{0,6}$/.test(e.target.value)) setAccent(e.target.value); }} maxLength={7} />
+                  </div>
+                </Field>
+              </div>
+
+              {/* Live preview strip */}
+              <div style={{ borderRadius: 10, overflow: "hidden", border: "1px solid " + BASE_BRAND.borderLight, marginBottom: 20 }}>
+                <div style={{ background: previewBrand.navy, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+                  <HoaLogo logoUrl={logoUrl} hoaName={hoaName} size={30} borderRadius={5} />
+                  <span style={{ fontFamily: BASE_BRAND.serif, fontWeight: 600, fontSize: 15, color: "#fff" }}>{hoaName || "Your HOA"}</span>
+                </div>
+                <div style={{ padding: 14, background: BASE_BRAND.white, display: "flex", gap: 8, alignItems: "center" }}>
+                  <button style={{ ...S.btnPrimary, background: previewBrand.brick, fontSize: 13, padding: "7px 16px" }}>Submit Entry</button>
+                  <button style={{ ...S.btnSecondary, fontSize: 13, padding: "7px 16px" }}>Save Draft</button>
+                  <span style={{ fontSize: 12, color: BASE_BRAND.textMuted }}>← live preview</span>
+                </div>
+              </div>
+
+              <button type="button" style={{ ...S.btnGhost, fontSize: 12, marginBottom: 10 }} onClick={() => { setPrimary(BASE_BRAND.navy); setAccent(BASE_BRAND.brick); }}>Reset to defaults</button>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button style={{ ...S.btnSecondary, flex: 1, justifyContent: "center" }} onClick={() => setStep(1)}>← Back</button>
+                <button style={{ ...S.btnPrimary, flex: 2, justifyContent: "center", background: previewBrand.brick }} onClick={() => setStep(3)}>Next: Member Access →</button>
+              </div>
+            </div>
+          )}
+
+          {/* ── STEP 3: Invite code ── */}
+          {step === 3 && (
+            <div className="fade-in">
+              <h2 style={{ fontFamily: BASE_BRAND.serif, fontSize: 20, fontWeight: 600, color: BASE_BRAND.navy, margin: "0 0 6px" }}>Member access</h2>
+              <p style={{ fontSize: 13, color: BASE_BRAND.textMuted, margin: "0 0 20px" }}>Members need this code to register. Share it only with residents.</p>
+
+              <Field label="Invite Code">
+                <input
+                  style={{ ...S.input, fontFamily: "monospace", letterSpacing: "0.1em", textTransform: "uppercase", fontSize: 16 }}
+                  value={inviteCode}
+                  onChange={e => setInviteCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+                  placeholder="e.g. GROVE2025"
+                  maxLength={12}
+                />
+                <div style={{ fontSize: 12, color: BASE_BRAND.textLight, marginTop: 4 }}>Letters and numbers only. You can change this any time in Settings.</div>
+              </Field>
+
+              <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8, padding: "12px 14px", marginBottom: 20, fontSize: 13, color: "#1d4ed8" }}>
+                ℹ️ You can add members directly from Settings without an invite code — the code just enables self-registration.
+              </div>
+
+              <div style={{ display: "flex", gap: 10 }}>
+                <button style={{ ...S.btnSecondary, flex: 1, justifyContent: "center" }} onClick={() => setStep(2)}>← Back</button>
+                <button style={{ ...S.btnPrimary, flex: 2, justifyContent: "center", background: previewBrand.brick, opacity: saving ? 0.7 : 1 }} disabled={saving} onClick={handleFinish}>
+                  {saving ? "Saving…" : "🎉 Launch My HOA Tracker"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const SettingsPage = ({ settings, users, currentUser, allEntries, allPurchases, onSaveSettings, onAddUser, onRemoveUser, onUpdateRate }) => {
   const [form, setForm] = useState({ ...settings });
+  const logoInputRefSettings = useRef(null);
   const [saved, setSaved] = useState(false);
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
@@ -3705,6 +3942,56 @@ const SettingsPage = ({ settings, users, currentUser, allEntries, allPurchases, 
       <div style={{ ...S.card, maxWidth: 600 }}>
         <div style={S.sectionLabel}>HOA Configuration</div>
         <Field label="HOA Name"><input style={S.input} value={form.hoaName} onChange={e => set("hoaName", e.target.value)} /></Field>
+
+        {/* Logo */}
+        <Field label="Logo">
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <HoaLogo logoUrl={form.logoUrl} hoaName={form.hoaName} size={60} borderRadius={8} />
+            <div style={{ flex: 1 }}>
+              <input
+                ref={logoInputRefSettings}
+                type="file" accept="image/*" style={{ display: "none" }}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const url = await compressImage(file, 400, 0.85);
+                  set("logoUrl", url);
+                }}
+              />
+              <button type="button" style={{ ...S.btnSecondary, fontSize: 13, width: "100%" }} onClick={() => logoInputRefSettings.current?.click()}>
+                📷 {form.logoUrl ? "Change Logo" : "Upload Logo"}
+              </button>
+              {form.logoUrl && (
+                <button type="button" style={{ ...S.btnGhost, fontSize: 12, marginTop: 6, width: "100%", color: BRAND.error }} onClick={() => set("logoUrl", "")}>
+                  Remove Logo
+                </button>
+              )}
+              <div style={{ fontSize: 11, color: BRAND.textLight, marginTop: 4 }}>Shown in header, sidebar, and PDF reports. PNG or JPG.</div>
+            </div>
+          </div>
+        </Field>
+
+        {/* Brand colors */}
+        <Field label="Brand Colors">
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 8 }}>
+            <div>
+              <div style={{ fontSize: 12, color: BRAND.textMuted, marginBottom: 4 }}>Primary (sidebar)</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <input type="color" value={form.primaryColor || BRAND.navy} onChange={e => set("primaryColor", e.target.value)} style={{ width: 40, height: 36, padding: 2, border: "1px solid " + BRAND.border, borderRadius: 6, cursor: "pointer", background: "none", flexShrink: 0 }} />
+                <input style={{ ...S.input, fontFamily: "monospace", fontSize: 13 }} value={form.primaryColor || ""} onChange={e => { if (/^#[0-9a-fA-F]{0,6}$/.test(e.target.value)) set("primaryColor", e.target.value); }} placeholder={BASE_BRAND.navy} maxLength={7} />
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: BRAND.textMuted, marginBottom: 4 }}>Accent (buttons)</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <input type="color" value={form.accentColor || BRAND.brick} onChange={e => set("accentColor", e.target.value)} style={{ width: 40, height: 36, padding: 2, border: "1px solid " + BRAND.border, borderRadius: 6, cursor: "pointer", background: "none", flexShrink: 0 }} />
+                <input style={{ ...S.input, fontFamily: "monospace", fontSize: 13 }} value={form.accentColor || ""} onChange={e => { if (/^#[0-9a-fA-F]{0,6}$/.test(e.target.value)) set("accentColor", e.target.value); }} placeholder={BASE_BRAND.brick} maxLength={7} />
+              </div>
+            </div>
+          </div>
+          <button type="button" style={{ ...S.btnGhost, fontSize: 12 }} onClick={() => { set("primaryColor", ""); set("accentColor", ""); }}>Reset to defaults</button>
+          <div style={{ fontSize: 11, color: BRAND.textLight, marginTop: 4 }}>Takes effect after saving. Reload the page to see changes.</div>
+        </Field>
         <Field label="Default Hourly Rate ($)"><input type="number" min="0" step="0.50" inputMode="decimal" style={S.input} value={form.defaultHourlyRate} onChange={e => set("defaultHourlyRate", Number(e.target.value))} /></Field>
         <Field label="Mileage Reimbursement Rate ($/mile)">
           <div>
@@ -4014,6 +4301,10 @@ export default function App() {
     saveSettings, addUser, removeUser, updateUserRate,
     setAuthError, fetchCommunityStats, refresh,
   } = useSupabase();
+
+  // Patch the module-level BRAND so all components pick up HOA colors
+  // This runs synchronously on every render but is cheap (just object assignment)
+  Object.assign(BRAND, buildBrand(settings));
 
   const [page, setPage] = useState("dashboard");
   // Undo stack — last action that can be reversed
@@ -4385,15 +4676,31 @@ export default function App() {
   }, [entries, purchaseEntries, users, settings, currentUser?.id, isTreasurer]);
 
   // ══════════════════════════════════════════════════════════════════════════
+  // SETUP WIZARD — Treasurer's first run when hoaName is blank
+  // ══════════════════════════════════════════════════════════════════════════
+  if (currentUser?.role === ROLES.TREASURER && !loading && !settings.hoaName) {
+    return <SetupWizard mob={mob} onComplete={async (cfg) => { await saveSettings(cfg); }} />;
+  }
+
   // LOGIN SCREEN
   // ══════════════════════════════════════════════════════════════════════════
   if (!currentUser) {
-    if (loading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans }}><div style={{ textAlign: "center" }}><img src="/logo.png" alt="24 Mill Street" style={{ width: 120, height: 120, objectFit: "contain", margin: "0 auto 16px", display: "block", opacity: 0.5 }} /><div style={{ fontSize: 14, color: BRAND.textMuted }}>Loading...</div></div></div>;
+    const loginLogoUrl = settings?.logoUrl;
+    const loginHoaName = settings?.hoaName || "HOA Work Tracker";
+    if (loading) return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans }}>
+        <div style={{ textAlign: "center" }}>
+          <HoaLogo logoUrl={loginLogoUrl} hoaName={loginHoaName} size={80} borderRadius={12} style={{ margin: "0 auto 16px" }} />
+          <div style={{ fontSize: 14, color: BRAND.textMuted }}>Loading...</div>
+        </div>
+      </div>
+    );
     return (
       <div style={{ minHeight: "100dvh", display: "flex", alignItems: "safe center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans, padding: mob ? "24px 16px" : 0, overflow: "auto", WebkitOverflowScrolling: "touch" }}>
         <div className="fade-in" style={{ textAlign: "center", maxWidth: 420, width: "100%" }}>
-          <img src="/logo.png" alt="24 Mill" style={{ width: mob ? 160 : 200, height: mob ? 160 : 200, objectFit: "contain", margin: "0 auto 24px", display: "block" }} />
-          <h1 style={{ fontFamily: BRAND.serif, fontSize: mob ? 28 : 34, fontWeight: 600, color: BRAND.navy, margin: "0 0 32px" }}>Log Your Work</h1>
+          <HoaLogo logoUrl={loginLogoUrl} hoaName={loginHoaName} size={mob ? 100 : 120} borderRadius={18} style={{ margin: "0 auto 20px" }} />
+          <h1 style={{ fontFamily: BRAND.serif, fontSize: mob ? 28 : 34, fontWeight: 600, color: BRAND.navy, margin: "0 0 4px" }}>{loginHoaName}</h1>
+          <p style={{ fontSize: 14, color: BRAND.textMuted, margin: "0 0 28px" }}>Log Your Work</p>
           <div style={{ background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 12, padding: mob ? 24 : 32, textAlign: "left", boxShadow: "0 4px 20px rgba(31,42,56,0.06)" }}>
             {/* Tab toggle */}
             <div style={{ display: "flex", marginBottom: 24, borderRadius: 8, background: BRAND.bgSoft, padding: 4 }}>
@@ -4746,7 +5053,7 @@ export default function App() {
             if (myEntries.length === 0) return (
               <div style={{ ...S.card, background: "linear-gradient(135deg, #EEF2FF 0%, #F0FDF4 100%)", borderColor: "#C7D2FE", padding: mob ? 20 : 28, marginBottom: 16 }}>
                 <div style={{ fontSize: 28, marginBottom: 12 }}>👋</div>
-                <div style={{ fontFamily: BRAND.serif, fontSize: 20, fontWeight: 600, color: BRAND.navy, marginBottom: 8 }}>Welcome to {settings.hoaName}!</div>
+                <div style={{ fontFamily: BRAND.serif, fontSize: 20, fontWeight: 600, color: BRAND.navy, marginBottom: 8 }}>Welcome to {settings.hoaName || "HOA Work Tracker"}!</div>
                 <div style={{ fontSize: 14, color: BRAND.charcoal, lineHeight: 1.7, marginBottom: 16 }}>Here's how reimbursement works:<br/>
                   <strong>1.</strong> Log your work — date, time, category, and what you did<br/>
                   <strong>2.</strong> Add materials and photos if applicable<br/>
@@ -5490,8 +5797,8 @@ export default function App() {
         {/* Mobile top bar */}
         <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: BRAND.navy, position: "fixed", top: 0, left: 0, right: 0, zIndex: 20 }} role="banner">
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <img src="/logo.png" alt="24 Mill Street logo" style={{ width: 32, height: 32, borderRadius: 4, objectFit: "cover", background: BRAND.beige }} />
-            <span style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 16, color: "#fff" }}>24 Mill</span>
+            <HoaLogo logoUrl={settings.logoUrl} hoaName={settings.hoaName} size={32} borderRadius={4} />
+            <span style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 16, color: "#fff" }}>{settings.hoaName || "HOA Tracker"}</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             {isTreasurer && (
@@ -5586,7 +5893,7 @@ export default function App() {
           <MoreSheet onClose={() => setMoreSheetOpen(false)} trashCount={trashCount} nav={nav} />
         )}
         <ChangePasswordModal />
-        {showHelp && <HelpModal onClose={() => setShowHelp(false)} isTreasurer={isTreasurer} mob={mob} hoaName={settings?.hoaName || "24 Mill Street HOA"} />}
+        {showHelp && <HelpModal onClose={() => setShowHelp(false)} isTreasurer={isTreasurer} mob={mob} hoaName={settings?.hoaName || "HOA Work Tracker"} />}
         {showConfetti && <ConfettiBurst onDone={() => setShowConfetti(false)} />}
         {lightboxSrc && <PhotoLightbox src={lightboxSrc.src} alt={lightboxSrc.alt} onClose={() => setLightboxSrc(null)} />}
         {/* Toast notification */}
@@ -5641,9 +5948,9 @@ export default function App() {
       <aside style={S.sidebar} aria-label="Sidebar navigation">
         <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <img src="/logo.png" alt="24 Mill Street logo" style={{ width: 40, height: 40, borderRadius: 6, objectFit: "cover", background: BRAND.beige }} />
+            <HoaLogo logoUrl={settings.logoUrl} hoaName={settings.hoaName} size={40} borderRadius={6} />
             <div>
-              <div style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 17, color: "#FFFFFF", lineHeight: 1.2 }}>24 Mill</div>
+              <div style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 17, color: "#FFFFFF", lineHeight: 1.2 }}>{settings.hoaName || "HOA Tracker"}</div>
               <div style={{ fontSize: 12, color: "#7A766E", letterSpacing: "0.02em" }}>Log Your Work</div>
             </div>
           </div>
@@ -5700,7 +6007,7 @@ export default function App() {
         <PreviewBanner />
         <main id="main-content" style={S.content}><div key={page} className="page-enter">{renderPage()}</div></main>
         <ChangePasswordModal />
-        {showHelp && <HelpModal onClose={() => setShowHelp(false)} isTreasurer={isTreasurer} mob={mob} hoaName={settings?.hoaName || "24 Mill Street HOA"} />}
+        {showHelp && <HelpModal onClose={() => setShowHelp(false)} isTreasurer={isTreasurer} mob={mob} hoaName={settings?.hoaName || "HOA Work Tracker"} />}
         {showConfetti && <ConfettiBurst onDone={() => setShowConfetti(false)} />}
         {lightboxSrc && <PhotoLightbox src={lightboxSrc.src} alt={lightboxSrc.alt} onClose={() => setLightboxSrc(null)} />}
         {toast && (
