@@ -1,4 +1,58 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, Component } from "react";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ERROR BOUNDARY — prevents white-screen crashes
+// ═══════════════════════════════════════════════════════════════════════════
+export class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("[ErrorBoundary]", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 40, textAlign: "center", fontFamily: "'Inter', system-ui, sans-serif", background: "#F5F2ED", minHeight: this.props.fullScreen ? "100vh" : "auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🏚️</div>
+          <h2 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 24, color: "#1F2A38", marginBottom: 8 }}>
+            {this.props.title || "Something went wrong"}
+          </h2>
+          <p style={{ color: "#6B6560", fontSize: 14, marginBottom: 24, maxWidth: 400, lineHeight: 1.6 }}>
+            {this.props.fullScreen
+              ? "The app hit an unexpected error. Your data is safe. Try refreshing the page."
+              : "This section encountered an error. Your other data is unaffected."}
+          </p>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => this.setState({ hasError: false, error: null })}
+              style={{ padding: "10px 22px", background: "#8E3B2E", color: "#fff", border: "none", borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif" }}>
+              Try Again
+            </button>
+            {this.props.fullScreen && (
+              <button onClick={() => window.location.reload()}
+                style={{ padding: "10px 22px", background: "#fff", color: "#222", border: "1px solid #E0E0E0", borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif" }}>
+                Reload Page
+              </button>
+            )}
+          </div>
+          {this.state.error && (
+            <details style={{ marginTop: 24, fontSize: 12, color: "#736D66", maxWidth: 500, textAlign: "left" }}>
+              <summary style={{ cursor: "pointer", fontWeight: 600 }}>Technical details</summary>
+              <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", marginTop: 8, padding: 12, background: "#fff", borderRadius: 6, border: "1px solid #EDE9E3" }}>
+                {this.state.error.toString()}
+              </pre>
+            </details>
+          )}
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // BRAND TOKENS
@@ -378,17 +432,65 @@ export const ConfirmDialog = ({ open, onClose, onConfirm, title, message, confir
 );
 
 // Dashboard Card — with navy top accent line
-export const StatCard = ({ label, value, icon, accentColor }) => (
-  <div style={{ ...S.cardAccent, padding: "20px 24px", display: "flex", alignItems: "center", gap: 16, marginBottom: 0 }}>
-    <div style={{ width: 44, height: 44, borderRadius: 8, background: (accentColor || BRAND.navy) + "10", display: "flex", alignItems: "center", justifyContent: "center", color: accentColor || BRAND.navy }}>
-      <Icon name={icon} size={22} />
+// ═══════════════════════════════════════════════════════════════════════════
+// useCountUp — ease-out cubic number roll-up
+// ═══════════════════════════════════════════════════════════════════════════
+export function useCountUp(target, duration = 850) {
+  const [display, setDisplay] = useState(0);
+  const prefersReduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  useEffect(() => {
+    const num = typeof target === "string" ? parseFloat(target.replace(/[^0-9.\-]/g, "")) || 0 : Number(target) || 0;
+    if (prefersReduced || num === 0) { setDisplay(num); return; }
+    let start = null;
+    let raf;
+    const step = (ts) => {
+      if (!start) start = ts;
+      const p = Math.min((ts - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - p, 3); // ease-out cubic
+      setDisplay(num * ease);
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration, prefersReduced]);
+  return display;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AnimatedBar — renders at 0% then transitions to real width
+// ═══════════════════════════════════════════════════════════════════════════
+export const AnimatedBar = ({ percent, color, height = 8, style = {} }) => {
+  const [width, setWidth] = useState(0);
+  const prefersReduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  useEffect(() => {
+    if (prefersReduced) { setWidth(percent); return; }
+    requestAnimationFrame(() => requestAnimationFrame(() => setWidth(percent)));
+  }, [percent, prefersReduced]);
+  return (
+    <div style={{ height, background: BRAND.borderLight, borderRadius: height / 2, overflow: "hidden", ...style }}>
+      <div style={{ height: "100%", width: Math.min(width, 100) + "%", background: color || BRAND.navy, borderRadius: height / 2, transition: "width 700ms cubic-bezier(0.34, 1.56, 0.64, 1)" }} />
     </div>
-    <div>
-      <div style={{ fontSize: 12, color: BRAND.textLight, fontWeight: 500, marginBottom: 2, fontFamily: BRAND.sans }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: BRAND.navy, fontFamily: BRAND.sans }}>{value}</div>
+  );
+};
+
+export const StatCard = ({ label, value, icon, accentColor }) => {
+  const isDollar = typeof value === "string" && value.startsWith("$");
+  const raw = isDollar ? parseFloat(value.replace(/[^0-9.\-]/g, "")) || 0 : Number(value) || 0;
+  const animated = useCountUp(raw);
+  const formatted = isDollar ? "$" + animated.toFixed(2) : (Number.isInteger(raw) ? Math.round(animated) : animated.toFixed(2));
+
+  return (
+    <div style={{ ...S.cardAccent, padding: "20px 24px", display: "flex", alignItems: "center", gap: 16, marginBottom: 0 }}>
+      <div style={{ width: 44, height: 44, borderRadius: 8, background: (accentColor || BRAND.navy) + "10", display: "flex", alignItems: "center", justifyContent: "center", color: accentColor || BRAND.navy }}>
+        <Icon name={icon} size={22} />
+      </div>
+      <div>
+        <div style={{ fontSize: 12, color: BRAND.textLight, fontWeight: 500, marginBottom: 2, fontFamily: BRAND.sans }}>{label}</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: BRAND.navy, fontFamily: BRAND.sans }}>{formatted}</div>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // IMAGE COMPRESSION + UPLOADER
@@ -446,7 +548,7 @@ export const ImageUploader = ({ images, onChange, label, color, icon, readOnly, 
         <div style={{ display: "grid", gridTemplateColumns: mob ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: 10, marginBottom: 12 }}>
           {images.map(img => (
             <div key={img.id} style={{ position: "relative", borderRadius: 10, overflow: "hidden", border: "1px solid " + BRAND.borderLight, background: BRAND.bgSoft }}>
-              <img src={img.dataUrl} alt={img.caption || (label + " photo")} style={{ width: "100%", height: 100, objectFit: "cover", display: "block", cursor: "pointer" }} onClick={() => setViewImg(img)} />
+              <img src={img.dataUrl} alt={img.caption || (label + " photo")} style={{ width: "100%", height: 100, objectFit: "cover", display: "block", cursor: "pointer", transition: "transform 150ms ease, box-shadow 150ms ease" }} onClick={() => setViewImg(img)} onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.04)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.15)"; }} onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "none"; }} />
               {!readOnly && (
                 <>
                   <button aria-label={"Remove " + label + " photo"} onClick={() => removeImage(img.id)} style={{ position: "absolute", top: 2, right: 2, width: 28, height: 28, borderRadius: 14, background: "rgba(0,0,0,0.6)", color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>✕</button>
@@ -469,12 +571,17 @@ export const ImageUploader = ({ images, onChange, label, color, icon, readOnly, 
         </div>
       )}
 
-      {/* Lightbox */}
+      {/* Lightbox — full-screen zoom overlay */}
       {viewImg && (
-        <Modal open={true} onClose={() => setViewImg(null)} title={label}>
-          <img src={viewImg.dataUrl} alt={viewImg.caption || "Uploaded photo"} style={{ width: "100%", borderRadius: 8, marginBottom: viewImg.caption ? 8 : 0 }} />
-          {viewImg.caption && <div style={{ fontSize: 13, color: BRAND.textMuted, textAlign: "center" }}>{viewImg.caption}</div>}
-        </Modal>
+        <div onClick={() => setViewImg(null)} onKeyDown={e => e.key === "Escape" && setViewImg(null)} tabIndex={-1}
+          style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out", animation: "fadeIn 200ms ease-out" }}>
+          <img src={viewImg.dataUrl} alt={viewImg.caption || "Photo"}
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth: "90vw", maxHeight: "90vh", borderRadius: 8, boxShadow: "0 16px 64px rgba(0,0,0,0.5)", cursor: "default", animation: "lightboxZoom 280ms cubic-bezier(0.34, 1.56, 0.64, 1)" }} />
+          {viewImg.caption && <div style={{ position: "absolute", bottom: 32, color: "#fff", fontSize: 14, textAlign: "center", width: "100%", textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}>{viewImg.caption}</div>}
+          <button onClick={() => setViewImg(null)} aria-label="Close"
+            style={{ position: "absolute", top: 20, right: 20, width: 40, height: 40, borderRadius: 20, background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+        </div>
       )}
     </div>
   );

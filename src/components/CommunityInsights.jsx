@@ -8,7 +8,7 @@ import {
   calcHours, calcLabor, calcMaterialsTotal, formatDate, timeAgo, formatTime, getUserRate,
   compressImage,
   Icon, StatusBadge, catColors, CategoryBadge, RoleBadge,
-  S, Field, Modal, ConfirmDialog, StatCard,
+  S, Field, Modal, ConfirmDialog, StatCard, AnimatedBar,
   ImageUploader, MaterialsEditor,
 } from "./shared";
 
@@ -126,9 +126,7 @@ export const CommunityInsights = ({ fetchStats, settings, mob, cachedStats, onSt
                     <span style={{ fontSize: 13, fontWeight: 600, color: BRAND.navy }}>{monthName(m.month)} {m.month.slice(0, 4)}</span>
                     <span style={{ fontSize: 14, fontWeight: 700, color: BRAND.brick }}>{fmt(total)}</span>
                   </div>
-                  <div style={{ height: 20, background: BRAND.bgSoft, borderRadius: 10, overflow: "hidden" }}>
-                    <div style={{ height: "100%", borderRadius: 10, width: pct + "%", minWidth: pct > 0 ? 8 : 0, background: "linear-gradient(90deg, #1565C0, #0097A7)", transition: "width 600ms ease-out" }} />
-                  </div>
+                  <AnimatedBar percent={pct} color="#1565C0" height={20} />
                   <div style={{ fontSize: 11, color: BRAND.textLight, marginTop: 2 }}>{m.entry_count} entries · {m.member_count} member{m.member_count > 1 ? "s" : ""}</div>
                 </div>
               );
@@ -160,9 +158,7 @@ export const CommunityInsights = ({ fetchStats, settings, mob, cachedStats, onSt
                       <span style={{ fontSize: 11, color: BRAND.textLight, marginLeft: 6 }}>{sharePct}%</span>
                     </div>
                   </div>
-                  <div style={{ height: 14, background: color + "15", borderRadius: 7, overflow: "hidden" }}>
-                    <div style={{ height: "100%", borderRadius: 7, width: pct + "%", minWidth: pct > 0 ? 6 : 0, background: color, transition: "width 600ms ease-out", opacity: 0.85 }} />
-                  </div>
+                  <AnimatedBar percent={pct} color={color} height={14} />
                   <div style={{ display: "flex", gap: 12, fontSize: 11, color: BRAND.textLight, marginTop: 3 }}>
                     <span>Labor: {fmt(data.labor)}</span><span>Materials: {fmt(data.materials)}</span><span>{data.count} entries</span>
                   </div>

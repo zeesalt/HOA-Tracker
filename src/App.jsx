@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useSupabase } from "./useSupabase";
 import {
+  ErrorBoundary, AnimatedBar,
   BRAND, CATEGORIES, STATUSES, ROLES,
   PURCHASE_CATEGORY_EMOJIS,
   useIsMobile, useOnline,
@@ -58,6 +59,11 @@ export default function App() {
       @keyframes validShake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
       @keyframes paidCount { from { opacity: 0; transform: translateY(4px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
       @keyframes springBack { 0% { transform: translateX(var(--snap-x, 0px)); } 60% { transform: translateX(calc(var(--snap-x, 0px) * -0.08)); } 100% { transform: translateX(0); } }
+      @keyframes lightboxZoom { from { transform: scale(0.88); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+      @keyframes confettiPop { 0% { transform: translate(0,0) rotate(0deg) scale(1); opacity: 1; } 100% { transform: translate(var(--cx), var(--cy)) rotate(var(--cr)) scale(0); opacity: 0; } }
+      @keyframes greenFlash { 0% { opacity: 0; } 40% { opacity: 0.18; } 100% { opacity: 0; } }
+      @keyframes toastProgress { from { width: 100%; } to { width: 0%; } }
+      @keyframes fabRing { 0% { transform: scale(1); opacity: 0.5; } 100% { transform: scale(2.2); opacity: 0; } }
       .fade-in { animation: fadeIn 200ms ease-out; }
       .page-enter { animation: slideInRight 220ms cubic-bezier(0.25,0.46,0.45,0.94); }
       .page-exit { animation: slideOutLeft 180ms ease-in forwards; }
@@ -279,8 +285,20 @@ export default function App() {
   };
   // Track when each page was last visited so we can skip the loading animation
   const lastVisitedRef = useRef({});
+  const [showNavGuard, setShowNavGuard] = useState(null); // target page for dirty-form confirmation
+  const hasUnsavedForm = newEntry || editEntry || newPurchase || editPurchase;
+
   const nav = (p) => {
     if (p === page && !viewEntry && !editEntry && !newEntry) return; // already there
+    // Dirty-form guard: confirm before leaving an open form
+    if (hasUnsavedForm) {
+      setShowNavGuard(p);
+      return;
+    }
+    doNav(p);
+  };
+  const doNav = (p) => {
+    setShowNavGuard(null);
     setViewEntry(null); setEditEntry(null); setNewEntry(false); setDrawerOpen(false);
     setViewPurchase(null); setEditPurchase(null); setNewPurchase(false); setNewEntryType(null);
     // Skip loading animation if visited in the last 5 minutes
@@ -310,6 +328,7 @@ export default function App() {
     }
   };
   const showToast = (message, type, detail) => { setToast({ message, type, detail }); setTimeout(() => setToast(null), 4000); };
+  const [showConfetti, setShowConfetti] = useState(false);
   const doSubmit = async (formData, draftId) => {
     const id = draftId || (editEntry ? editEntry.id : null);
     const data = { ...formData, status: STATUSES.SUBMITTED };
@@ -317,6 +336,7 @@ export default function App() {
     if (result?.error) { showToast("Submit failed", "error", result.error); return; }
     const total = calcLabor(calcHours(formData.startTime, formData.endTime), getRate(formData.userId || currentUser.id)) + calcMaterialsTotal(formData.materials);
     setEditEntry(null); setNewEntry(false); setPage("entries");
+    setShowConfetti(true); setTimeout(() => setShowConfetti(false), 1200);
     showToast("Entry submitted!", "success", fmt(total) + " for " + formData.category + " — Treasurer will review shortly");
   };
   const doDelete = async () => { if (editEntry) { await deleteEntry(editEntry.id); setEditEntry(null); setPage("entries"); } };
@@ -411,7 +431,8 @@ export default function App() {
     if (updated) showToast("Moved to Trash", "success", (u?.name || "Member") + " — " + entry.category);
   };
   // Quick approve/reject from review queue (without opening detail)
-  const doApproveEntry = async (id, notes) => { await approveEntry(id, notes); const e = entries.find(x => x.id === id); const u = users.find(x => x.id === e?.userId); showToast("Entry approved", "success", u?.name + " — " + (e?.category || "")); };
+  const [flashApproveId, setFlashApproveId] = useState(null);
+  const doApproveEntry = async (id, notes) => { setFlashApproveId(id); setTimeout(async () => { await approveEntry(id, notes); setFlashApproveId(null); const e = entries.find(x => x.id === id); const u = users.find(x => x.id === e?.userId); showToast("Entry approved", "success", u?.name + " — " + (e?.category || "")); }, 400); };
   const doRejectEntry = async (id, notes) => { await rejectEntry(id, notes); const e = entries.find(x => x.id === id); const u = users.find(x => x.id === e?.userId); showToast("Entry returned for edits", "error", u?.name + " will be notified"); };
   const doNeedsInfo = async (id, notes) => { await needsInfoEntry(id, notes); const e = entries.find(x => x.id === id); const u = users.find(x => x.id === e?.userId); showToast("Needs Info requested", "info", u?.name + " will be notified to add details"); };
   const doBulkApprove = async (ids) => {
@@ -657,6 +678,43 @@ export default function App() {
               <StatCard label="Year to Date" value={fmt(dashStats.ytdReimb)} icon="check" accentColor="#2563eb" />
             </>)}
           </div>
+          {/* ── Treasurer First-Run Onboarding Checklist ── */}
+          {isTreasurer && entries.length === 0 && purchaseEntries.length === 0 && (() => {
+            const checks = [
+              { done: settings.hoaName && settings.hoaName !== "24 Mill Street", label: "Set your HOA name", action: () => nav("settings"), icon: "🏠", desc: "Settings → HOA Name" },
+              { done: settings.defaultHourlyRate && settings.defaultHourlyRate !== 40, label: "Configure hourly rate", action: () => nav("settings"), icon: "💲", desc: "Settings → Default Hourly Rate" },
+              { done: settings.inviteCodes?.length > 0, label: "Create an invite code", action: () => nav("settings"), icon: "🔑", desc: "Settings → Invite Codes" },
+              { done: users.filter(u => u.role === ROLES.MEMBER).length > 0, label: "Add your first member", action: () => nav("settings"), icon: "👥", desc: "Share your invite code with a member" },
+            ];
+            const completed = checks.filter(c => c.done).length;
+            if (completed === checks.length) return null;
+            return (
+              <div style={{ ...S.card, background: "#EFF6FF", borderColor: "#BFDBFE", borderLeft: "4px solid #2563EB", marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                  <span style={{ fontSize: 22 }}>🚀</span>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: BRAND.navy }}>Getting Started</div>
+                    <div style={{ fontSize: 12, color: BRAND.textMuted }}>{completed} of {checks.length} complete</div>
+                  </div>
+                  <div style={{ flex: 1, maxWidth: 120, height: 6, background: "#DBEAFE", borderRadius: 3, overflow: "hidden", marginLeft: "auto" }}>
+                    <div style={{ height: "100%", width: (completed / checks.length * 100) + "%", background: "#2563EB", borderRadius: 3, transition: "width 400ms ease" }} />
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {checks.map((c, i) => (
+                    <button key={i} onClick={c.action} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 8, border: "1px solid " + (c.done ? "#A5D6A7" : "#BFDBFE"), background: c.done ? "#F0FDF4" : BRAND.white, cursor: "pointer", fontFamily: BRAND.sans, textAlign: "left", width: "100%", transition: "all 150ms" }}>
+                      <span style={{ fontSize: 18, width: 28, textAlign: "center" }}>{c.done ? "✅" : c.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: c.done ? BRAND.success : BRAND.charcoal, textDecoration: c.done ? "line-through" : "none" }}>{c.label}</div>
+                        <div style={{ fontSize: 12, color: BRAND.textLight }}>{c.desc}</div>
+                      </div>
+                      {!c.done && <span style={{ fontSize: 12, color: "#2563EB", fontWeight: 600 }}>→</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           {isTreasurer && pendingCount > 0 && (
             <div style={{ ...S.card, background: "#FFF8F0", borderColor: "#F0D4A8", borderLeft: "4px solid " + BRAND.warning, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}><Icon name="alert" size={20} /><span style={{ fontWeight: 600 }}>{pendingCount === 1 ? "1 entry" : pendingCount + " entries"} awaiting your review</span></div>
@@ -681,9 +739,7 @@ export default function App() {
                   </div>
                   <span style={{ fontSize: 14, fontWeight: 700, color: barColor }}>{pct.toFixed(0)}% used</span>
                 </div>
-                <div style={{ height: 12, background: BRAND.bgSoft, borderRadius: 6, overflow: "hidden", marginBottom: 8 }}>
-                  <div style={{ height: "100%", borderRadius: 6, width: pct + "%", background: barColor, transition: "width 600ms ease-out" }} />
-                </div>
+                <AnimatedBar percent={pct} color={barColor} height={12} style={{ marginBottom: 8 }} />
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
                   <span style={{ color: BRAND.textMuted }}>{fmt(ytdSpent)} spent</span>
                   <span style={{ color: BRAND.textLight }}>{fmt(settings.annualBudget - ytdSpent)} remaining of {fmt(settings.annualBudget)}</span>
@@ -711,9 +767,7 @@ export default function App() {
                   </div>
                   <span style={{ fontSize: 14, fontWeight: 700, color: barColor }}>{pct.toFixed(0)}% used</span>
                 </div>
-                <div style={{ height: 12, background: BRAND.bgSoft, borderRadius: 6, overflow: "hidden", marginBottom: 8 }}>
-                  <div style={{ height: "100%", borderRadius: 6, width: pct + "%", background: barColor, transition: "width 600ms ease-out" }} />
-                </div>
+                <AnimatedBar percent={pct} color={barColor} height={12} style={{ marginBottom: 8 }} />
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
                   <span style={{ color: BRAND.textMuted }}>{fmt(ytdSpent)} spent</span>
                   <span style={{ color: BRAND.textLight }}>{fmt(settings.annualBudget - ytdSpent)} remaining of {fmt(settings.annualBudget)}</span>
@@ -944,7 +998,7 @@ export default function App() {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                   <thead><tr><th scope="col" style={S.th}>Date</th>{isTreasurer && <th scope="col" style={S.th}>Member</th>}<th scope="col" style={S.th}>Category</th><th scope="col" style={S.th}>Description</th><th scope="col" style={{ ...S.th, textAlign: "right" }}>Total</th><th scope="col" style={S.th}>Status</th></tr></thead>
                   <tbody>{recent.map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); return (
-                    <tr key={e.id} tabIndex={0} role="row" onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), setViewEntry(e))} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms" }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
+                    <tr key={e.id} tabIndex={0} role="row" onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), setViewEntry(e))} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms", animation: `cardSlideIn 280ms cubic-bezier(0.34,1.56,0.64,1) ${Math.min(i, 8) * 30}ms both` }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
                       <td style={S.td}>{formatDate(e.date)}</td>{isTreasurer && <td style={S.td}>{u?.name}</td>}<td style={S.td}><CategoryBadge category={e.category} /></td><td style={{ ...S.td, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</td><td style={{ ...S.td, textAlign: "right", fontWeight: 600 }}>{fmt(total)}</td><td style={S.td}><StatusBadge status={e.status} /></td>
                     </tr>); })}</tbody>
                 </table>
@@ -1037,7 +1091,7 @@ export default function App() {
                 <tbody>{filtered.map((e, i) => {
                   const u = users.find(u => u.id === e.userId);
                   return (
-                    <tr key={e.id} onClick={() => setViewPurchase(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms" }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
+                    <tr key={e.id} onClick={() => setViewPurchase(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms", animation: `cardSlideIn 280ms cubic-bezier(0.34,1.56,0.64,1) ${Math.min(i, 8) * 25}ms both` }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
                       <td style={S.td}>{formatDate(e.date)}</td>
                       {isTreasurer && <td style={S.td}>{u?.name}</td>}
                       <td style={S.td}>{e.storeName}</td>
@@ -1237,7 +1291,7 @@ export default function App() {
                   });
                   return sorted;
                 })().map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); return (
-                  <tr key={e.id} tabIndex={0} role="row" onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), setViewEntry(e))} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms" }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
+                  <tr key={e.id} tabIndex={0} role="row" onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), setViewEntry(e))} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms", animation: `cardSlideIn 280ms cubic-bezier(0.34,1.56,0.64,1) ${Math.min(i, 8) * 30}ms both` }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
                     <td style={S.td}>{formatDate(e.date)}</td>{isTreasurer && <td style={S.td}>{u?.name}</td>}<td style={S.td}><CategoryBadge category={e.category} /></td><td style={{ ...S.td, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</td><td style={{ ...S.td, textAlign: "right" }}>{fmtHours(h)}</td><td style={{ ...S.td, textAlign: "right", fontWeight: 600 }}>{fmt(total)}</td><td style={S.td}><StatusBadge status={e.status} /></td>
                   </tr>); })}</tbody>
               </table>
@@ -1320,7 +1374,8 @@ export default function App() {
                 const isBulkEligible = !isPurchase && e.status === STATUSES.SUBMITTED;
                 const submittedAgo = e.submittedAt ? timeAgo(e.submittedAt) : null;
                 return (
-                <div key={e.id} style={{ ...S.card, padding: "20px 24px", transition: "box-shadow 150ms, border-color 150ms", borderLeft: "4px solid " + (isSelected ? BRAND.navy : isPurchase ? "#0E7490" : e.status === STATUSES.AWAITING_SECOND ? "#4338CA" : BRAND.brick), outline: isSelected ? "2px solid " + BRAND.navy + "30" : "none" }} onMouseEnter={ev => ev.currentTarget.style.boxShadow = "0 4px 16px rgba(31,42,56,0.08)"} onMouseLeave={ev => ev.currentTarget.style.boxShadow = "0 1px 3px rgba(31,42,56,0.04)"}>
+                <div key={e.id} style={{ ...S.card, padding: "20px 24px", transition: "box-shadow 150ms, border-color 150ms", borderLeft: "4px solid " + (isSelected ? BRAND.navy : isPurchase ? "#0E7490" : e.status === STATUSES.AWAITING_SECOND ? "#4338CA" : BRAND.brick), outline: isSelected ? "2px solid " + BRAND.navy + "30" : "none", position: "relative", overflow: "hidden" }} onMouseEnter={ev => ev.currentTarget.style.boxShadow = "0 4px 16px rgba(31,42,56,0.08)"} onMouseLeave={ev => ev.currentTarget.style.boxShadow = "0 1px 3px rgba(31,42,56,0.04)"}>
+                  {flashApproveId === e.id && <div style={{ position: "absolute", inset: 0, background: "#2E7D32", animation: "greenFlash 380ms ease-out forwards", pointerEvents: "none", zIndex: 2 }} />}
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                     {isBulkEligible && (
                       <div style={{ paddingTop: 4, flexShrink: 0 }}>
@@ -1594,12 +1649,12 @@ export default function App() {
         {(pullY > 0 || pullRefreshing) && (
           <div style={{ position: "fixed", top: 56, left: 0, right: 0, zIndex: 19, display: "flex", alignItems: "center", justifyContent: "center", height: Math.max(pullY, pullRefreshing ? 40 : 0), overflow: "hidden", transition: pullRefreshing ? "none" : "height 200ms ease", background: BRAND.bgSoft, borderBottom: "1px solid " + BRAND.borderLight }}>
             <div style={{ fontSize: 13, color: BRAND.textMuted, display: "flex", alignItems: "center", gap: 6 }}>
-              {pullRefreshing ? "↻ Refreshing..." : pullY >= PULL_THRESHOLD ? "↑ Release to refresh" : "↓ Pull to refresh"}
+              {pullRefreshing ? <><span style={{ display: "inline-block", animation: "spin 600ms linear infinite" }}>↻</span> Refreshing...</> : pullY >= PULL_THRESHOLD ? "↑ Release to refresh" : "↓ Pull to refresh"}
             </div>
           </div>
         )}
         <PreviewBanner />
-        <main id="main-content" style={{ padding: "16px 16px", paddingTop: 72 }}><div key={page} className="page-enter">{renderPage()}</div></main>
+        <main id="main-content" style={{ padding: "16px 16px", paddingTop: 72 }}><ErrorBoundary key={page} title="This page hit an error"><div className="page-enter">{renderPage()}</div></ErrorBoundary></main>
         {/* FAB */}
         {!newEntry && !editEntry && !viewEntry && !newPurchase && !editPurchase && !viewPurchase && (page === "dashboard" || page === "entries") && (
           <>
@@ -1615,7 +1670,14 @@ export default function App() {
                 </button>
               </div>
             )}
-            <button aria-label="Create new entry" style={{ position: "fixed", bottom: 160, right: 20, width: 56, height: 56, borderRadius: 28, background: BRAND.brick, color: "#fff", border: "none", boxShadow: "0 4px 16px rgba(142,59,46,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 15, transform: newEntryType === "chooser" ? "rotate(45deg)" : "none", transition: "transform 200ms" }} onClick={() => setNewEntryType(t => t === "chooser" ? null : "chooser")}>
+            <button aria-label="Create new entry" style={{ position: "fixed", bottom: 160, right: 20, width: 56, height: 56, borderRadius: 28, background: BRAND.brick, color: "#fff", border: "none", boxShadow: "0 4px 16px rgba(142,59,46,0.35)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 15, transform: newEntryType === "chooser" ? "rotate(45deg)" : "none", transition: "transform 200ms" }} onClick={() => { setNewEntryType(t => t === "chooser" ? null : "chooser"); try { localStorage.setItem("hoa_fab_pulsed", "1"); } catch {} }}>
+              {entries.length === 0 && purchaseEntries.length === 0 && !localStorage.getItem("hoa_fab_pulsed") && (
+                <>
+                  <span style={{ position: "absolute", inset: -4, borderRadius: "50%", border: "3px solid " + BRAND.brick, opacity: 0, animation: "fabRing 1s ease-out 0s 1 forwards" }} />
+                  <span style={{ position: "absolute", inset: -4, borderRadius: "50%", border: "3px solid " + BRAND.brick, opacity: 0, animation: "fabRing 1s ease-out 0.8s 1 forwards" }} />
+                  <span style={{ position: "absolute", inset: -4, borderRadius: "50%", border: "3px solid " + BRAND.brick, opacity: 0, animation: "fabRing 1s ease-out 1.6s 1 forwards" }} />
+                </>
+              )}
               <Icon name="plus" size={24} />
             </button>
           </>
@@ -1625,7 +1687,29 @@ export default function App() {
           <MoreSheet onClose={() => setMoreSheetOpen(false)} trashCount={trashCount} nav={nav} />
         )}
         <ChangePasswordModal />
+        <ConfirmDialog open={!!showNavGuard} onClose={() => setShowNavGuard(null)} title="Discard unsaved changes?" message="You have an entry form open with unsaved work. Navigating away will discard your changes." confirmText="Discard" danger onConfirm={() => doNav(showNavGuard)} />
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} isTreasurer={isTreasurer} mob={mob} hoaName={settings?.hoaName || "24 Mill Street HOA"} />}
+        {/* Confetti burst on submit */}
+        {showConfetti && (
+          <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 9999 }}>
+            {Array.from({ length: 18 }).map((_, i) => {
+              const angle = (Math.PI * 2 * i) / 18 + (Math.random() - 0.5) * 0.5;
+              const dist = 80 + Math.random() * 160;
+              const cx = Math.cos(angle) * dist;
+              const cy = Math.sin(angle) * dist - 60 - Math.random() * 100;
+              const cr = (Math.random() - 0.5) * 720;
+              const colors = ["#F5C24C", "#8E3B2E", "#1F2A38", "#2E7D32", "#2563EB", "#E91E63", "#FF9800"];
+              return (
+                <div key={i} style={{
+                  position: "absolute", left: "50%", top: "50%", width: 8 + Math.random() * 6, height: 8 + Math.random() * 6,
+                  background: colors[i % colors.length], borderRadius: Math.random() > 0.5 ? "50%" : "2px",
+                  "--cx": cx + "px", "--cy": cy + "px", "--cr": cr + "deg",
+                  animation: `confettiPop 1s cubic-bezier(0.25, 0.46, 0.45, 0.94) ${i * 10}ms forwards`,
+                }} />
+              );
+            })}
+          </div>
+        )}
         {/* Toast notification */}
         {toast && (
           <div className="toast-enter" role="status" aria-live="polite" style={{ position: "fixed", bottom: 96, left: 16, right: 16, zIndex: 50, background: toast.type === "success" ? "#065F46" : toast.type === "error" ? "#991B1B" : BRAND.navy, color: "#fff", borderRadius: 12, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,0.25)" }}>
@@ -1641,9 +1725,13 @@ export default function App() {
               <button onClick={() => setToast(null)} aria-label="Dismiss" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "0 0 0 4px", flexShrink: 0 }}>×</button>
             </div>
             {/* Undo countdown bar */}
-            {undoStack.length > 0 && (
+            {undoStack.length > 0 ? (
               <div style={{ height: 3, background: "rgba(255,255,255,0.15)", position: "relative" }}>
                 <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.55)", animation: "undoBar 6000ms linear forwards", transformOrigin: "left" }} />
+              </div>
+            ) : (
+              <div style={{ height: 3, background: "rgba(255,255,255,0.15)", position: "relative" }}>
+                <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.45)", animation: "toastProgress 4000ms linear forwards", transformOrigin: "left" }} />
               </div>
             )}
           </div>
@@ -1730,8 +1818,9 @@ export default function App() {
         </header>
         {!online && <div role="alert" style={{ background: "#FFF3E0", borderBottom: "1px solid #FFB74D", padding: "10px 32px", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#E65100" }}><Icon name="wifiOff" size={16} /><span>You're offline. Viewing cached data — changes require an internet connection.</span></div>}
         <PreviewBanner />
-        <main id="main-content" style={S.content}><div key={page} className="page-enter">{renderPage()}</div></main>
+        <main id="main-content" style={S.content}><ErrorBoundary key={page} title="This page hit an error"><div className="page-enter">{renderPage()}</div></ErrorBoundary></main>
         <ChangePasswordModal />
+        <ConfirmDialog open={!!showNavGuard} onClose={() => setShowNavGuard(null)} title="Discard unsaved changes?" message="You have an entry form open with unsaved work. Navigating away will discard your changes." confirmText="Discard" danger onConfirm={() => doNav(showNavGuard)} />
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} isTreasurer={isTreasurer} mob={mob} hoaName={settings?.hoaName || "24 Mill Street HOA"} />}
         {toast && (
           <div className="toast-enter" role="status" aria-live="polite" style={{ position: "fixed", bottom: 24, right: 24, zIndex: 50, background: toast.type === "success" ? "#065F46" : toast.type === "error" ? "#991B1B" : BRAND.navy, color: "#fff", borderRadius: 12, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", maxWidth: 420 }}>
@@ -1746,9 +1835,13 @@ export default function App() {
               )}
               <button onClick={() => setToast(null)} aria-label="Dismiss" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "0 0 0 4px", flexShrink: 0 }}>×</button>
             </div>
-            {undoStack.length > 0 && (
+            {undoStack.length > 0 ? (
               <div style={{ height: 3, background: "rgba(255,255,255,0.15)", position: "relative" }}>
                 <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.55)", animation: "undoBar 6000ms linear forwards" }} />
+              </div>
+            ) : (
+              <div style={{ height: 3, background: "rgba(255,255,255,0.15)", position: "relative" }}>
+                <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.45)", animation: "toastProgress 4000ms linear forwards", transformOrigin: "left" }} />
               </div>
             )}
           </div>
