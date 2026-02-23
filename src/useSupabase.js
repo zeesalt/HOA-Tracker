@@ -82,9 +82,6 @@ function mapSettings(row) {
     annualBudget: Number(row.annual_budget) || 0,
     dualApprovalThreshold: Number(row.dual_approval_threshold) || 0,
     mileageRate: row.mileage_rate != null ? Number(row.mileage_rate) : 0.725,
-    logoUrl: row.logo_url || "",
-    primaryColor: row.primary_color || "",
-    accentColor: row.accent_color || "",
   };
 }
 
@@ -94,7 +91,7 @@ export function useSupabase() {
   const [users, setUsers] = useState([]);
   const [entries, setEntries] = useState([]);
   const [purchaseEntries, setPurchaseEntries] = useState([]);
-  const [settings, setSettings] = useState({ hoaName: "", defaultHourlyRate: 40, currency: "USD", inviteCode: "", inviteExpiresAt: null, mileageRate: 0.725, logoUrl: "", primaryColor: "", accentColor: "" });
+  const [settings, setSettings] = useState({ hoaName: "24 Mill Street", defaultHourlyRate: 40, currency: "USD", inviteCode: "", inviteExpiresAt: null, mileageRate: 0.725 });
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState("");
 
@@ -254,7 +251,7 @@ export function useSupabase() {
   }, []);
 
   // ── ENTRIES ────────────────────────────────────────────────────────────
-  // Helper: append to audit log
+  // Helper: append to audit log (JSONB on entry row — backward-compatible)
   const appendAuditLog = (existingLog, action, details, changes) => {
     const user = currentUser || {};
     return [...(existingLog || []), {
@@ -265,6 +262,24 @@ export function useSupabase() {
       details: details || null,
       changes: changes || null,   // array of { field, from, to }
     }];
+  };
+
+  // Server-side audit event (writes to audit_events table if it exists)
+  const logAuditEvent = async (entryId, entryType, action, details, changes) => {
+    try {
+      await supabase.from("audit_events").insert({
+        entry_id: entryId,
+        entry_type: entryType || "work", // "work" | "purchase"
+        action,
+        actor_id: currentUser?.id || null,
+        actor_name: currentUser?.name || "System",
+        details: details || null,
+        changes: changes || null,
+        created_at: new Date().toISOString(),
+      });
+    } catch {
+      // Table may not exist yet — silently fall back to JSONB-only
+    }
   };
 
   // Produce a human-readable diff between old DB row and new formData
@@ -331,6 +346,7 @@ export function useSupabase() {
       const { data, error } = await supabase
         .from("entries").update(row).eq("id", existingId).select().single();
       if (error) { console.error("Update error:", error); return { error: error.message }; }
+      logAuditEvent(existingId, "work", action, details, changes?.length ? changes : null);
       const mapped = mapEntry(data);
       setEntries(prev => prev.map(e => e.id === existingId ? mapped : e));
       return mapped;
@@ -350,6 +366,7 @@ export function useSupabase() {
       const { data, error } = await supabase
         .from("entries").insert(row).select().single();
       if (error) { console.error("Insert error:", error); return { error: error.message }; }
+      logAuditEvent(data.id, "work", "Entry created", null, initChanges);
       const mapped = mapEntry(data);
       setEntries(prev => [mapped, ...prev]);
       return mapped;
@@ -373,6 +390,7 @@ export function useSupabase() {
       status: "Approved", reviewer_notes: reviewerNotes || null, reviewed_at: new Date().toISOString(), audit_log: log,
     }).eq("id", id).select().single();
     if (error) { console.error("Approve error:", error); return null; }
+    logAuditEvent(id, "work", "Approved", reviewerNotes || null, null);
     const mapped = mapEntry(data);
     setEntries(prev => prev.map(e => e.id === id ? mapped : e));
     return mapped;
@@ -417,6 +435,7 @@ export function useSupabase() {
       status: "Rejected", reviewer_notes: reviewerNotes || null, reviewed_at: new Date().toISOString(), audit_log: log,
     }).eq("id", id).select().single();
     if (error) { console.error("Reject error:", error); return null; }
+    logAuditEvent(id, "work", "Declined", reviewerNotes || null, null);
     const mapped = mapEntry(data);
     setEntries(prev => prev.map(e => e.id === id ? mapped : e));
     return mapped;
@@ -641,9 +660,6 @@ export function useSupabase() {
       annual_budget: newSettings.annualBudget || 0,
       dual_approval_threshold: newSettings.dualApprovalThreshold || 0,
       mileage_rate: newSettings.mileageRate != null ? newSettings.mileageRate : 0.725,
-      logo_url: newSettings.logoUrl || null,
-      primary_color: newSettings.primaryColor || null,
-      accent_color: newSettings.accentColor || null,
     }).eq("id", 1);
     if (error) { console.error("Settings error:", error); return false; }
     setSettings(newSettings);
@@ -708,6 +724,6 @@ export function useSupabase() {
     // Settings & Users
     saveSettings, addUser, removeUser, updateUserRate,
     // Misc
-    refresh, setAuthError, fetchCommunityStats,
+    refresh, setAuthError, fetchCommunityStats, logAuditEvent,
   };
 }

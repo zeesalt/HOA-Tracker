@@ -375,6 +375,16 @@ export const S = {
   h2: { fontFamily: BRAND.serif, fontSize: 26, fontWeight: 600, color: BRAND.navy, margin: 0 },
   h3: { fontFamily: BRAND.sans, fontSize: 16, fontWeight: 700, color: BRAND.charcoal, margin: 0 },
   sectionLabel: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: BRAND.textMuted, marginBottom: 12, fontFamily: BRAND.sans },
+
+  // Utility styles extracted from inline usage
+  flexBetween: { display: "flex", justifyContent: "space-between", alignItems: "center" },
+  flexCenter: { display: "flex", alignItems: "center", justifyContent: "center" },
+  flexCol: { display: "flex", flexDirection: "column" },
+  flexWrap: { display: "flex", flexWrap: "wrap", gap: 10 },
+  flexGap: (gap = 12) => ({ display: "flex", alignItems: "center", gap }),
+  truncate: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  badge: (bg, color, border) => ({ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, fontFamily: BRAND.sans, background: bg, color, border: "1px solid " + (border || bg), letterSpacing: "0.02em" }),
+  srOnly: { position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0 },
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -394,22 +404,34 @@ export const Modal = ({ open, onClose, title, children }) => {
   useEffect(() => {
     if (!open) return;
     prevFocusRef.current = document.activeElement;
-    const handleEsc = (e) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handleEsc);
     // Focus first focusable element
     setTimeout(() => {
       const focusable = modalRef.current?.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
       if (focusable?.length) focusable[0].focus();
     }, 50);
     return () => {
-      document.removeEventListener("keydown", handleEsc);
       if (prevFocusRef.current) prevFocusRef.current.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
+
+  // Focus trap + Escape handler
+  const handleKeyDown = (e) => {
+    if (e.key === "Escape") { onClose(); return; }
+    if (e.key !== "Tab") return;
+    const focusable = modalRef.current?.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (!focusable?.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey) {
+      if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+    } else {
+      if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  };
 
   if (!open) return null;
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(31,42,56,0.45)" }} onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(31,42,56,0.45)" }} onClick={onClose} onKeyDown={handleKeyDown} role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div ref={modalRef} className="fade-in" style={{ background: BRAND.white, borderRadius: 12, width: 520, maxWidth: "92vw", maxHeight: "88vh", overflow: "auto", boxShadow: "0 20px 60px rgba(31,42,56,0.2)" }} onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px", borderBottom: "1px solid " + BRAND.borderLight }}>
           <h3 id="modal-title" style={{ ...S.h3, fontSize: 18 }}>{title}</h3>

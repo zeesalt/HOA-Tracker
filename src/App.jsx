@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useReducer, useCallback } from "react";
 import { useSupabase } from "./useSupabase";
 import {
   ErrorBoundary, AnimatedBar,
@@ -91,7 +91,47 @@ export default function App() {
     setAuthError, fetchCommunityStats, refresh,
   } = useSupabase();
 
-  const [page, setPage] = useState("dashboard");
+  // ── NAV REDUCER — groups tightly-coupled navigation state ───────────────
+  const navInitial = {
+    page: "dashboard", viewEntry: null, editEntry: null, newEntry: false,
+    viewPurchase: null, editPurchase: null, newPurchase: false,
+    newEntryType: null, drawerOpen: false, moreSheetOpen: false,
+    pageLoading: null, showNavGuard: null, entryTab: "work",
+  };
+  const navReducer = (state, action) => {
+    switch (action.type) {
+      case "NAV": return { ...navInitial, page: action.page, entryTab: state.entryTab };
+      case "NAV_LOADING": return { ...state, pageLoading: action.page };
+      case "NAV_LOADED": return { ...navInitial, page: action.page, entryTab: state.entryTab };
+      case "SET_PAGE": return { ...state, page: action.page, pageLoading: null };
+      case "VIEW_ENTRY": return { ...state, viewEntry: action.entry, editEntry: null, viewPurchase: null };
+      case "EDIT_ENTRY": return { ...state, editEntry: action.entry, viewEntry: null };
+      case "NEW_ENTRY": return { ...state, newEntry: true, editEntry: null, viewEntry: null, newEntryType: null };
+      case "VIEW_PURCHASE": return { ...state, viewPurchase: action.entry, editPurchase: null, viewEntry: null };
+      case "EDIT_PURCHASE": return { ...state, editPurchase: action.entry, viewPurchase: null };
+      case "NEW_PURCHASE": return { ...state, newPurchase: true, editPurchase: null, viewPurchase: null, newEntryType: null };
+      case "CLOSE_FORM": return { ...state, viewEntry: null, editEntry: null, newEntry: false, viewPurchase: null, editPurchase: null, newPurchase: false, newEntryType: null };
+      case "SET": return { ...state, ...action.payload };
+      default: return state;
+    }
+  };
+  const [n, dispatch] = useReducer(navReducer, navInitial);
+  // Convenience aliases (backward-compatible with existing JSX)
+  const { page, viewEntry, editEntry, newEntry, viewPurchase, editPurchase, newPurchase, newEntryType, drawerOpen, moreSheetOpen, pageLoading, showNavGuard, entryTab } = n;
+  const setPage = (p) => dispatch({ type: "SET_PAGE", page: p });
+  const setViewEntry = (e) => dispatch({ type: e ? "VIEW_ENTRY" : "SET", ...(e ? { entry: e } : { payload: { viewEntry: null } }) });
+  const setEditEntry = (e) => dispatch({ type: e ? "EDIT_ENTRY" : "SET", ...(e ? { entry: e } : { payload: { editEntry: null } }) });
+  const setNewEntry = (v) => dispatch({ type: v ? "NEW_ENTRY" : "SET", payload: v ? undefined : { newEntry: false } });
+  const setViewPurchase = (e) => dispatch({ type: e ? "VIEW_PURCHASE" : "SET", ...(e ? { entry: e } : { payload: { viewPurchase: null } }) });
+  const setEditPurchase = (e) => dispatch({ type: e ? "EDIT_PURCHASE" : "SET", ...(e ? { entry: e } : { payload: { editPurchase: null } }) });
+  const setNewPurchase = (v) => dispatch({ type: v ? "NEW_PURCHASE" : "SET", payload: v ? undefined : { newPurchase: false } });
+  const setNewEntryType = (v) => dispatch({ type: "SET", payload: { newEntryType: typeof v === "function" ? v(newEntryType) : v } });
+  const setDrawerOpen = (v) => dispatch({ type: "SET", payload: { drawerOpen: typeof v === "function" ? v(drawerOpen) : v } });
+  const setMoreSheetOpen = (v) => dispatch({ type: "SET", payload: { moreSheetOpen: v } });
+  const setPageLoading = (v) => dispatch({ type: "SET", payload: { pageLoading: v } });
+  const setShowNavGuard = (v) => dispatch({ type: "SET", payload: { showNavGuard: v } });
+  const setEntryTab = (v) => dispatch({ type: "SET", payload: { entryTab: v } });
+
   // Undo stack — last action that can be reversed
   const [undoStack, setUndoStack] = useState([]); // [{label, action, timeout}]
   const pushUndo = (label, undoFn) => {
@@ -109,16 +149,11 @@ export default function App() {
     setUndoStack(rest);
     await top.undoFn();
   };
-  const [viewEntry, setViewEntry] = useState(null);
-  const [editEntry, setEditEntry] = useState(null);
-  const [newEntry, setNewEntry] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
-  const [pageLoading, setPageLoading] = useState(null); // null = not loading, string = target page
   const [authMode, setAuthMode] = useState(() => {
     // If redirected back from password-reset email, go straight to reset form
     if (typeof window !== "undefined" && window.location.search.includes("reset=1")) return "reset";
@@ -149,16 +184,11 @@ export default function App() {
   const [registering, setRegistering] = useState(false);
   const [regSuccess, setRegSuccess] = useState(false);
   const [filterSearch, setFilterSearch] = useState("");
+  const [globalSearch, setGlobalSearch] = useState(""); // unified search across all entries
   const [permDeleteTarget, setPermDeleteTarget] = useState(null); // for trash permanent delete confirm
   const [cachedInsightsStats, setCachedInsightsStats] = useState(null); // cache between tab visits
   const [selectedIds, setSelectedIds] = useState(new Set()); // bulk selection in review queue
-  const [moreSheetOpen, setMoreSheetOpen] = useState(false); // mobile "More" bottom sheet
   const [showHelp, setShowHelp] = useState(false);
-  const [entryTab, setEntryTab] = useState("work"); // "work" | "purchases"
-  const [newPurchase, setNewPurchase] = useState(false);
-  const [editPurchase, setEditPurchase] = useState(null);
-  const [viewPurchase, setViewPurchase] = useState(null);
-  const [newEntryType, setNewEntryType] = useState(null); // null | "work" | "purchase" — for FAB chooser
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterMember, setFilterMember] = useState("all");
@@ -167,6 +197,8 @@ export default function App() {
   const [filterDateTo, setFilterDateTo] = useState("");
   const [sortField, setSortField] = useState("date");   // date | member | category | total | status | hours
   const [sortDir, setSortDir] = useState("desc");       // asc | desc
+  const [currentPage, setCurrentPage] = useState(1);
+  const ENTRIES_PER_PAGE = 20;
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectNote, setRejectNote] = useState("");
   const [needsInfoId, setNeedsInfoId] = useState(null);
@@ -228,7 +260,7 @@ export default function App() {
     if (result.error) { setRegError(result.error); return; }
     setRegSuccess(true);
   };
-  const handleLogout = async () => { await sbLogout(); setLoginEmail(""); setLoginPassword(""); setLoginError(""); setPage("dashboard"); setViewEntry(null); setEditEntry(null); setNewEntry(false); };
+  const handleLogout = async () => { await sbLogout(); setLoginEmail(""); setLoginPassword(""); setLoginError(""); dispatch({ type: "NAV", page: "dashboard" }); };
 
   const handleForgotPassword = async () => {
     setForgotError("");
@@ -298,18 +330,15 @@ export default function App() {
     doNav(p);
   };
   const doNav = (p) => {
-    setShowNavGuard(null);
-    setViewEntry(null); setEditEntry(null); setNewEntry(false); setDrawerOpen(false);
-    setViewPurchase(null); setEditPurchase(null); setNewPurchase(false); setNewEntryType(null);
     // Skip loading animation if visited in the last 5 minutes
     const now = Date.now();
     const lastVisit = lastVisitedRef.current[p] || 0;
     const skipAnimation = (now - lastVisit) < 5 * 60 * 1000;
-    if (skipAnimation) { setPage(p); return; }
+    if (skipAnimation) { dispatch({ type: "NAV", page: p }); return; }
     lastVisitedRef.current[p] = now;
-    setPageLoading(p);
+    dispatch({ type: "NAV_LOADING", page: p });
     const delay = 800 + Math.floor(Math.random() * 800); // 800-1600ms
-    setTimeout(() => { setPageLoading(null); setPage(p); }, delay);
+    setTimeout(() => dispatch({ type: "NAV_LOADED", page: p }), delay);
   };
 
   // Entry operations (now async)
@@ -1111,7 +1140,7 @@ export default function App() {
           const hasActiveFilter = filterSearch || filterStatus !== "all" || filterCategory !== "all" || filterMember !== "all" || filterDateFrom || filterDateTo;
           const activeCount = [filterSearch, filterStatus !== "all", filterCategory !== "all", filterMember !== "all", filterDateFrom, filterDateTo].filter(Boolean).length;
           const advancedCount = [filterStatus !== "all", filterCategory !== "all", filterMember !== "all", filterDateFrom, filterDateTo].filter(Boolean).length;
-          const clearAll = () => { setFilterSearch(""); setFilterStatus("all"); setFilterCategory("all"); setFilterMember("all"); setFilterDateFrom(""); setFilterDateTo(""); };
+          const clearAll = () => { setFilterSearch(""); setFilterStatus("all"); setFilterCategory("all"); setFilterMember("all"); setFilterDateFrom(""); setFilterDateTo(""); setCurrentPage(1); };
           const datePresets = [
             { label: "This Month", fn: () => { const d = new Date(); setFilterDateFrom(d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-01"); setFilterDateTo(new Date().toISOString().split("T")[0]); } },
             { label: "Last Month", fn: () => { const d = new Date(); d.setMonth(d.getMonth()-1); const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"); setFilterDateFrom(y+"-"+m+"-01"); const end=new Date(y,d.getMonth()+1,0); setFilterDateTo(end.toISOString().split("T")[0]); } },
@@ -1290,11 +1319,26 @@ export default function App() {
                     return sortDir === "asc" ? cmp : -cmp;
                   });
                   return sorted;
-                })().map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); return (
+                })();
+                const totalPages = Math.ceil(sortedAll.length / ENTRIES_PER_PAGE);
+                const paginated = sortedAll.slice((currentPage - 1) * ENTRIES_PER_PAGE, currentPage * ENTRIES_PER_PAGE);
+                return paginated; })().map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); return (
                   <tr key={e.id} tabIndex={0} role="row" onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), setViewEntry(e))} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms", animation: `cardSlideIn 280ms cubic-bezier(0.34,1.56,0.64,1) ${Math.min(i, 8) * 30}ms both` }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
                     <td style={S.td}>{formatDate(e.date)}</td>{isTreasurer && <td style={S.td}>{u?.name}</td>}<td style={S.td}><CategoryBadge category={e.category} /></td><td style={{ ...S.td, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</td><td style={{ ...S.td, textAlign: "right" }}>{fmtHours(h)}</td><td style={{ ...S.td, textAlign: "right", fontWeight: 600 }}>{fmt(total)}</td><td style={S.td}><StatusBadge status={e.status} /></td>
                   </tr>); })}</tbody>
               </table>
+              {/* Pagination controls */}
+              {(() => {
+                const totalPages = Math.ceil(filtered.length / ENTRIES_PER_PAGE);
+                if (totalPages <= 1) return null;
+                return (
+                  <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8, padding: "16px 0" }}>
+                    <button style={{ ...S.btnGhost, opacity: currentPage <= 1 ? 0.4 : 1 }} disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)}>← Prev</button>
+                    <span style={{ fontSize: 13, color: BRAND.textMuted }}>Page {currentPage} of {totalPages} ({filtered.length} entries)</span>
+                    <button style={{ ...S.btnGhost, opacity: currentPage >= totalPages ? 0.4 : 1 }} disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)}>Next →</button>
+                  </div>
+                );
+              })()}
             </div>
           );
         })()}
@@ -1594,6 +1638,9 @@ export default function App() {
             <span style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 16, color: "#fff" }}>24 Mill</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button style={{ background: "none", border: "none", color: "#fff", padding: 6, cursor: "pointer", minWidth: 44, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setGlobalSearch(prev => prev === null ? "" : null)} aria-label="Search">
+              <Icon name="search" size={20} />
+            </button>
             {isTreasurer && (
               <button style={{ background: "none", border: "none", color: "#fff", padding: 6, cursor: "pointer", position: "relative", minWidth: 44, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={(e) => { e.stopPropagation(); setShowNotifPanel(p => !p); }} aria-label={"Notifications" + (pendingCount > 0 ? ", " + pendingCount + " pending" : "")}>
                 <Icon name="bell" size={22} />
@@ -1603,6 +1650,57 @@ export default function App() {
             <button style={{ background: "none", border: "none", color: "#fff", padding: 4, cursor: "pointer", minWidth: 44, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setDrawerOpen(true)} aria-label="Open navigation menu"><Icon name="menu" size={24} /></button>
           </div>
         </header>
+        {/* Global search overlay */}
+        {typeof globalSearch === "string" && (() => {
+          const q = globalSearch.toLowerCase().trim();
+          const matchedEntries = q ? entries.filter(e => {
+            const u = users.find(u => u.id === e.userId);
+            return [e.description, e.category, e.location, e.notes, u?.name, e.status, formatDate(e.date)].some(f => f?.toLowerCase().includes(q));
+          }).slice(0, 8) : [];
+          const matchedPurchases = q ? purchaseEntries.filter(e => {
+            const u = users.find(u => u.id === e.userId);
+            return [e.description, e.category, e.storeName, u?.name, e.status, formatDate(e.date)].some(f => f?.toLowerCase().includes(q));
+          }).slice(0, 4) : [];
+          return (
+            <div style={{ position: "fixed", top: 56, left: 0, right: 0, zIndex: 19, background: BRAND.white, borderBottom: "1px solid " + BRAND.borderLight, boxShadow: "0 4px 16px rgba(0,0,0,0.1)" }}>
+              <div style={{ padding: "8px 16px" }}>
+                <input autoFocus style={{ ...S.input, fontSize: 14, padding: "10px 14px" }} placeholder="Search entries, members, categories..." value={globalSearch} onChange={e => setGlobalSearch(e.target.value)} onKeyDown={e => e.key === "Escape" && setGlobalSearch("")} />
+              </div>
+              {q && (matchedEntries.length > 0 || matchedPurchases.length > 0) ? (
+                <div style={{ maxHeight: 320, overflowY: "auto" }}>
+                  {matchedEntries.map(e => {
+                    const u = users.find(u => u.id === e.userId);
+                    return (
+                      <button key={e.id} onClick={() => { setGlobalSearch(""); setViewEntry(e); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px", border: "none", borderBottom: "1px solid " + BRAND.borderLight, background: "none", cursor: "pointer", textAlign: "left", fontFamily: BRAND.sans }}>
+                        <CategoryBadge category={e.category} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</div>
+                          <div style={{ fontSize: 11, color: BRAND.textLight }}>{u?.name} · {formatDate(e.date)}</div>
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: BRAND.brick }}>{fmt(calcLabor(calcHours(e.startTime, e.endTime), getUserRate(users, settings, e.userId)) + calcMaterialsTotal(e.materials))}</span>
+                      </button>
+                    );
+                  })}
+                  {matchedPurchases.map(e => {
+                    const u = users.find(u => u.id === e.userId);
+                    return (
+                      <button key={e.id} onClick={() => { setGlobalSearch(""); setViewPurchase(e); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px", border: "none", borderBottom: "1px solid " + BRAND.borderLight, background: "none", cursor: "pointer", textAlign: "left", fontFamily: BRAND.sans }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", background: "#ECFEFF", padding: "2px 8px", borderRadius: 10 }}>PURCHASE</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description || e.storeName}</div>
+                          <div style={{ fontSize: 11, color: BRAND.textLight }}>{u?.name} · {formatDate(e.date)}</div>
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "#0E7490" }}>{fmt(e.total || 0)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : q ? (
+                <div style={{ padding: "16px", textAlign: "center", fontSize: 13, color: BRAND.textLight }}>No results for "{globalSearch}"</div>
+              ) : null}
+            </div>
+          );
+        })()}
         {/* Notification panel */}
         {showNotifPanel && isTreasurer && <NotificationPanel entries={entries} purchaseEntries={purchaseEntries} users={users} settings={settings} onView={(e) => { setShowNotifPanel(false); setViewEntry(e); }} onViewPurchase={(e) => { setShowNotifPanel(false); setViewPurchase(e); }} onClose={() => setShowNotifPanel(false)} onReviewAll={() => { setShowNotifPanel(false); nav("review"); }} mob={mob} />}
         {/* Slide-out drawer */}
