@@ -299,9 +299,9 @@ const S = {
   btnGhost: { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", background: "transparent", color: BRAND.textMuted, border: "none", borderRadius: 6, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: BRAND.sans },
 
   // Form elements
-  input: { width: "100%", padding: "10px 14px", border: "1px solid " + BRAND.border, borderRadius: 6, fontSize: 14, fontFamily: BRAND.sans, background: BRAND.white, color: BRAND.charcoal, boxSizing: "border-box" },
-  textarea: { width: "100%", padding: "10px 14px", border: "1px solid " + BRAND.border, borderRadius: 6, fontSize: 14, fontFamily: BRAND.sans, background: BRAND.white, color: BRAND.charcoal, resize: "vertical", minHeight: 80, boxSizing: "border-box" },
-  select: { width: "100%", padding: "10px 14px", border: "1px solid " + BRAND.border, borderRadius: 6, fontSize: 14, fontFamily: BRAND.sans, background: BRAND.white, color: BRAND.charcoal, cursor: "pointer", boxSizing: "border-box", appearance: "auto" },
+  input: { width: "100%", padding: "10px 14px", border: "1px solid " + BRAND.border, borderRadius: 6, fontSize: 16, fontFamily: BRAND.sans, background: BRAND.white, color: BRAND.charcoal, boxSizing: "border-box" },
+  textarea: { width: "100%", padding: "10px 14px", border: "1px solid " + BRAND.border, borderRadius: 6, fontSize: 16, fontFamily: BRAND.sans, background: BRAND.white, color: BRAND.charcoal, resize: "vertical", minHeight: 80, boxSizing: "border-box" },
+  select: { width: "100%", padding: "10px 14px", border: "1px solid " + BRAND.border, borderRadius: 6, fontSize: 16, fontFamily: BRAND.sans, background: BRAND.white, color: BRAND.charcoal, cursor: "pointer", boxSizing: "border-box", appearance: "auto" },
   label: { display: "block", fontSize: 14, fontWeight: 600, color: BRAND.textMuted, marginBottom: 6, fontFamily: BRAND.sans },
   field: { marginBottom: 20 },
 
@@ -507,11 +507,11 @@ const MaterialsEditor = ({ materials, onChange, readOnly, mob }) => {
             </div>
             <div>
               <div style={{ fontSize: 11, color: BRAND.textLight, marginBottom: 3 }}>Qty</div>
-              {readOnly ? <div style={{ fontSize: 14 }}>{m.quantity}</div> : <input type="number" min="0" style={{ ...S.input, padding: "8px 10px" }} value={m.quantity} onChange={e => update(i, "quantity", e.target.value)} />}
+              {readOnly ? <div style={{ fontSize: 14 }}>{m.quantity}</div> : <input type="number" min="0" inputMode="decimal" style={{ ...S.input, padding: "8px 10px" }} value={m.quantity} onChange={e => update(i, "quantity", e.target.value)} />}
             </div>
             <div>
               <div style={{ fontSize: 11, color: BRAND.textLight, marginBottom: 3 }}>Unit Cost</div>
-              {readOnly ? <div style={{ fontSize: 14 }}>{fmt(m.unitCost)}</div> : <input type="number" min="0" step="0.01" style={{ ...S.input, padding: "8px 10px" }} value={m.unitCost} onChange={e => update(i, "unitCost", e.target.value)} />}
+              {readOnly ? <div style={{ fontSize: 14 }}>{fmt(m.unitCost)}</div> : <input type="number" min="0" step="0.01" inputMode="decimal" style={{ ...S.input, padding: "8px 10px" }} value={m.unitCost} onChange={e => update(i, "unitCost", e.target.value)} />}
             </div>
             <div>
               <div style={{ fontSize: 11, color: BRAND.textLight, marginBottom: 3 }}>Total</div>
@@ -719,7 +719,7 @@ const EntryForm = ({ entry, settings, users, currentUser, onSave, onCancel, onSu
       <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: mob ? 12 : 16 }}>
         <Field label="Location"><input style={S.input} value={form.location} onChange={e => set("location", e.target.value)} placeholder="e.g. Unit 3B" /></Field>
         <Field label="Mileage">
-          <input type="number" min="0" step="0.1" style={S.input} value={form.mileage} onChange={e => set("mileage", e.target.value)} placeholder="Miles driven" />
+          <input type="number" min="0" step="0.1" inputMode="decimal" style={S.input} value={form.mileage} onChange={e => set("mileage", e.target.value)} placeholder="Miles driven" />
           {form.mileage > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: BRAND.textLight, marginTop: 4 }}>
               <span>@ ${IRS_MILEAGE_RATE}/mi (IRS {new Date().getFullYear()})</span>
@@ -977,11 +977,11 @@ const PurchaseEntryForm = ({ entry, settings, currentUser, onSave, onCancel, onS
               </div>
               <div>
                 {mob && <div style={{ fontSize: 11, color: BRAND.textLight, marginBottom: 3 }}>Qty</div>}
-                <input type="number" min="0.01" step="1" style={{ ...S.input, padding: "8px 10px", fontSize: 13, textAlign: "right" }} value={item.quantity} onChange={e => updateItem(i, "quantity", e.target.value)} />
+                <input type="number" min="0.01" step="1" inputMode="decimal" style={{ ...S.input, padding: "8px 10px", fontSize: 13, textAlign: "right" }} value={item.quantity} onChange={e => updateItem(i, "quantity", e.target.value)} />
               </div>
               <div>
                 {mob && <div style={{ fontSize: 11, color: BRAND.textLight, marginBottom: 3 }}>Unit Cost ($)</div>}
-                <input type="number" min="0" step="0.01" style={{ ...S.input, padding: "8px 10px", fontSize: 13, textAlign: "right" }} value={item.unitCost} onChange={e => updateItem(i, "unitCost", e.target.value)} placeholder="0.00" />
+                <input type="number" min="0" step="0.01" inputMode="decimal" style={{ ...S.input, padding: "8px 10px", fontSize: 13, textAlign: "right" }} value={item.unitCost} onChange={e => updateItem(i, "unitCost", e.target.value)} placeholder="0.00" />
               </div>
               <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.charcoal, textAlign: "right", padding: "8px 0" }}>
                 {fmt((Number(item.quantity) || 0) * (Number(item.unitCost) || 0))}
@@ -1001,7 +1001,7 @@ const PurchaseEntryForm = ({ entry, settings, currentUser, onSave, onCancel, onS
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, fontSize: 14 }}>
             <span style={{ color: BRAND.textMuted }}>Tax</span>
-            <input type="number" min="0" step="0.01" style={{ ...S.input, width: 100, padding: "6px 10px", fontSize: 13, textAlign: "right" }} value={form.tax} onChange={e => set("tax", e.target.value)} placeholder="0.00" />
+            <input type="number" min="0" step="0.01" inputMode="decimal" style={{ ...S.input, width: 100, padding: "6px 10px", fontSize: 13, textAlign: "right" }} value={form.tax} onChange={e => set("tax", e.target.value)} placeholder="0.00" />
           </div>
           {mileageTotal > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, fontSize: 14 }}>
@@ -1021,7 +1021,7 @@ const PurchaseEntryForm = ({ entry, settings, currentUser, onSave, onCancel, onS
       <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 16 }}>
         <Field label="Round-trip Mileage (optional)">
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input type="number" min="0" step="0.1" style={{ ...S.input, flex: 1 }} value={form.mileage} onChange={e => set("mileage", e.target.value)} placeholder="0" />
+            <input type="number" min="0" step="0.1" inputMode="decimal" style={{ ...S.input, flex: 1 }} value={form.mileage} onChange={e => set("mileage", e.target.value)} placeholder="0" />
             <span style={{ fontSize: 12, color: BRAND.textLight, whiteSpace: "nowrap" }}>@ {fmt(mileageRate)}/mi</span>
           </div>
         </Field>
@@ -1792,8 +1792,8 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
     const delta = offsetX - base;
     if (revealed === "left"  && delta > SWIPE_THRESHOLD)  { reset(); }
     else if (revealed === "right" && delta < -SWIPE_THRESHOLD) { reset(); }
-    else if (!revealed && offsetX < -SWIPE_THRESHOLD && allowSwipeLeft)  { setOffsetX(-swipeMax); setRevealed("left"); }
-    else if (!revealed && offsetX > SWIPE_THRESHOLD  && allowSwipeRight) { setOffsetX(swipeMax);  setRevealed("right"); }
+    else if (!revealed && offsetX < -SWIPE_THRESHOLD && allowSwipeLeft)  { setOffsetX(-swipeMax); setRevealed("left");  if (navigator.vibrate) navigator.vibrate(10); }
+    else if (!revealed && offsetX > SWIPE_THRESHOLD  && allowSwipeRight) { setOffsetX(swipeMax);  setRevealed("right"); if (navigator.vibrate) navigator.vibrate(10); }
     else { setOffsetX(base); } // snap back to current state
     touchStartX.current = null;
   };
@@ -1916,7 +1916,7 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
               aria-label="Approve"
               style={{ background: BRAND.success, color: "#fff", border: "none", width: 64, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 22, transition: "transform 120ms ease, filter 120ms ease" }}
               onTouchStart={e => e.currentTarget.style.transform = "scale(0.88)"}
-              onTouchEnd={e => { e.currentTarget.style.transform = "scale(1)"; e.stopPropagation(); reset(); onApprove(entry); }}
+              onTouchEnd={e => { e.currentTarget.style.transform = "scale(1)"; e.stopPropagation(); reset(); if (navigator.vibrate) navigator.vibrate(15); onApprove(entry); }}
             >
               <Icon name="check" size={22} />
             </button>
@@ -1926,7 +1926,7 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
               aria-label="Decline"
               style={{ background: BRAND.brick, color: "#fff", border: "none", width: 64, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "transform 120ms ease" }}
               onTouchStart={e => e.currentTarget.style.transform = "scale(0.88)"}
-              onTouchEnd={e => { e.currentTarget.style.transform = "scale(1)"; e.stopPropagation(); reset(); onReject(entry); }}
+              onTouchEnd={e => { e.currentTarget.style.transform = "scale(1)"; e.stopPropagation(); reset(); if (navigator.vibrate) navigator.vibrate(15); onReject(entry); }}
             >
               <Icon name="x" size={22} />
             </button>
@@ -1974,7 +1974,7 @@ const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit, onSub
 // ═══════════════════════════════════════════════════════════════════════════
 // REPORTS PAGE
 // ═══════════════════════════════════════════════════════════════════════════
-const ReportsPage = ({ entries, purchaseEntries, users, settings, currentUser, mob }) => {
+const ReportsPage = ({ entries, purchaseEntries, users, settings, currentUser, mob, onToast }) => {
   const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().split("T")[0]; });
   const [dateTo, setDateTo] = useState(todayStr());
   const [filterUser, setFilterUser] = useState("all");
@@ -2017,6 +2017,7 @@ const ReportsPage = ({ entries, purchaseEntries, users, settings, currentUser, m
     const csv = [header, ...workRows, ...purchRows].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = settings.hoaName.replace(/\s+/g, "_") + "_Report.csv"; a.click();
+    if (onToast) onToast("Report CSV downloaded (" + filtered.length + " entries)", "success");
   };
 
   // ── PDF Export ──────────────────────────────────────────────────────────
@@ -2191,6 +2192,7 @@ const ReportsPage = ({ entries, purchaseEntries, users, settings, currentUser, m
     win.document.close();
     win.focus();
     setTimeout(() => win.print(), 400);
+    if (onToast) onToast("PDF report opened — use Print to save", "success");
   };
 
   // ── Fiscal Year Report (CPA-ready) ──────────────────────────────────────
@@ -2312,6 +2314,7 @@ const ReportsPage = ({ entries, purchaseEntries, users, settings, currentUser, m
 
     const blob = new Blob([lines.join("\n")], { type: "text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = settings.hoaName.replace(/\s+/g, "_") + "_FiscalYear_" + year + ".csv"; a.click();
+    if (onToast) onToast(year + " fiscal year CSV downloaded", "success");
   };
 
   return (
@@ -2445,7 +2448,7 @@ const PageLoader = ({ page }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 const RateInput = ({ initialValue, placeholder, onSave }) => {
   const [val, setVal] = useState(initialValue || "");
-  return <input aria-label="Hourly rate" type="number" min="0" step="0.50" style={{ ...S.input, padding: "6px 10px" }} value={val} onChange={e => setVal(e.target.value)} onBlur={() => onSave(Number(val) || null)} placeholder={placeholder} />;
+  return <input aria-label="Hourly rate" type="number" min="0" step="0.50" inputMode="decimal" style={{ ...S.input, padding: "6px 10px" }} value={val} onChange={e => setVal(e.target.value)} onBlur={() => onSave(Number(val) || null)} placeholder={placeholder} />;
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3598,11 +3601,11 @@ const SettingsPage = ({ settings, users, currentUser, allEntries, allPurchases, 
       <div style={{ ...S.card, maxWidth: 600 }}>
         <div style={S.sectionLabel}>HOA Configuration</div>
         <Field label="HOA Name"><input style={S.input} value={form.hoaName} onChange={e => set("hoaName", e.target.value)} /></Field>
-        <Field label="Default Hourly Rate ($)"><input type="number" min="0" step="0.50" style={S.input} value={form.defaultHourlyRate} onChange={e => set("defaultHourlyRate", Number(e.target.value))} /></Field>
+        <Field label="Default Hourly Rate ($)"><input type="number" min="0" step="0.50" inputMode="decimal" style={S.input} value={form.defaultHourlyRate} onChange={e => set("defaultHourlyRate", Number(e.target.value))} /></Field>
         <Field label="Mileage Reimbursement Rate ($/mile)">
           <div>
-            <input type="number" min="0" step="0.005" style={S.input} value={form.mileageRate != null ? form.mileageRate : 0.725} onChange={e => set("mileageRate", Number(e.target.value))} />
-            <div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 6 }}>2026 IRS standard rate: $0.725/mile. Used for mileage reimbursement on purchase entries.</div>
+            <input type="number" min="0" step="0.005" inputMode="decimal" style={S.input} value={form.mileageRate != null ? form.mileageRate : 0.725} onChange={e => set("mileageRate", Number(e.target.value))} />
+            <div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 6 }}>IRS standard rate for {new Date().getFullYear()}: $0.725/mile. Update each January when the IRS publishes new rates. Applies to all mileage reimbursements.</div>
           </div>
         </Field>
         <div>
@@ -3643,8 +3646,8 @@ const SettingsPage = ({ settings, users, currentUser, allEntries, allPurchases, 
         </div>
         <div style={{ borderTop: "1px solid " + BRAND.borderLight, marginTop: 8, paddingTop: 16 }}>
           <div style={S.sectionLabel}>Governance</div>
-          <Field label="Annual Reimbursement Budget ($)"><div><input type="number" min="0" step="500" style={S.input} value={form.annualBudget || ""} onChange={e => set("annualBudget", Number(e.target.value))} placeholder="0 = no limit" /><div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 6 }}>Set to 0 to disable. Shows a progress bar on the dashboard.</div></div></Field>
-          <Field label="Dual Approval Threshold ($)"><div><input type="number" min="0" step="50" style={S.input} value={form.dualApprovalThreshold || ""} onChange={e => set("dualApprovalThreshold", Number(e.target.value))} placeholder="0 = single approval" /><div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 6 }}>Entries ≥ this amount require two board members to approve. Set to 0 to disable.</div></div></Field>
+          <Field label="Annual Reimbursement Budget ($)"><div><input type="number" min="0" step="500" inputMode="decimal" style={S.input} value={form.annualBudget || ""} onChange={e => set("annualBudget", Number(e.target.value))} placeholder="0 = no limit" /><div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 6 }}>Set to 0 to disable. Shows a progress bar on the dashboard.</div></div></Field>
+          <Field label="Dual Approval Threshold ($)"><div><input type="number" min="0" step="50" inputMode="decimal" style={S.input} value={form.dualApprovalThreshold || ""} onChange={e => set("dualApprovalThreshold", Number(e.target.value))} placeholder="0 = single approval" /><div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 6 }}>Entries ≥ this amount require two board members to approve. Set to 0 to disable.</div></div></Field>
         </div>
         <button style={S.btnPrimary} onClick={handleSave}>{saved ? "✓ Saved" : "Save Settings"}</button>
       </div>
@@ -4663,6 +4666,28 @@ export default function App() {
 
             return (
               <div style={{ marginBottom: 16 }}>
+                {/* ── ACTION REQUIRED banner — pinned to top ── */}
+                {(rejectedEntries.length > 0 || needsInfoEntries.length > 0) && (
+                  <div style={{ ...S.card, background: "#FFF5F5", borderColor: "#F0BABA", borderLeft: "4px solid " + BRAND.error, marginBottom: 16 }}>
+                    <div style={{ fontWeight: 700, color: BRAND.error, marginBottom: 10 }}>⚠️ {rejectedEntries.length + needsInfoEntries.length} entr{rejectedEntries.length + needsInfoEntries.length === 1 ? "y needs" : "ies need"} your attention</div>
+                    {[...rejectedEntries, ...needsInfoEntries].slice(0, 3).map(e => {
+                      const total = calcLabor(calcHours(e.startTime, e.endTime), getRate(e.userId)) + calcMaterialsTotal(e.materials);
+                      return (
+                        <div key={e.id} onClick={() => setViewEntry(e)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#fff", borderRadius: 8, marginBottom: 6, cursor: "pointer", border: "1px solid #F0BABA" }}>
+                          <StatusBadge status={e.status} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.charcoal, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.category} — {e.description}</div>
+                            {e.reviewerNotes && <div style={{ fontSize: 12, color: BRAND.textMuted, marginTop: 2 }}>"{e.reviewerNotes.slice(0, 60)}{e.reviewerNotes.length > 60 ? "…" : ""}"</div>}
+                          </div>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: BRAND.navy, flexShrink: 0 }}>{fmt(total)}</div>
+                        </div>
+                      );
+                    })}
+                    {rejectedEntries.length + needsInfoEntries.length > 3 && (
+                      <button style={{ ...S.btnGhost, fontSize: 12, marginTop: 4 }} onClick={() => { setFilterStatus(STATUSES.REJECTED); nav("entries"); }}>View all →</button>
+                    )}
+                  </div>
+                )}
                 {/* 1. YTD earnings summary */}
                 <div style={{ ...S.card, background: "linear-gradient(135deg, #F0FDF4 0%, #E8EDF5 100%)", borderColor: "#B5CCAE", marginBottom: 16 }}>
                   <div style={{ fontFamily: BRAND.serif, fontSize: 16, fontWeight: 600, color: BRAND.navy, marginBottom: 14 }}>{yr} Earnings Summary</div>
@@ -4680,6 +4705,45 @@ export default function App() {
                       </div>
                     ))}
                   </div>
+                  {/* 6-month rolling earnings bar chart */}
+                  {(() => {
+                    const months = [];
+                    const now = new Date();
+                    for (let i = 5; i >= 0; i--) {
+                      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                      const key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+                      const label = d.toLocaleDateString("en-US", { month: "short" });
+                      months.push({ key, label });
+                    }
+                    const monthTotals = months.map(({ key, label }) => {
+                      const total = myEntries
+                        .filter(e => e.date?.startsWith(key) && (e.status === STATUSES.APPROVED || e.status === STATUSES.PAID) && e.status !== STATUSES.TRASH)
+                        .reduce((s, e) => s + calcLabor(calcHours(e.startTime, e.endTime), getRate(e.userId)) + calcMaterialsTotal(e.materials), 0);
+                      return { key, label, total };
+                    });
+                    const maxVal = Math.max(...monthTotals.map(m => m.total), 1);
+                    const hasAnyData = monthTotals.some(m => m.total > 0);
+                    if (!hasAnyData) return null;
+                    return (
+                      <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,0.5)" }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: BRAND.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>6-Month Earnings</div>
+                        <div style={{ display: "flex", alignItems: "flex-end", gap: mob ? 6 : 10, height: 52 }}>
+                          {monthTotals.map(({ key, label, total }) => {
+                            const pct = maxVal > 0 ? (total / maxVal) : 0;
+                            const barH = Math.max(pct * 44, total > 0 ? 4 : 2);
+                            const isCurrent = key === (now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0"));
+                            return (
+                              <div key={key} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }} title={label + ": " + fmt(total)}>
+                                <div style={{ fontSize: 10, fontWeight: 700, color: total > 0 ? BRAND.navy : "transparent" }}>{total > 0 ? fmt(total).replace(".00","") : ""}</div>
+                                <div style={{ width: "100%", height: barH, borderRadius: "3px 3px 0 0", background: isCurrent ? BRAND.brick : (total > 0 ? BRAND.navy : BRAND.borderLight), transition: "height 400ms ease", minHeight: 2 }} />
+                                <div style={{ fontSize: 10, color: isCurrent ? BRAND.brick : BRAND.textMuted, fontWeight: isCurrent ? 700 : 400 }}>{label}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {avgApprovalDays && (
                     <div style={{ marginTop: 12, padding: "8px 12px", background: "rgba(255,255,255,0.5)", borderRadius: 8, fontSize: 12, color: BRAND.textMuted, display: "flex", gap: 6, alignItems: "center" }}>
                       <span>⚡</span>
@@ -4719,28 +4783,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* 3+4. Rejected / Needs Info — needing action */}
-                {(rejectedEntries.length > 0 || needsInfoEntries.length > 0) && (
-                  <div style={{ ...S.card, background: "#FFF5F5", borderColor: "#F0BABA", borderLeft: "4px solid " + BRAND.error, marginBottom: 16 }}>
-                    <div style={{ fontWeight: 700, color: BRAND.error, marginBottom: 10 }}>⚠️ {rejectedEntries.length + needsInfoEntries.length} entr{rejectedEntries.length + needsInfoEntries.length === 1 ? "y needs" : "ies need"} your attention</div>
-                    {[...rejectedEntries, ...needsInfoEntries].slice(0, 3).map(e => {
-                      const total = calcLabor(calcHours(e.startTime, e.endTime), getRate(e.userId)) + calcMaterialsTotal(e.materials);
-                      return (
-                        <div key={e.id} onClick={() => setViewEntry(e)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#fff", borderRadius: 8, marginBottom: 6, cursor: "pointer", border: "1px solid #F0BABA" }}>
-                          <StatusBadge status={e.status} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.charcoal, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.category} — {e.description}</div>
-                            {e.reviewerNotes && <div style={{ fontSize: 12, color: BRAND.textMuted, marginTop: 2 }}>"{e.reviewerNotes.slice(0, 60)}{e.reviewerNotes.length > 60 ? "…" : ""}"</div>}
-                          </div>
-                          <div style={{ fontWeight: 700, fontSize: 13, color: BRAND.navy, flexShrink: 0 }}>{fmt(total)}</div>
-                        </div>
-                      );
-                    })}
-                    {rejectedEntries.length + needsInfoEntries.length > 3 && (
-                      <button style={{ ...S.btnGhost, fontSize: 12, marginTop: 4 }} onClick={() => { setFilterStatus(STATUSES.REJECTED); nav("entries"); }}>View all →</button>
-                    )}
-                  </div>
-                )}
               </div>
             );
           })()}
@@ -4992,7 +5034,7 @@ export default function App() {
                 <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
                 <div style={{ fontWeight: 600, color: BRAND.navy, marginBottom: 8, fontSize: 16 }}>No entries yet</div>
                 <div style={{ fontSize: 14, color: BRAND.textLight, marginBottom: 20 }}>{isTreasurer ? "Work entries from all members will appear here once submitted." : "Start by logging your first work session."}</div>
-                {!isTreasurer && <button style={S.btnPrimary} onClick={() => setNewEntryType("chooser")}><Icon name="plus" size={16} /> New Entry</button>}
+                {!isTreasurer && <button style={S.btnPrimary} onClick={() => setNewEntryType("chooser")}><Icon name="plus" size={16} /> Log Work</button>}
               </div>
             );
             return (
@@ -5121,8 +5163,11 @@ export default function App() {
             <div style={{ ...S.card, textAlign: "center", padding: 60 }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
               <div style={{ fontWeight: 600, color: BRAND.navy, marginBottom: 8 }}>All caught up!</div>
-              <div style={{ fontSize: 14, color: BRAND.textLight, marginBottom: 16 }}>No entries waiting for review.</div>
-              <button style={S.btnGhost} onClick={() => { setFilterStatus(STATUSES.APPROVED); nav("entries"); }}>View approved entries →</button>
+              <div style={{ fontSize: 14, color: BRAND.textLight, marginBottom: 20 }}>No entries waiting for review.</div>
+              <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                <button style={S.btnGhost} onClick={() => { setFilterStatus(STATUSES.APPROVED); nav("entries"); }}>View approved entries →</button>
+                <button style={S.btnGhost} onClick={() => nav("reports")}>Generate a report →</button>
+              </div>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -5263,7 +5308,7 @@ export default function App() {
     }
     if (page === "payment") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <PaymentRunPage entries={entries} purchaseEntries={purchaseEntries} users={users} settings={settings} onMarkPaid={async (ids, paymentDetails) => { let count = 0; for (const id of ids) { const updated = await markPaid(id, paymentDetails); if (updated) count++; } if (count > 0) showToast(count + " entr" + (count === 1 ? "y" : "ies") + " marked as paid", "success"); }} onMarkPurchasePaid={doPurchaseMarkPaid} mob={mob} />; }
     if (page === "help") return <HelpPage currentUser={currentUser} settings={settings} mob={mob} onNav={nav} />;
-    if (page === "reports") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <ReportsPage entries={entries} purchaseEntries={purchaseEntries} users={users} settings={settings} currentUser={currentUser} mob={mob} />; }
+    if (page === "reports") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <ReportsPage entries={entries} purchaseEntries={purchaseEntries} users={users} settings={settings} currentUser={currentUser} mob={mob} onToast={showToast} />; }
     if (page === "settings") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <SettingsPage settings={settings} users={users} currentUser={currentUser} allEntries={entries} allPurchases={purchaseEntries} onSaveSettings={saveSettings} onAddUser={addUser} onRemoveUser={removeUser} onUpdateRate={updateUserRate} />; }
     if (page === "insights") return (
       <div className="fade-in">
