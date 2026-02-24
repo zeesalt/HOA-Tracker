@@ -184,7 +184,7 @@ export default function App() {
   const [registering, setRegistering] = useState(false);
   const [regSuccess, setRegSuccess] = useState(false);
   const [filterSearch, setFilterSearch] = useState("");
-  const [globalSearch, setGlobalSearch] = useState(""); // unified search across all entries
+  const [globalSearch, setGlobalSearch] = useState(null); // null = closed, "" = open, "xyz" = searching
   const [permDeleteTarget, setPermDeleteTarget] = useState(null); // for trash permanent delete confirm
   const [cachedInsightsStats, setCachedInsightsStats] = useState(null); // cache between tab visits
   const [selectedIds, setSelectedIds] = useState(new Set()); // bulk selection in review queue
@@ -319,6 +319,18 @@ export default function App() {
   const lastVisitedRef = useRef({});
   const hasUnsavedForm = newEntry || editEntry || newPurchase || editPurchase;
 
+  // Cmd+K / Ctrl+K opens global search
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setGlobalSearch(prev => prev === null ? "" : null);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
+
   const nav = (p) => {
     if (p === page && !viewEntry && !editEntry && !newEntry) return; // already there
     // Dirty-form guard: confirm before leaving an open form
@@ -329,6 +341,7 @@ export default function App() {
     doNav(p);
   };
   const doNav = (p) => {
+    window.scrollTo({ top: 0, behavior: "instant" });
     // Skip loading animation if visited in the last 5 minutes
     const now = Date.now();
     const lastVisit = lastVisitedRef.current[p] || 0;
@@ -1657,44 +1670,50 @@ export default function App() {
             const u = users.find(u => u.id === e.userId);
             return [e.description, e.category, e.storeName, u?.name, e.status, formatDate(e.date)].some(f => f?.toLowerCase().includes(q));
           }).slice(0, 4) : [];
+          const dismiss = () => setGlobalSearch(null);
           return (
-            <div style={{ position: "fixed", top: 56, left: 0, right: 0, zIndex: 19, background: BRAND.white, borderBottom: "1px solid " + BRAND.borderLight, boxShadow: "0 4px 16px rgba(0,0,0,0.1)" }}>
-              <div style={{ padding: "8px 16px" }}>
-                <input autoFocus style={{ ...S.input, fontSize: 14, padding: "10px 14px" }} placeholder="Search entries, members, categories..." value={globalSearch} onChange={e => setGlobalSearch(e.target.value)} onKeyDown={e => e.key === "Escape" && setGlobalSearch("")} />
-              </div>
-              {q && (matchedEntries.length > 0 || matchedPurchases.length > 0) ? (
-                <div style={{ maxHeight: 320, overflowY: "auto" }}>
-                  {matchedEntries.map(e => {
-                    const u = users.find(u => u.id === e.userId);
-                    return (
-                      <button key={e.id} onClick={() => { setGlobalSearch(""); setViewEntry(e); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px", border: "none", borderBottom: "1px solid " + BRAND.borderLight, background: "none", cursor: "pointer", textAlign: "left", fontFamily: BRAND.sans }}>
-                        <CategoryBadge category={e.category} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</div>
-                          <div style={{ fontSize: 11, color: BRAND.textLight }}>{u?.name} · {formatDate(e.date)}</div>
-                        </div>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: BRAND.brick }}>{fmt(calcLabor(calcHours(e.startTime, e.endTime), getUserRate(users, settings, e.userId)) + calcMaterialsTotal(e.materials))}</span>
-                      </button>
-                    );
-                  })}
-                  {matchedPurchases.map(e => {
-                    const u = users.find(u => u.id === e.userId);
-                    return (
-                      <button key={e.id} onClick={() => { setGlobalSearch(""); setViewPurchase(e); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px", border: "none", borderBottom: "1px solid " + BRAND.borderLight, background: "none", cursor: "pointer", textAlign: "left", fontFamily: BRAND.sans }}>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", background: "#ECFEFF", padding: "2px 8px", borderRadius: 10 }}>PURCHASE</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description || e.storeName}</div>
-                          <div style={{ fontSize: 11, color: BRAND.textLight }}>{u?.name} · {formatDate(e.date)}</div>
-                        </div>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: "#0E7490" }}>{fmt(e.total || 0)}</span>
-                      </button>
-                    );
-                  })}
+            <>
+              <div style={{ position: "fixed", inset: 0, zIndex: 44, background: "rgba(0,0,0,0.25)" }} onClick={dismiss} />
+              <div style={{ position: "fixed", top: 56, left: 0, right: 0, zIndex: 45, background: BRAND.white, borderTop: "1px solid " + BRAND.borderLight, borderBottom: "1px solid " + BRAND.borderLight, boxShadow: "0 4px 16px rgba(0,0,0,0.1)" }}>
+                <div style={{ padding: "8px 16px" }}>
+                  <input autoFocus style={{ ...S.input, fontSize: 14, padding: "10px 14px" }} placeholder="Search entries, members, categories..." value={globalSearch} onChange={e => setGlobalSearch(e.target.value)} onKeyDown={e => e.key === "Escape" && dismiss()} />
                 </div>
-              ) : q ? (
-                <div style={{ padding: "16px", textAlign: "center", fontSize: 13, color: BRAND.textLight }}>No results for "{globalSearch}"</div>
-              ) : null}
-            </div>
+                {q && (matchedEntries.length > 0 || matchedPurchases.length > 0) ? (
+                  <div style={{ maxHeight: 320, overflowY: "auto" }}>
+                    {matchedEntries.map(e => {
+                      const u = users.find(u => u.id === e.userId);
+                      return (
+                        <button key={e.id} onClick={() => { dismiss(); setViewEntry(e); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px", border: "none", borderBottom: "1px solid " + BRAND.borderLight, background: "none", cursor: "pointer", textAlign: "left", fontFamily: BRAND.sans }}>
+                          <CategoryBadge category={e.category} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</div>
+                            <div style={{ fontSize: 11, color: BRAND.textLight }}>{u?.name} · {formatDate(e.date)}</div>
+                          </div>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: BRAND.brick }}>{fmt(calcLabor(calcHours(e.startTime, e.endTime), getUserRate(users, settings, e.userId)) + calcMaterialsTotal(e.materials))}</span>
+                        </button>
+                      );
+                    })}
+                    {matchedPurchases.map(e => {
+                      const u = users.find(u => u.id === e.userId);
+                      return (
+                        <button key={e.id} onClick={() => { dismiss(); setViewPurchase(e); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px", border: "none", borderBottom: "1px solid " + BRAND.borderLight, background: "none", cursor: "pointer", textAlign: "left", fontFamily: BRAND.sans }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", background: "#ECFEFF", padding: "2px 8px", borderRadius: 10 }}>PURCHASE</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description || e.storeName}</div>
+                            <div style={{ fontSize: 11, color: BRAND.textLight }}>{u?.name} · {formatDate(e.date)}</div>
+                          </div>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: "#0E7490" }}>{fmt(e.total || 0)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : q ? (
+                  <div style={{ padding: "16px", textAlign: "center", fontSize: 13, color: BRAND.textLight }}>No results for "{globalSearch}"</div>
+                ) : (
+                  <div style={{ padding: "12px 16px", fontSize: 12, color: BRAND.textLight }}>Type to search across all entries, members, and categories</div>
+                )}
+              </div>
+            </>
           );
         })()}
         {/* Notification panel */}
@@ -1897,7 +1916,12 @@ export default function App() {
       </aside>
       <div style={S.main}>
         <header style={S.header} role="banner">
-          <span style={{ fontSize: 14, color: BRAND.textMuted }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <span style={{ fontSize: 14, color: BRAND.textMuted }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</span>
+            <button onClick={() => setGlobalSearch(prev => prev === null ? "" : null)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 14px", background: BRAND.bgSoft, border: "1px solid " + BRAND.borderLight, borderRadius: 8, cursor: "pointer", color: BRAND.textLight, fontSize: 13, fontFamily: BRAND.sans }}>
+              <Icon name="search" size={14} /> Search... <kbd style={{ fontSize: 11, color: BRAND.textLight, background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 4, padding: "1px 5px", marginLeft: 8, fontFamily: BRAND.sans }}>⌘K</kbd>
+            </button>
+          </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12, position: "relative" }}>
             {isTreasurer && (
               <button aria-label={"Notifications" + (pendingCount > 0 ? ", " + pendingCount + " pending" : "")} style={{ background: "none", border: "none", color: BRAND.charcoal, padding: 6, cursor: "pointer", position: "relative", borderRadius: 8, minWidth: 36, minHeight: 36, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={(e) => { e.stopPropagation(); setShowNotifPanel(p => !p); }}>
@@ -1910,6 +1934,67 @@ export default function App() {
             {showNotifPanel && isTreasurer && <NotificationPanel entries={entries} purchaseEntries={purchaseEntries} users={users} settings={settings} onView={(e) => { setShowNotifPanel(false); setViewEntry(e); }} onViewPurchase={(e) => { setShowNotifPanel(false); setViewPurchase(e); }} onClose={() => setShowNotifPanel(false)} onReviewAll={() => { setShowNotifPanel(false); nav("review"); }} mob={mob} />}
           </div>
         </header>
+        {/* Desktop global search overlay (Cmd+K) */}
+        {typeof globalSearch === "string" && !mob && (() => {
+          const q = globalSearch.toLowerCase().trim();
+          const matchedEntries = q ? entries.filter(e => {
+            const u = users.find(u => u.id === e.userId);
+            return [e.description, e.category, e.location, e.notes, u?.name, e.status, formatDate(e.date)].some(f => f?.toLowerCase().includes(q));
+          }).slice(0, 8) : [];
+          const matchedPurchases = q ? purchaseEntries.filter(e => {
+            const u = users.find(u => u.id === e.userId);
+            return [e.description, e.category, e.storeName, u?.name, e.status, formatDate(e.date)].some(f => f?.toLowerCase().includes(q));
+          }).slice(0, 4) : [];
+          const dismiss = () => setGlobalSearch(null);
+          return (
+            <>
+              <div style={{ position: "fixed", inset: 0, zIndex: 999, background: "rgba(31,42,56,0.35)" }} onClick={dismiss} />
+              <div className="fade-in" style={{ position: "fixed", top: 80, left: "50%", transform: "translateX(-50%)", width: 560, maxWidth: "80vw", zIndex: 1000, background: BRAND.white, borderRadius: 12, boxShadow: "0 20px 60px rgba(31,42,56,0.25)", border: "1px solid " + BRAND.borderLight, overflow: "hidden" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: "1px solid " + BRAND.borderLight }}>
+                  <Icon name="search" size={18} />
+                  <input autoFocus style={{ flex: 1, border: "none", outline: "none", fontSize: 15, fontFamily: BRAND.sans, color: BRAND.charcoal, background: "transparent" }} placeholder="Search entries, members, categories..." value={globalSearch} onChange={e => setGlobalSearch(e.target.value)} onKeyDown={e => e.key === "Escape" && dismiss()} />
+                  <kbd style={{ fontSize: 11, color: BRAND.textLight, background: BRAND.bgSoft, border: "1px solid " + BRAND.borderLight, borderRadius: 4, padding: "2px 6px", fontFamily: BRAND.sans }}>ESC</kbd>
+                </div>
+                {q && (matchedEntries.length > 0 || matchedPurchases.length > 0) ? (
+                  <div style={{ maxHeight: 380, overflowY: "auto" }}>
+                    {matchedEntries.length > 0 && <div style={{ padding: "8px 16px 4px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: BRAND.textMuted }}>Work Entries</div>}
+                    {matchedEntries.map(e => {
+                      const u = users.find(u => u.id === e.userId);
+                      return (
+                        <button key={e.id} onClick={() => { dismiss(); setViewEntry(e); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px", border: "none", borderBottom: "1px solid " + BRAND.borderLight, background: "none", cursor: "pointer", textAlign: "left", fontFamily: BRAND.sans, transition: "background 100ms" }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.bgSoft} onMouseLeave={ev => ev.currentTarget.style.background = "transparent"}>
+                          <CategoryBadge category={e.category} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</div>
+                            <div style={{ fontSize: 11, color: BRAND.textLight }}>{u?.name} · {formatDate(e.date)} · <StatusBadge status={e.status} /></div>
+                          </div>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: BRAND.brick }}>{fmt(calcLabor(calcHours(e.startTime, e.endTime), getUserRate(users, settings, e.userId)) + calcMaterialsTotal(e.materials))}</span>
+                        </button>
+                      );
+                    })}
+                    {matchedPurchases.length > 0 && <div style={{ padding: "8px 16px 4px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: BRAND.textMuted }}>Purchases</div>}
+                    {matchedPurchases.map(e => {
+                      const u = users.find(u => u.id === e.userId);
+                      return (
+                        <button key={e.id} onClick={() => { dismiss(); setViewPurchase(e); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px", border: "none", borderBottom: "1px solid " + BRAND.borderLight, background: "none", cursor: "pointer", textAlign: "left", fontFamily: BRAND.sans, transition: "background 100ms" }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.bgSoft} onMouseLeave={ev => ev.currentTarget.style.background = "transparent"}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", background: "#ECFEFF", padding: "2px 8px", borderRadius: 10 }}>PURCHASE</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description || e.storeName}</div>
+                            <div style={{ fontSize: 11, color: BRAND.textLight }}>{u?.name} · {formatDate(e.date)}</div>
+                          </div>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: "#0E7490" }}>{fmt(e.total || 0)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : q ? (
+                  <div style={{ padding: "24px 16px", textAlign: "center", fontSize: 13, color: BRAND.textLight }}>No results for "{globalSearch}"</div>
+                ) : (
+                  <div style={{ padding: "12px 16px", fontSize: 12, color: BRAND.textLight }}>Type to search across all entries, members, and categories</div>
+                )}
+              </div>
+            </>
+          );
+        })()}
         {!online && <div role="alert" style={{ background: "#FFF3E0", borderBottom: "1px solid #FFB74D", padding: "10px 32px", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#E65100" }}><Icon name="wifiOff" size={16} /><span>You're offline. Viewing cached data — changes require an internet connection.</span></div>}
         <PreviewBanner />
         <main id="main-content" style={S.content}><ErrorBoundary key={page} title="This page hit an error"><div className="page-enter">{renderPage()}</div></ErrorBoundary></main>
