@@ -25,6 +25,8 @@ import { HelpModal } from "./components/HelpModal";
 import { NotificationPanel } from "./components/NotificationPanel";
 import { SettingsPage } from "./components/SettingsPage";
 import { MoreSheet } from "./components/MoreSheet";
+import { CommandCenter } from "./components/CommandCenter";
+import { NudgeComposer, MemberNudgeBanners, SentNudgesLog } from "./components/NudgeSystem";
 
 export default function App() {
   // Inject global CSS keyframes once
@@ -89,6 +91,7 @@ export default function App() {
     savePurchaseEntry, deletePurchaseEntry, approvePurchaseEntry, rejectPurchaseEntry, markPurchasePaid,
     saveSettings, addUser, removeUser, updateUserRate,
     setAuthError, fetchCommunityStats, refresh,
+    nudges, sendNudges, markNudgeRead, dismissNudge,
   } = useSupabase();
 
   // ── NAV REDUCER — groups tightly-coupled navigation state ───────────────
@@ -189,6 +192,7 @@ export default function App() {
   const [cachedInsightsStats, setCachedInsightsStats] = useState(null); // cache between tab visits
   const [selectedIds, setSelectedIds] = useState(new Set()); // bulk selection in review queue
   const [showHelp, setShowHelp] = useState(false);
+  const [nudgeModal, setNudgeModal] = useState(null); // { recipients?: string[], template?: string } | null
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterMember, setFilterMember] = useState("all");
@@ -612,6 +616,8 @@ export default function App() {
     ...(!isTreasurer ? [{ id: "insights", label: "Community Insights", icon: "insights" }] : []),
     ...(!isTreasurer ? [{ id: "help", label: "Help", icon: "help" }] : []),
     ...(isTreasurer ? [{ id: "review", label: "Review Queue", icon: "inbox", badge: pendingCount }] : []),
+    ...(isTreasurer ? [{ id: "command", label: "Command Center", icon: "barChart" }] : []),
+    ...(isTreasurer ? [{ id: "nudges", label: "Nudge Members", icon: "bell" }] : []),
     ...(isTreasurer ? [{ id: "payment", label: "Payment Run", icon: "dollar" }] : []),
     ...(isTreasurer ? [{ id: "reports", label: "Reports", icon: "chart" }] : []),
     ...(isTreasurer ? [{ id: "insights", label: "Community Insights", icon: "insights" }] : []),
@@ -941,6 +947,18 @@ export default function App() {
 
             return (
               <div style={{ marginBottom: 16 }}>
+                {/* Nudge banners for members */}
+                <MemberNudgeBanners
+                  entries={entries}
+                  purchaseEntries={purchaseEntries}
+                  nudges={nudges}
+                  currentUser={viewAs}
+                  settings={settings}
+                  onViewEntry={(e) => setViewEntry(e)}
+                  onViewPurchase={(e) => setViewPurchase(e)}
+                  onDismissNudge={dismissNudge}
+                  mob={mob}
+                />
                 {/* 1. YTD earnings summary */}
                 <div style={{ ...S.card, background: "linear-gradient(135deg, #F0FDF4 0%, #E8EDF5 100%)", borderColor: "#B5CCAE", marginBottom: 16 }}>
                   <div style={{ fontFamily: BRAND.serif, fontSize: 16, fontWeight: 600, color: BRAND.navy, marginBottom: 14 }}>{yr} Earnings Summary</div>
@@ -1563,6 +1581,46 @@ export default function App() {
         <CommunityInsights fetchStats={fetchCommunityStats} settings={settings} mob={mob} cachedStats={cachedInsightsStats} onStatsCached={setCachedInsightsStats} entries={entries} users={users} />
       </div>
     );
+    if (page === "command") {
+      if (!isTreasurer || previewAsId) { nav("dashboard"); return null; }
+      return (
+        <CommandCenter
+          entries={entries}
+          purchaseEntries={purchaseEntries}
+          users={users}
+          settings={settings}
+          currentUser={currentUser}
+          mob={mob}
+          onViewEntry={(e) => setViewEntry(e)}
+          onViewPurchase={(e) => setViewPurchase(e)}
+          onNav={nav}
+          onSendNudge={(template, recipientIds) => setNudgeModal({ recipients: recipientIds, template })}
+        />
+      );
+    }
+    if (page === "nudges") {
+      if (!isTreasurer || previewAsId) { nav("dashboard"); return null; }
+      return (
+        <div className="fade-in">
+          <h2 style={{ ...S.h2, marginBottom: 8 }}>Nudge Members</h2>
+          <p style={{ margin: "0 0 24px", fontSize: 14, color: BRAND.textMuted }}>Send in-app messages to members about their entries.</p>
+          <div style={{ ...S.card, marginBottom: 20 }}>
+            <NudgeComposer
+              users={users}
+              currentUser={currentUser}
+              onSend={async (recipientIds, message, template) => {
+                const sent = await sendNudges(recipientIds, message, template);
+                if (sent.length > 0) showToast("Nudge sent to " + sent.length + " member" + (sent.length !== 1 ? "s" : ""), "success");
+              }}
+            />
+          </div>
+          <div style={{ ...S.card }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: BRAND.navy, marginBottom: 12 }}>Sent Nudges</div>
+            <SentNudgesLog nudges={nudges} users={users} mob={mob} />
+          </div>
+        </div>
+      );
+    }
     return null;
   };
 
@@ -2024,6 +2082,21 @@ export default function App() {
               </div>
             )}
           </div>
+        )}
+        {nudgeModal && (
+          <Modal open={true} onClose={() => setNudgeModal(null)} title="Send a Nudge">
+            <NudgeComposer
+              users={users}
+              currentUser={currentUser}
+              prefillRecipients={nudgeModal.recipients}
+              prefillTemplate={nudgeModal.template}
+              onSend={async (recipientIds, message, template) => {
+                const sent = await sendNudges(recipientIds, message, template);
+                if (sent.length > 0) showToast("Nudge sent to " + sent.length + " member" + (sent.length !== 1 ? "s" : ""), "success");
+              }}
+              onClose={() => setNudgeModal(null)}
+            />
+          </Modal>
         )}
       </div>
     </div>

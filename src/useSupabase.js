@@ -706,6 +706,115 @@ export function useSupabase() {
     return data;
   }
 
+  // ── NUDGES ─────────────────────────────────────────────────────────────
+  const [nudges, setNudges] = useState([]);
+
+  function mapNudge(row) {
+    return {
+      id: row.id,
+      senderId: row.sender_id,
+      recipientId: row.recipient_id,
+      message: row.message,
+      template: row.template,
+      readAt: row.read_at,
+      dismissedAt: row.dismissed_at,
+      actedOnAt: row.acted_on_at,
+      createdAt: row.created_at,
+    };
+  }
+
+  // Load nudges when authenticated
+  useEffect(() => {
+    if (!session?.user) return;
+    const loadNudges = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("nudges")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(100);
+        if (data) setNudges(data.map(mapNudge));
+        if (error && error.code !== "42P01") console.error("Nudge load error:", error);
+        // 42P01 = table doesn't exist yet — gracefully handle pre-migration state
+      } catch (e) {
+        // Silently fail if nudges table doesn't exist yet
+      }
+    };
+    loadNudges();
+  }, [session?.user?.id]);
+
+  // Real-time for nudges
+  useEffect(() => {
+    if (!session?.user) return;
+    let channel;
+    try {
+      channel = supabase
+        .channel("nudges-realtime")
+        .on("postgres_changes", { event: "*", schema: "public", table: "nudges" }, (payload) => {
+          if (payload.eventType === "INSERT") {
+            setNudges(prev => {
+              if (prev.find(n => n.id === payload.new.id)) return prev;
+              return [mapNudge(payload.new), ...prev];
+            });
+          } else if (payload.eventType === "UPDATE") {
+            setNudges(prev => prev.map(n => n.id === payload.new.id ? mapNudge(payload.new) : n));
+          } else if (payload.eventType === "DELETE") {
+            setNudges(prev => prev.filter(n => n.id !== payload.old.id));
+          }
+        })
+        .subscribe();
+    } catch (e) {
+      // Graceful: table may not exist yet
+    }
+    return () => { if (channel) supabase.removeChannel(channel); };
+  }, [session?.user?.id]);
+
+  // Send nudges (Treasurer only)
+  const sendNudges = useCallback(async (recipientIds, message, template) => {
+    if (!currentUser) return [];
+    const rows = recipientIds.map(rid => ({
+      sender_id: currentUser.id,
+      recipient_id: rid,
+      message,
+      template: template || null,
+    }));
+    try {
+      const { data, error } = await supabase.from("nudges").insert(rows).select();
+      if (error) { console.error("Send nudge error:", error); return []; }
+      const mapped = (data || []).map(mapNudge);
+      setNudges(prev => [...mapped, ...prev]);
+      return mapped;
+    } catch (e) {
+      console.error("Send nudge exception:", e);
+      return [];
+    }
+  }, [currentUser]);
+
+  // Mark nudge as read (Member)
+  const markNudgeRead = useCallback(async (nudgeId) => {
+    try {
+      const { data, error } = await supabase.from("nudges").update({
+        read_at: new Date().toISOString(),
+      }).eq("id", nudgeId).select().single();
+      if (data) setNudges(prev => prev.map(n => n.id === nudgeId ? mapNudge(data) : n));
+    } catch (e) {
+      // Graceful
+    }
+  }, []);
+
+  // Dismiss nudge (Member)
+  const dismissNudge = useCallback(async (nudgeId) => {
+    try {
+      const { data, error } = await supabase.from("nudges").update({
+        dismissed_at: new Date().toISOString(),
+        read_at: new Date().toISOString(),  // Also mark as read
+      }).eq("id", nudgeId).select().single();
+      if (data) setNudges(prev => prev.map(n => n.id === nudgeId ? mapNudge(data) : n));
+    } catch (e) {
+      // Graceful
+    }
+  }, []);
+
   // ── REFRESH ────────────────────────────────────────────────────────────
   const refresh = useCallback(() => {
     if (session?.user?.id) loadAll(session.user.id);
@@ -713,7 +822,7 @@ export function useSupabase() {
 
   return {
     // State
-    currentUser, users, entries, purchaseEntries, settings, loading, authError,
+    currentUser, users, entries, purchaseEntries, settings, loading, authError, nudges,
     // Auth
     login, logout, register, resetPassword, changePassword,
     // Entries
@@ -723,6 +832,8 @@ export function useSupabase() {
     savePurchaseEntry, deletePurchaseEntry, approvePurchaseEntry, rejectPurchaseEntry, markPurchasePaid,
     // Settings & Users
     saveSettings, addUser, removeUser, updateUserRate,
+    // Nudges
+    sendNudges, markNudgeRead, dismissNudge,
     // Misc
     refresh, setAuthError, fetchCommunityStats, logAuditEvent,
   };
