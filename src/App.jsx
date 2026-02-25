@@ -27,6 +27,9 @@ import { SettingsPage } from "./components/SettingsPage";
 import { MoreSheet } from "./components/MoreSheet";
 import { CommandCenter } from "./components/CommandCenter";
 import { NudgeComposer, MemberNudgeBanners, SentNudgesLog } from "./components/NudgeSystem";
+import { OnboardingWizard } from "./components/OnboardingWizard";
+import { ShareInviteCard } from "./components/ShareInviteCard";
+import { InstallPrompt } from "./components/InstallPrompt";
 
 export default function App() {
   // Inject global CSS keyframes once
@@ -42,6 +45,8 @@ export default function App() {
       @keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
       @keyframes slideDown { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(16px); } }
       @keyframes slideInRight { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: translateX(0); } }
+      @keyframes slideInLeft { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: translateX(0); } }
+      @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
       @keyframes slideOutLeft { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(-24px); } }
       @keyframes stepPop { 0% { transform: scale(0.6); opacity: 0; } 70% { transform: scale(1.18); } 100% { transform: scale(1); opacity: 1; } }
       @keyframes stepPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(31,42,56,0.18); } 50% { box-shadow: 0 0 0 7px rgba(31,42,56,0); } }
@@ -192,6 +197,7 @@ export default function App() {
   const [cachedInsightsStats, setCachedInsightsStats] = useState(null); // cache between tab visits
   const [selectedIds, setSelectedIds] = useState(new Set()); // bulk selection in review queue
   const [showHelp, setShowHelp] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [nudgeModal, setNudgeModal] = useState(null); // { recipients?: string[], template?: string } | null
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -213,12 +219,25 @@ export default function App() {
   // Sync auth errors from hook
   useEffect(() => { if (authError) setLoginError(authError); }, [authError]);
 
-  // Scroll lock for drawer and help modal
+  // Scroll lock for drawer, help modal, and onboarding
   useEffect(() => {
-    if (drawerOpen || showHelp) { document.body.style.overflow = "hidden"; }
+    if (drawerOpen || showHelp || showOnboarding) { document.body.style.overflow = "hidden"; }
     else { document.body.style.overflow = ""; }
     return () => { document.body.style.overflow = ""; };
-  }, [drawerOpen, showHelp]);
+  }, [drawerOpen, showHelp, showOnboarding]);
+
+  // ── ONBOARDING WIZARD — show for new members with zero entries ─────────
+  useEffect(() => {
+    if (loading || !currentUser) return;
+    if (currentUser.role === ROLES.TREASURER) return; // Treasurers have their own checklist
+    const key = "hoa_onboarding_seen_" + currentUser.id;
+    try {
+      if (localStorage.getItem(key)) return;
+      // Check if member has zero entries (both work + purchase)
+      const hasEntries = entries.some(e => e.userId === currentUser.id) || purchaseEntries.some(e => e.userId === currentUser.id);
+      if (!hasEntries) setShowOnboarding(true);
+    } catch {}
+  }, [loading, currentUser, entries.length, purchaseEntries.length]);
 
   // ── PULL-TO-REFRESH state (must be before any early returns) ─────────────
   const [pullY, setPullY] = useState(0);
@@ -712,6 +731,7 @@ export default function App() {
               )}
             </div>
           </div>
+          <InstallPrompt hoaName={settings.hoaName || "24 Mill Street"} mob={mob} />
           <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "repeat(4, 1fr)", gap: mob ? 8 : 16, marginBottom: mob ? 16 : 28 }}>
             {isTreasurer ? (<>
               <StatCard label="Total Entries" value={dashStats.total} icon="file" />
@@ -762,40 +782,14 @@ export default function App() {
               </div>
             );
           })()}
+          {/* ── Share Invite Card (Treasurer, when members < 2) ── */}
+          {isTreasurer && <ShareInviteCard settings={settings} users={users} mob={mob} />}
           {isTreasurer && pendingCount > 0 && (
             <div style={{ ...S.card, background: "#FFF8F0", borderColor: "#F0D4A8", borderLeft: "4px solid " + BRAND.warning, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}><Icon name="alert" size={20} /><span style={{ fontWeight: 600 }}>{pendingCount === 1 ? "1 entry" : pendingCount + " entries"} awaiting your review</span></div>
               <button style={S.btnPrimary} onClick={() => setPage("review")}>Review Now</button>
             </div>
           )}
-          {/* Annual Budget Progress Bar */}
-          {isTreasurer && settings.annualBudget > 0 && (() => {
-            const yr = String(new Date().getFullYear());
-            let ytdSpent = 0;
-            entries.filter(e => (e.status === STATUSES.APPROVED || e.status === STATUSES.PAID) && e.date.startsWith(yr)).forEach(e => { const h = calcHours(e.startTime, e.endTime); const r = getRate(e.userId); ytdSpent += calcLabor(h, r) + calcMaterialsTotal(e.materials); });
-            const pct = Math.min((ytdSpent / settings.annualBudget) * 100, 100);
-            const isWarning = pct >= 80;
-            const isDanger = pct >= 100;
-            const barColor = isDanger ? BRAND.error : isWarning ? BRAND.warning : "#2E7D32";
-            return (
-              <div style={{ ...S.card, padding: "18px 24px", marginBottom: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 18 }}>💰</span>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: BRAND.navy }}>{yr} Reimbursement Budget</span>
-                  </div>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: barColor }}>{pct.toFixed(0)}% used</span>
-                </div>
-                <AnimatedBar percent={pct} color={barColor} height={12} style={{ marginBottom: 8 }} />
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                  <span style={{ color: BRAND.textMuted }}>{fmt(ytdSpent)} spent</span>
-                  <span style={{ color: BRAND.textLight }}>{fmt(settings.annualBudget - ytdSpent)} remaining of {fmt(settings.annualBudget)}</span>
-                </div>
-                {isWarning && !isDanger && <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: BRAND.warning }}>⚠️ Budget is at {pct.toFixed(0)}% — approaching the annual limit.</div>}
-                {isDanger && <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: BRAND.error }}>🚨 Budget exceeded! Approved reimbursements surpass the annual budget.</div>}
-              </div>
-            );
-          })()}
           {/* Annual Budget Progress Bar */}
           {isTreasurer && settings.annualBudget > 0 && (() => {
             const yr = String(new Date().getFullYear());
@@ -1694,6 +1688,22 @@ export default function App() {
     </Modal>
   );
 
+  // ── ONBOARDING WIZARD DISMISS HANDLER ───────────────────────────────────
+  const dismissOnboarding = () => {
+    setShowOnboarding(false);
+    try { localStorage.setItem("hoa_onboarding_seen_" + currentUser.id, "1"); } catch {}
+  };
+
+  // ── ONBOARDING WIZARD (fixed overlay, shared by mobile + desktop) ──────
+  const onboardingOverlay = showOnboarding && (
+    <OnboardingWizard
+      onClose={dismissOnboarding}
+      onCreateEntry={() => setNewEntryType("chooser")}
+      hoaName={settings?.hoaName || "24 Mill Street"}
+      mob={mob}
+    />
+  );
+
   if (mob) {
     return (
       <div style={{ minHeight: "100vh", fontFamily: BRAND.sans, background: BRAND.bgSoft, color: BRAND.charcoal, paddingBottom: 88 }} onTouchStart={onPullStart} onTouchMove={onPullMove} onTouchEnd={onPullEnd}>
@@ -1860,6 +1870,7 @@ export default function App() {
         <ChangePasswordModal />
         <ConfirmDialog open={!!showNavGuard} onClose={() => setShowNavGuard(null)} title="Discard unsaved changes?" message="You have an entry form open with unsaved work. Navigating away will discard your changes." confirmText="Discard" danger onConfirm={() => doNav(showNavGuard)} />
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} isTreasurer={isTreasurer} mob={mob} hoaName={settings?.hoaName || "24 Mill Street HOA"} />}
+        {onboardingOverlay}
         {/* Confetti burst on submit */}
         {showConfetti && (
           <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 9999 }}>
@@ -2059,6 +2070,7 @@ export default function App() {
         <ChangePasswordModal />
         <ConfirmDialog open={!!showNavGuard} onClose={() => setShowNavGuard(null)} title="Discard unsaved changes?" message="You have an entry form open with unsaved work. Navigating away will discard your changes." confirmText="Discard" danger onConfirm={() => doNav(showNavGuard)} />
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} isTreasurer={isTreasurer} mob={mob} hoaName={settings?.hoaName || "24 Mill Street HOA"} />}
+        {onboardingOverlay}
         {toast && (
           <div className="toast-enter" role="status" aria-live="polite" style={{ position: "fixed", bottom: 24, right: 24, zIndex: 50, background: toast.type === "success" ? "#065F46" : toast.type === "error" ? "#991B1B" : BRAND.navy, color: "#fff", borderRadius: 12, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", maxWidth: 420 }}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 20px" }}>
