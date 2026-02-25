@@ -12,6 +12,13 @@ import {
   ImageUploader, MaterialsEditor,
 } from "../shared";
 
+const WORKFLOW_STEPS = [
+  { key: "Draft",     label: "Draft",     icon: "edit" },
+  { key: "Submitted", label: "Submitted", icon: "inbox" },
+  { key: "Approved",  label: "Approved",  icon: "check" },
+  { key: "Paid",      label: "Paid",      icon: "dollar" },
+];
+
 export const WorkflowStepper = ({ status, mob }) => {
   const [mounted, setMounted] = useState(false);
   const prevStatus = useRef(status);
