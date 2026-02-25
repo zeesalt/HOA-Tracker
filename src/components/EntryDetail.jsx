@@ -12,6 +12,7 @@ import {
   ImageUploader, MaterialsEditor,
 } from "../shared";
 import { WorkflowStepper } from "./WorkflowStepper";
+import { ActivityTimeline } from "./ActivityTimeline";
 export const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onApprove, onReject, onTrash, onRestore, onMarkPaid, onDuplicate, onSecondApprove, onDelete, onComment, mob }) => {
   const [reviewNotes, setReviewNotes] = useState(entry.reviewerNotes || "");
   const [showApproveConfirm, setShowApproveConfirm] = useState(false);
@@ -111,7 +112,7 @@ export const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdi
       {!isTreasurer && entry.reviewerNotes && (
         <div style={{ ...S.card,
           borderColor: entry.status === STATUSES.NEEDS_INFO ? "#FED7AA" : entry.status === STATUSES.REJECTED ? "#F0BABA" : BRAND.borderLight,
-          borderLeft: "4px solid " + (entry.status === STATUSES.NEEDS_INFO ? "#C2410C" : entry.status === STATUSES.REJECTED ? BRAND.brick : BRAND.success),
+          borderLeft: "4px solid " + (entry.status === STATUSES.NEEDS_INFO ? "#9A3412" : entry.status === STATUSES.REJECTED ? BRAND.brick : BRAND.success),
           background: entry.status === STATUSES.NEEDS_INFO ? "#FFF7ED" : BRAND.white
         }}>
           <div style={{ ...S.sectionLabel, color: entry.status === STATUSES.NEEDS_INFO ? "#C2410C" : BRAND.textMuted }}>
@@ -126,6 +127,9 @@ export const EntryDetail = ({ entry, settings, users, currentUser, onBack, onEdi
         </div>
       )}
       {/* ── Treasurer Action Bar ── */}
+      {/* Activity Timeline */}
+      <ActivityTimeline entry={entry} mob={mob} />
+
       {isTreasurer && (
         <div style={{ ...S.card, background: "#F8F7F5", borderColor: BRAND.borderLight, padding: "16px 20px" }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: BRAND.textMuted, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.05em" }}>Treasurer Actions</div>

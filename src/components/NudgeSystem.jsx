@@ -19,7 +19,7 @@ const NUDGE_TEMPLATES = [
   { id: "submit_drafts",     emoji: "📝", label: "Submit your drafts",     message: "You have draft entries that are ready to submit. Can you finalize and submit them when you get a chance?" },
   { id: "missing_receipts",  emoji: "🧾", label: "Missing receipts",       message: "Some of your entries are missing receipt attachments. Please upload photos of your receipts so we can process your reimbursement." },
   { id: "end_of_month",      emoji: "📅", label: "End-of-month reminder",  message: "Friendly reminder to submit any outstanding work entries before the end of the month so we can include them in this month's payment run." },
-  { id: "rejected_followup", emoji: "🔄", label: "Rejected entry followup", message: "You have a rejected entry that needs your attention. Please review the Treasurer's notes and resubmit with the requested changes." },
+  { id: "rejected_followup", emoji: "🔄", label: "Declined entry followup", message: "You have a declined entry that needs your attention. Please review the Treasurer's notes and resubmit with the requested changes." },
   { id: "welcome",           emoji: "👋", label: "Welcome & onboarding",   message: "Welcome to the HOA reimbursement system! Start by logging your first work entry or purchase. Tap the + button to get started." },
   { id: "custom",            emoji: "✏️", label: "Custom message...",       message: "" },
 ];
@@ -177,7 +177,7 @@ export const MemberNudgeBanners = ({ entries, purchaseEntries, nudges, currentUs
         priority: 1,
         type: "error",
         emoji: "🔄",
-        title: rejected.length + " rejected entr" + (rejected.length === 1 ? "y" : "ies") + " need" + (rejected.length === 1 ? "s" : "") + " revision",
+        title: rejected.length + " declined entr" + (rejected.length === 1 ? "y" : "ies") + " need" + (rejected.length === 1 ? "s" : "") + " revision",
         detail: "Treasurer left a note" + note,
         action: { label: "Fix It →", onClick: () => onViewEntry?.(newest) },
       });

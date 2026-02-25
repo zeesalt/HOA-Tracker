@@ -322,11 +322,11 @@ export const CommunityInsights = ({ fetchStats, settings, mob, cachedStats, onSt
                             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                               <thead>
                                 <tr style={{ background: BRAND.bgSoft }}>
-                                  <th style={{ padding: "10px 16px", textAlign: "left", fontWeight: 600, color: BRAND.textMuted, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>Month</th>
+                                  <th style={{ padding: "10px 16px", textAlign: "left", fontWeight: 600, color: BRAND.textMuted, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>Month</th>
                                   {visibleStatuses.map(st => (
-                                    <th key={st} style={{ padding: "10px 12px", textAlign: "right", fontWeight: 600, color: STATUS_COLORS[st]?.text || BRAND.textMuted, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>{st}</th>
+                                    <th key={st} style={{ padding: "10px 12px", textAlign: "right", fontWeight: 600, color: STATUS_COLORS[st]?.text || BRAND.textMuted, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>{st}</th>
                                   ))}
-                                  <th style={{ padding: "10px 16px", textAlign: "right", fontWeight: 700, color: BRAND.charcoal, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>Month Total</th>
+                                  <th style={{ padding: "10px 16px", textAlign: "right", fontWeight: 700, color: BRAND.charcoal, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.05em" }}>Month Total</th>
                                 </tr>
                               </thead>
                               <tbody>

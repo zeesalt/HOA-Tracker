@@ -12,6 +12,7 @@ import {
   ImageUploader, MaterialsEditor,
 } from "../shared";
 import { WorkflowStepper } from "./WorkflowStepper";
+import { ActivityTimeline } from "./ActivityTimeline";
 export const PurchaseEntryDetail = ({ entry, settings, users, currentUser, onBack, onEdit, onApprove, onReject, onMarkPaid, mob }) => {
   const user = users.find(u => u.id === entry.userId);
   const isTreasurer = currentUser?.role === ROLES.TREASURER;
@@ -45,10 +46,10 @@ export const PurchaseEntryDetail = ({ entry, settings, users, currentUser, onBac
 
         {/* Details Grid */}
         <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 16, margin: "20px 0" }}>
-          <div><div style={{ fontSize: 11, color: BRAND.textLight, textTransform: "uppercase", marginBottom: 4 }}>Store</div><div style={{ fontSize: 15, fontWeight: 600, color: BRAND.charcoal }}>{entry.storeName}</div></div>
-          <div><div style={{ fontSize: 11, color: BRAND.textLight, textTransform: "uppercase", marginBottom: 4 }}>Category</div><div style={{ fontSize: 14 }}>{PURCHASE_CATEGORY_EMOJIS[entry.category] || "📦"} {entry.category}</div></div>
-          {entry.paymentMethod && <div><div style={{ fontSize: 11, color: BRAND.textLight, textTransform: "uppercase", marginBottom: 4 }}>Payment Method</div><div style={{ fontSize: 14 }}>{entry.paymentMethod}</div></div>}
-          {entry.description && <div style={{ gridColumn: "1 / -1" }}><div style={{ fontSize: 11, color: BRAND.textLight, textTransform: "uppercase", marginBottom: 4 }}>Description</div><div style={{ fontSize: 14 }}>{entry.description}</div></div>}
+          <div><div style={{ fontSize: 12, color: BRAND.textLight, textTransform: "uppercase", marginBottom: 4 }}>Store</div><div style={{ fontSize: 15, fontWeight: 600, color: BRAND.charcoal }}>{entry.storeName}</div></div>
+          <div><div style={{ fontSize: 12, color: BRAND.textLight, textTransform: "uppercase", marginBottom: 4 }}>Category</div><div style={{ fontSize: 14 }}>{PURCHASE_CATEGORY_EMOJIS[entry.category] || "📦"} {entry.category}</div></div>
+          {entry.paymentMethod && <div><div style={{ fontSize: 12, color: BRAND.textLight, textTransform: "uppercase", marginBottom: 4 }}>Payment Method</div><div style={{ fontSize: 14 }}>{entry.paymentMethod}</div></div>}
+          {entry.description && <div style={{ gridColumn: "1 / -1" }}><div style={{ fontSize: 12, color: BRAND.textLight, textTransform: "uppercase", marginBottom: 4 }}>Description</div><div style={{ fontSize: 14 }}>{entry.description}</div></div>}
         </div>
 
         {/* Line Items Table */}
@@ -106,6 +107,9 @@ export const PurchaseEntryDetail = ({ entry, settings, users, currentUser, onBac
           </div>
         )}
 
+        {/* Activity Timeline */}
+        <ActivityTimeline entry={entry} mob={mob} />
+
         {/* Actions */}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end", marginTop: 8 }}>
           {canEdit && <button style={S.btnPrimary} onClick={onEdit}><Icon name="edit" size={16} /> Edit</button>}
@@ -113,7 +117,7 @@ export const PurchaseEntryDetail = ({ entry, settings, users, currentUser, onBac
             <>
               <div style={{ flex: 1 }} />
               <input style={{ ...S.input, flex: 2, minWidth: 200, maxWidth: 400, fontSize: 13 }} value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} placeholder="Reviewer notes (optional)..." />
-              <button style={{ ...S.btnGhost, color: BRAND.error, border: "1px solid " + BRAND.error + "40", opacity: processing ? 0.6 : 1 }} disabled={processing} onClick={() => setShowRejectConfirm(true)}><Icon name="x" size={16} /> Reject</button>
+              <button style={{ ...S.btnGhost, color: BRAND.error, border: "1px solid " + BRAND.error + "40", opacity: processing ? 0.6 : 1 }} disabled={processing} onClick={() => setShowRejectConfirm(true)}><Icon name="x" size={16} /> Decline</button>
               <button style={{ ...S.btnPrimary, opacity: processing ? 0.6 : 1 }} disabled={processing} onClick={async () => { setProcessing(true); await onApprove(reviewNotes); setProcessing(false); }}><Icon name="check" size={16} /> {processing ? "Approving..." : "Approve"}</button>
             </>
           )}
@@ -123,7 +127,7 @@ export const PurchaseEntryDetail = ({ entry, settings, users, currentUser, onBac
         </div>
       </div>
 
-      <ConfirmDialog open={showRejectConfirm} onClose={() => setShowRejectConfirm(false)} onConfirm={async () => { setProcessing(true); await onReject(reviewNotes); setShowRejectConfirm(false); setProcessing(false); }} title="Reject Purchase Entry?" message="This will return the entry to the member for edits." confirmText="Reject" danger />
+      <ConfirmDialog open={showRejectConfirm} onClose={() => setShowRejectConfirm(false)} onConfirm={async () => { setProcessing(true); await onReject(reviewNotes); setShowRejectConfirm(false); setProcessing(false); }} title="Decline Purchase Entry?" message="This will return the entry to the member for edits." confirmText="Decline" danger />
     </div>
   );
 };

@@ -82,13 +82,13 @@ export const WorkflowStepper = ({ status, mob }) => {
               </div>
               {/* Label */}
               <span style={{
-                fontSize: 11, fontWeight: active ? 700 : 500,
+                fontSize: 12, fontWeight: active ? 700 : 500,
                 color: active ? dotColor : done ? BRAND.success : BRAND.textLight,
                 marginTop: 4, whiteSpace: "nowrap",
                 opacity: mounted ? 1 : 0,
                 transition: `opacity 300ms ease ${delay + 80}ms, color 400ms ease`,
               }}>
-                {isRejectStep ? "Rejected" : isAwaitStep ? "Awaiting 2nd" : s.label}
+                {isRejectStep ? "Declined" : isAwaitStep ? "Awaiting 2nd" : s.label}
               </span>
             </div>
             {/* Connecting line with fill animation */}

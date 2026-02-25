@@ -26,7 +26,7 @@ export const HelpModal = ({ onClose, isTreasurer, mob, hoaName }) => {
   }, [onClose]);
 
   const sectionLabel = (text) => (
-    <div style={{ fontFamily: BRAND.sans, fontSize: 10, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: BRAND.textLight, marginBottom: 16, paddingBottom: 8, borderBottom: "1px solid " + BRAND.borderLight }}>{text}</div>
+    <div style={{ fontFamily: BRAND.sans, fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: BRAND.textLight, marginBottom: 16, paddingBottom: 8, borderBottom: "1px solid " + BRAND.borderLight }}>{text}</div>
   );
 
   const workflowSteps = [

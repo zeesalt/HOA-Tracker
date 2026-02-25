@@ -66,7 +66,7 @@ export const HelpPage = ({ currentUser, settings, mob, onNav }) => {
       items: [
         { q: "What does Draft mean?", a: "You've saved the entry but haven't submitted it yet. Only you can see drafts. You can edit or delete a draft at any time." },
         { q: "What happens after I submit?", a: "The entry moves to Submitted (Pending Review). The Treasurer will review it and either approve it or send it back with notes." },
-        { q: "My entry was Rejected — what now?", a: "Read the Treasurer's note (shown on the entry), make the requested changes, and resubmit. The entry goes back into the review queue." },
+        { q: "My entry was declined — what now?", a: "Read the Treasurer's note (shown on the entry), make the requested changes, and resubmit. The entry goes back into the review queue." },
         { q: "What is Needs Info?", a: "The Treasurer has a question but hasn't declined the entry. Check the Discussion thread inside the entry for their message and reply there." },
         { q: "What's the difference between Approved and Paid?", a: "Approved means the Treasurer has signed off. Paid means the money has actually been sent to you via the payment method on record." },
       ],
@@ -86,7 +86,7 @@ export const HelpPage = ({ currentUser, settings, mob, onNav }) => {
       emoji: "📊",
       title: "Your Dashboard",
       items: [
-        { q: "What does my Dashboard show?", a: "Your year-to-date approved and paid totals, pending entries with how long they've been waiting (color-coded by age), and any rejected or Needs Info entries requiring your action." },
+        { q: "What does my Dashboard show?", a: "Your year-to-date approved and paid totals, pending entries with how long they've been waiting (color-coded by age), and any declined or Needs Info entries requiring your action." },
         { q: "What does \"Owed to You\" mean?", a: "The total amount across all your Approved entries — work that's been signed off but not yet paid out." },
         { q: "How is my hourly rate set?", a: "The Treasurer sets a default rate for all members. You may have a custom rate set for you individually — the rate is shown on your entry summary when you create one." },
       ],
@@ -101,7 +101,7 @@ export const HelpPage = ({ currentUser, settings, mob, onNav }) => {
       items: [
         { q: "Where do I review entries?", a: "Go to Review Queue in the sidebar. All Submitted entries appear here, oldest first. You can also bulk-approve multiple entries at once." },
         { q: "How do I approve an entry?", a: "Open the entry and click Approve (or use the quick-approve button in the Review Queue). You can add an optional note before approving." },
-        { q: "How do I decline an entry?", a: "Click Decline, enter a reason (required), and confirm. The entry returns to the member as Rejected and they'll see your note." },
+        { q: "How do I decline an entry?", a: "Click Decline, enter a reason (required), and confirm. The entry returns to the member as Declined and they'll see your note." },
         { q: "What is Needs Info?", a: "Use this when you have a question but don't want to fully decline. The entry is flagged and the member is expected to respond via the Discussion thread." },
         { q: "What is dual approval?", a: "Entries above the dual approval threshold (set in Settings) require a second board member to approve. The first approval marks it Awaiting Second; a second treasurer-role user must then approve." },
       ],
@@ -146,7 +146,7 @@ export const HelpPage = ({ currentUser, settings, mob, onNav }) => {
     { name: "Submitted", desc: "Awaiting Treasurer review", bg: "#FFF0E0", border: "#E8C4A8", dot: "#8E3B2E", text: "#6D3620" },
     { name: "Approved",  desc: "Signed off, payment pending", bg: "#E8F0E6", border: "#B5CCAE", dot: "#2E7D32", text: "#2F4F3E" },
     { name: "Paid",      desc: "Payment sent", bg: "#E8EDF5", border: "#B8C8E0", dot: "#3B5998", text: "#2C4478" },
-    { name: "Rejected",  desc: "Edit and resubmit", bg: "#FDEAEA", border: "#F0BABA", dot: "#C62828", text: "#7f1d1d" },
+    { name: "Declined",  desc: "Edit and resubmit", bg: "#FDEAEA", border: "#F0BABA", dot: "#C62828", text: "#7f1d1d" },
     { name: "Needs Info", desc: "Treasurer has a question", bg: "#FFF7ED", border: "#FED7AA", dot: "#C2410C", text: "#7C3910" },
   ];
 
