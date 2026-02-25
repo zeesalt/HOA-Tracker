@@ -839,16 +839,19 @@ export function useSupabase() {
   // Send a test digest email to a specific address via the send-digest edge function
   const sendTestDigest = useCallback(async (testRecipientEmail, digestType, testAsUserId) => {
     try {
+      const { data: { session: sess } } = await supabase.auth.getSession();
       const { data, error } = await supabase.functions.invoke("send-digest", {
         body: {
           testRecipientEmail,
           testDigestType: digestType || "treasurer",
           testAsUserId: testAsUserId || null,
         },
+        headers: sess?.access_token
+          ? { Authorization: "Bearer " + sess.access_token }
+          : {},
       });
       if (error) {
         console.error("sendTestDigest error:", error);
-        // Try to extract the real error from the response context
         let msg = error.message || String(error);
         try {
           if (error.context?.body) {
@@ -869,8 +872,12 @@ export function useSupabase() {
   // Send a nudge email via the send-nudge-email edge function
   const sendNudgeEmail = useCallback(async (recipientIds, message, senderName, hoaName) => {
     try {
+      const { data: { session: sess } } = await supabase.auth.getSession();
       const { data, error } = await supabase.functions.invoke("send-nudge-email", {
         body: { recipientIds, message, senderName, hoaName },
+        headers: sess?.access_token
+          ? { Authorization: "Bearer " + sess.access_token }
+          : {},
       });
       if (error) {
         console.error("sendNudgeEmail error:", error);
