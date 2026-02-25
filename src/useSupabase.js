@@ -95,6 +95,7 @@ export function useSupabase() {
   const [settings, setSettings] = useState({ hoaName: "24 Mill Street", defaultHourlyRate: 40, currency: "USD", inviteCode: "", inviteExpiresAt: null, mileageRate: 0.725 });
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState("");
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
 
   // ── AUTH ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -102,8 +103,11 @@ export function useSupabase() {
       setSession(session);
       if (!session) setLoading(false);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
+      if (event === "PASSWORD_RECOVERY") {
+        setPasswordRecovery(true);
+      }
       if (!session) { setCurrentUser(null); setLoading(false); }
     });
     return () => subscription.unsubscribe();
@@ -920,6 +924,6 @@ export function useSupabase() {
     // Email (Edge Functions)
     sendTestDigest, sendNudgeEmail,
     // Misc
-    refresh, setAuthError, fetchCommunityStats, logAuditEvent,
+    refresh, setAuthError, fetchCommunityStats, logAuditEvent, passwordRecovery, setPasswordRecovery,
   };
 }
