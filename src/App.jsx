@@ -4,6 +4,7 @@ import {
   ErrorBoundary, AnimatedBar,
   BRAND, CATEGORIES, STATUSES, ROLES,
   PURCHASE_CATEGORY_EMOJIS,
+  createTheme, getLogoUrl, ThemeProvider,
   useIsMobile, useOnline,
   fmt, fmtHours, todayStr, nowTime, relativeDate,
   calcHours, calcLabor, calcMaterialsTotal, formatDate, timeAgo, getUserRate,
@@ -102,6 +103,10 @@ export default function App() {
     sendTestDigest, sendNudgeEmail,
     passwordRecovery, setPasswordRecovery,
   } = useSupabase();
+
+  // ── DYNAMIC THEME — derive from settings.branding overrides ──────────
+  const theme = useMemo(() => createTheme(settings), [settings?.branding?.primaryColor, settings?.branding?.accentColor, settings?.branding?.bgColor]);
+  const logoUrl = getLogoUrl(settings);
 
   // ── NAV REDUCER — groups tightly-coupled navigation state ───────────────
   const navInitial = {
@@ -542,11 +547,11 @@ export default function App() {
   // LOGIN SCREEN
   // ══════════════════════════════════════════════════════════════════════════
   if (!currentUser || passwordRecovery) {
-    if (loading && !passwordRecovery) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans }}><div style={{ textAlign: "center" }}><img src="/logo.png" alt="24 Mill Street" style={{ width: 120, height: 120, objectFit: "contain", margin: "0 auto 16px", display: "block", opacity: 0.5 }} /><div style={{ fontSize: 14, color: BRAND.textMuted }}>Loading...</div></div></div>;
+    if (loading && !passwordRecovery) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans }}><div style={{ textAlign: "center" }}><img src={logoUrl} alt={settings?.hoaName || "HOA"} style={{ width: 120, height: 120, objectFit: "contain", margin: "0 auto 16px", display: "block", opacity: 0.5 }} /><div style={{ fontSize: 14, color: BRAND.textMuted }}>Loading...</div></div></div>;
     return (
       <div style={{ minHeight: "100dvh", display: "flex", alignItems: "safe center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans, padding: mob ? "24px 16px" : 0, overflow: "auto", WebkitOverflowScrolling: "touch" }}>
         <div className="fade-in" style={{ textAlign: "center", maxWidth: 420, width: "100%" }}>
-          <img src="/logo.png" alt="24 Mill" style={{ width: mob ? 160 : 200, height: mob ? 160 : 200, objectFit: "contain", margin: "0 auto 24px", display: "block" }} />
+          <img src={logoUrl} alt={settings?.hoaName || "HOA"} style={{ width: mob ? 160 : 200, height: mob ? 160 : 200, objectFit: "contain", margin: "0 auto 24px", display: "block" }} />
           <h1 style={{ fontFamily: BRAND.serif, fontSize: mob ? 28 : 34, fontWeight: 600, color: BRAND.navy, margin: "0 0 32px" }}>Log Your Work</h1>
           <div style={{ background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 12, padding: mob ? 24 : 32, textAlign: "left", boxShadow: "0 4px 20px rgba(31,42,56,0.06)" }}>
             {/* Tab toggle */}
@@ -1751,7 +1756,7 @@ export default function App() {
         {/* Mobile top bar */}
         <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: BRAND.navy, position: "fixed", top: 0, left: 0, right: 0, zIndex: 20 }} role="banner">
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <img src="/logo.png" alt="24 Mill Street logo" style={{ width: 32, height: 32, borderRadius: 4, objectFit: "cover", background: BRAND.beige }} />
+            <img src={logoUrl} alt={(settings?.hoaName || "HOA") + " logo"} style={{ width: 32, height: 32, borderRadius: 4, objectFit: "cover", background: BRAND.beige }} />
             <span style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 16, color: "#fff" }}>24 Mill</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -1983,7 +1988,7 @@ export default function App() {
       <aside style={S.sidebar} aria-label="Sidebar navigation">
         <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <img src="/logo.png" alt="24 Mill Street logo" style={{ width: 40, height: 40, borderRadius: 6, objectFit: "cover", background: BRAND.beige }} />
+            <img src={logoUrl} alt={(settings?.hoaName || "HOA") + " logo"} style={{ width: 40, height: 40, borderRadius: 6, objectFit: "cover", background: BRAND.beige }} />
             <div>
               <div style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 17, color: "#FFFFFF", lineHeight: 1.2 }}>24 Mill</div>
               <div style={{ fontSize: 12, color: "#A8A29E", letterSpacing: "0.02em" }}>Log Your Work</div>

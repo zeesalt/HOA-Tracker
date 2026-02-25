@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, Component } from "react";
+import { useState, useEffect, useMemo, useRef, Component, createContext, useContext } from "react";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ERROR BOUNDARY — prevents white-screen crashes
@@ -76,6 +76,51 @@ export const BRAND = {
   serif: "'Cormorant Garamond', Georgia, 'Times New Roman', serif",
   sans: "'Inter', system-ui, -apple-system, sans-serif",
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DYNAMIC THEMING — overrides BRAND defaults with settings-driven colors
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Default branding values (matches static BRAND above)
+export const DEFAULT_BRAND = { ...BRAND };
+
+/**
+ * Create a themed BRAND object by merging saved settings overrides.
+ * settings.branding shape: { primaryColor, accentColor, bgColor, sidebarColor, logoUrl }
+ */
+export function createTheme(settings) {
+  const b = settings?.branding;
+  if (!b) return { ...DEFAULT_BRAND };
+  return {
+    ...DEFAULT_BRAND,
+    navy:       b.primaryColor  || DEFAULT_BRAND.navy,
+    brick:      b.accentColor   || DEFAULT_BRAND.brick,
+    brickDark:  b.accentColor   ? darkenHex(b.accentColor, 0.12) : DEFAULT_BRAND.brickDark,
+    bgSoft:     b.bgColor       || DEFAULT_BRAND.bgSoft,
+  };
+}
+
+/** Darken a hex color by a factor (0..1). Used to auto-generate hover states. */
+function darkenHex(hex, factor) {
+  const c = hex.replace("#", "");
+  const r = parseInt(c.substring(0, 2), 16);
+  const g = parseInt(c.substring(2, 4), 16);
+  const b = parseInt(c.substring(4, 6), 16);
+  const d = (v) => Math.max(0, Math.round(v * (1 - factor)));
+  return "#" + [d(r), d(g), d(b)].map(v => v.toString(16).padStart(2, "0")).join("");
+}
+
+// Theme React Context — allows any component to read the active theme
+const ThemeContext = createContext(BRAND);
+export const ThemeProvider = ThemeContext.Provider;
+export function useTheme() { return useContext(ThemeContext); }
+
+/**
+ * Get the logo URL from settings, with fallback to default /logo.png.
+ */
+export function getLogoUrl(settings) {
+  return settings?.branding?.logoUrl || "/logo.png";
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS

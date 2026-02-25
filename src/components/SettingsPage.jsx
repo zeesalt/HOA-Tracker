@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import {
-  BRAND, CATEGORIES, CATEGORY_EMOJIS, STATUSES, ROLES, DEFAULT_SETTINGS,
+  BRAND, DEFAULT_BRAND, createTheme, getLogoUrl,
+  CATEGORIES, CATEGORY_EMOJIS, STATUSES, ROLES, DEFAULT_SETTINGS,
   MOBILE_BP, IRS_MILEAGE_RATE,
   PURCHASE_CATEGORIES, PURCHASE_CATEGORY_EMOJIS, PAYMENT_METHODS,
   useIsMobile, useOnline,
@@ -23,6 +24,8 @@ export const SettingsPage = ({ settings, users, currentUser, allEntries, allPurc
   const [addingUser, setAddingUser] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setBranding = (k, v) => setForm(f => ({ ...f, branding: { ...(f.branding || {}), [k]: v } }));
+  const logoInputRef = useRef(null);
   const handleSave = async () => { await onSaveSettings(form); setSaved(true); setTimeout(() => setSaved(false), 2000); };
   const addMember = async () => {
     setMemberError("");
@@ -96,6 +99,142 @@ export const SettingsPage = ({ settings, users, currentUser, allEntries, allPurc
           <Field label="Annual Reimbursement Budget ($)"><div><input type="number" min="0" step="500" style={S.input} value={form.annualBudget || ""} onChange={e => set("annualBudget", Number(e.target.value))} placeholder="0 = no limit" /><div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 6 }}>Set to 0 to disable. Shows a progress bar on the dashboard.</div></div></Field>
           <Field label="Dual Approval Threshold ($)"><div><input type="number" min="0" step="50" style={S.input} value={form.dualApprovalThreshold || ""} onChange={e => set("dualApprovalThreshold", Number(e.target.value))} placeholder="0 = single approval" /><div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 6 }}>Entries ≥ this amount require two board members to approve. Set to 0 to disable.</div></div></Field>
         </div>
+
+        {/* ── BRANDING / WHITELABEL SECTION ─────────────────────────── */}
+        <div style={{ borderTop: "1px solid " + BRAND.borderLight, marginTop: 8, paddingTop: 16 }}>
+          <div style={S.sectionLabel}>Branding</div>
+          <div style={{ fontSize: 13, color: BRAND.textLight, marginBottom: 16, lineHeight: 1.6 }}>
+            Customize colors and logo to match your HOA's identity. Changes apply to all members after saving.
+          </div>
+
+          {/* Color pickers row */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+            <Field label="Primary Color (Sidebar, Headings)">
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input type="color" value={form.branding?.primaryColor || DEFAULT_BRAND.navy} onChange={e => setBranding("primaryColor", e.target.value)}
+                  style={{ width: 40, height: 36, border: "1px solid " + BRAND.border, borderRadius: 6, cursor: "pointer", padding: 2, background: BRAND.white }} />
+                <input style={{ ...S.input, fontFamily: "monospace", fontSize: 13, flex: 1 }} value={form.branding?.primaryColor || DEFAULT_BRAND.navy}
+                  onChange={e => { if (/^#[0-9a-fA-F]{0,6}$/.test(e.target.value)) setBranding("primaryColor", e.target.value); }} placeholder="#1F2A38" />
+              </div>
+            </Field>
+            <Field label="Accent Color (Buttons, Highlights)">
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input type="color" value={form.branding?.accentColor || DEFAULT_BRAND.brick} onChange={e => setBranding("accentColor", e.target.value)}
+                  style={{ width: 40, height: 36, border: "1px solid " + BRAND.border, borderRadius: 6, cursor: "pointer", padding: 2, background: BRAND.white }} />
+                <input style={{ ...S.input, fontFamily: "monospace", fontSize: 13, flex: 1 }} value={form.branding?.accentColor || DEFAULT_BRAND.brick}
+                  onChange={e => { if (/^#[0-9a-fA-F]{0,6}$/.test(e.target.value)) setBranding("accentColor", e.target.value); }} placeholder="#8E3B2E" />
+              </div>
+            </Field>
+          </div>
+
+          <Field label="Background Color">
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input type="color" value={form.branding?.bgColor || DEFAULT_BRAND.bgSoft} onChange={e => setBranding("bgColor", e.target.value)}
+                style={{ width: 40, height: 36, border: "1px solid " + BRAND.border, borderRadius: 6, cursor: "pointer", padding: 2, background: BRAND.white }} />
+              <input style={{ ...S.input, fontFamily: "monospace", fontSize: 13, maxWidth: 160 }} value={form.branding?.bgColor || DEFAULT_BRAND.bgSoft}
+                onChange={e => { if (/^#[0-9a-fA-F]{0,6}$/.test(e.target.value)) setBranding("bgColor", e.target.value); }} placeholder="#F5F2ED" />
+              <button type="button" style={{ ...S.btnGhost, fontSize: 12, padding: "6px 10px", color: BRAND.textLight }} onClick={() => setBranding("bgColor", "")}>Reset</button>
+            </div>
+          </Field>
+
+          {/* Logo upload */}
+          <Field label="HOA Logo">
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              <div style={{ width: 64, height: 64, borderRadius: 8, border: "1px solid " + BRAND.borderLight, background: BRAND.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                {(form.branding?.logoUrl || form.branding?.logoPreview) ? (
+                  <img src={form.branding?.logoPreview || form.branding?.logoUrl} alt="Logo preview" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                ) : (
+                  <span style={{ fontSize: 28, opacity: 0.4 }}>🏠</span>
+                )}
+              </div>
+              <div style={{ flex: 1 }}>
+                <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" style={{ display: "none" }}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 2 * 1024 * 1024) { alert("Logo must be under 2 MB."); e.target.value = ""; return; }
+                    const dataUrl = file.type === "image/svg+xml"
+                      ? await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(file); })
+                      : await compressImage(file, 400, 0.85);
+                    setBranding("logoPreview", dataUrl);
+                    setBranding("logoUrl", dataUrl);
+                    e.target.value = "";
+                  }} />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button type="button" style={{ ...S.btnSecondary, fontSize: 13, padding: "8px 14px" }} onClick={() => logoInputRef.current?.click()}>
+                    <Icon name="camera" size={14} /> Upload Logo
+                  </button>
+                  {(form.branding?.logoUrl || form.branding?.logoPreview) && (
+                    <button type="button" style={{ ...S.btnGhost, fontSize: 12, color: BRAND.error }} onClick={() => { setBranding("logoUrl", ""); setBranding("logoPreview", ""); }}>
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: BRAND.textLight, marginTop: 6 }}>PNG, JPG, SVG, or WebP. Max 2 MB. Square ratio recommended.</div>
+              </div>
+            </div>
+          </Field>
+
+          {/* Live preview strip */}
+          {(() => {
+            const preview = createTheme({ branding: form.branding });
+            const logoSrc = form.branding?.logoPreview || form.branding?.logoUrl;
+            return (
+              <div style={{ border: "1px solid " + BRAND.borderLight, borderRadius: 10, overflow: "hidden", marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: BRAND.textMuted, padding: "8px 12px", background: BRAND.bgSoft, borderBottom: "1px solid " + BRAND.borderLight }}>Live Preview</div>
+                {/* Mini sidebar + header mockup */}
+                <div style={{ display: "flex", height: 80 }}>
+                  <div style={{ width: 80, background: preview.navy, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, padding: 8 }}>
+                    {logoSrc ? <img src={logoSrc} alt="" style={{ width: 28, height: 28, borderRadius: 4, objectFit: "contain" }} /> : <span style={{ fontSize: 18 }}>🏠</span>}
+                    <span style={{ fontSize: 8, color: "rgba(255,255,255,0.7)", textAlign: "center", lineHeight: 1.2 }}>{form.hoaName || "Your HOA"}</span>
+                  </div>
+                  <div style={{ flex: 1, background: preview.bgSoft, display: "flex", flexDirection: "column" }}>
+                    <div style={{ height: 28, background: BRAND.white, borderBottom: "1px solid " + BRAND.borderLight, display: "flex", alignItems: "center", padding: "0 12px" }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: preview.navy, fontFamily: BRAND.serif }}>Dashboard</span>
+                    </div>
+                    <div style={{ flex: 1, padding: 8, display: "flex", gap: 6 }}>
+                      <div style={{ flex: 1, background: BRAND.white, borderRadius: 4, borderTop: "2px solid " + preview.navy, padding: "6px 8px" }}>
+                        <div style={{ fontSize: 8, color: BRAND.textLight }}>Stat</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: preview.navy }}>$420.00</div>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <button style={{ background: preview.brick, color: "#fff", border: "none", borderRadius: 3, fontSize: 8, padding: "4px 10px", fontWeight: 600, cursor: "default" }}>Button</button>
+                        <button style={{ background: BRAND.white, color: preview.navy, border: "1px solid " + BRAND.border, borderRadius: 3, fontSize: 8, padding: "4px 10px", fontWeight: 600, cursor: "default" }}>Secondary</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Preset themes */}
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: BRAND.textMuted, marginBottom: 8 }}>Quick Presets</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {[
+                { label: "Default", primary: DEFAULT_BRAND.navy, accent: DEFAULT_BRAND.brick, bg: DEFAULT_BRAND.bgSoft },
+                { label: "Ocean",   primary: "#1A365D", accent: "#2B6CB0", bg: "#EBF8FF" },
+                { label: "Forest",  primary: "#22543D", accent: "#38A169", bg: "#F0FFF4" },
+                { label: "Slate",   primary: "#334155", accent: "#6366F1", bg: "#F1F5F9" },
+                { label: "Warm",    primary: "#44322D", accent: "#C05621", bg: "#FFFAF0" },
+                { label: "Night",   primary: "#1A1A2E", accent: "#E94560", bg: "#F7F7FB" },
+              ].map(preset => (
+                <button key={preset.label} type="button" onClick={() => setForm(f => ({ ...f, branding: { ...(f.branding || {}), primaryColor: preset.primary, accentColor: preset.accent, bgColor: preset.bg } }))}
+                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 6, border: "1px solid " + BRAND.borderLight, background: BRAND.white, cursor: "pointer", fontSize: 12, fontWeight: 500, fontFamily: BRAND.sans, transition: "all 150ms" }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = BRAND.border} onMouseLeave={e => e.currentTarget.style.borderColor = BRAND.borderLight}>
+                  <div style={{ display: "flex", gap: 2 }}>
+                    <span style={{ width: 12, height: 12, borderRadius: 3, background: preset.primary }} />
+                    <span style={{ width: 12, height: 12, borderRadius: 3, background: preset.accent }} />
+                    <span style={{ width: 12, height: 12, borderRadius: 3, background: preset.bg, border: "1px solid " + BRAND.borderLight }} />
+                  </div>
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
         <button style={S.btnPrimary} onClick={handleSave}>{saved ? "✓ Saved" : "Save Settings"}</button>
       </div>
       <div style={{ ...S.card, maxWidth: 600, marginTop: 20 }}>
