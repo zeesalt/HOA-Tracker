@@ -40,7 +40,7 @@ export class ErrorBoundary extends Component {
             )}
           </div>
           {this.state.error && (
-            <details style={{ marginTop: 24, fontSize: 12, color: "#736D66", maxWidth: 500, textAlign: "left" }}>
+            <details style={{ marginTop: 24, fontSize: 12, color: "#5C5752", maxWidth: 500, textAlign: "left" }}>
               <summary style={{ cursor: "pointer", fontWeight: 600 }}>Technical details</summary>
               <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", marginTop: 8, padding: 12, background: "#fff", borderRadius: 6, border: "1px solid #EDE9E3" }}>
                 {this.state.error.toString()}
@@ -66,13 +66,13 @@ export const BRAND = {
   brickDark: "#7A3226",
   green: "#2F4F3E",
   success: "#2E7D32",
-  warning: "#ED6C02",
+  warning: "#C77700",
   error: "#C62828",
   border: "#E0E0E0",
   borderLight: "#EDE9E3",
   white: "#FFFFFF",
-  textMuted: "#6B6560",
-  textLight: "#736D66",
+  textMuted: "#57534E",
+  textLight: "#5C5752",
   serif: "'Cormorant Garamond', Georgia, 'Times New Roman', serif",
   sans: "'Inter', system-ui, -apple-system, sans-serif",
 };
@@ -95,6 +95,9 @@ export const ROLES = { TREASURER: "Treasurer", MEMBER: "Member" };
 export const DEFAULT_SETTINGS = { hoaName: "24 Mill Street", defaultHourlyRate: 40, userRates: {}, currency: "USD" };
 export const MOBILE_BP = 768;
 export const IRS_MILEAGE_RATE = 0.725; // IRS standard mileage rate 2026 ($/mile) — update annually
+
+// Display-friendly status labels (internal "Rejected" → user-facing "Declined")
+export const statusLabel = (status) => status === "Rejected" ? "Declined" : status;
 
 export const PURCHASE_CATEGORIES = [
   "Cleaning Supplies", "Landscaping Supplies", "Decor",
@@ -281,13 +284,13 @@ export const StatusBadge = ({ status }) => {
   }, [status]);
 
   const map = {
-    Draft: { bg: "#EDEBE8", text: BRAND.textMuted, border: "#D5D0C9" },
+    Draft: { bg: "#EDEBE8", text: "#57534E", border: "#D5D0C9" },
     Submitted: { bg: "#FFF0E0", text: BRAND.brick, border: "#E8C4A8" },
     Trash: { bg: "#FFF1F1", text: "#7f1d1d", border: "#FCA5A520" },
     Approved: { bg: "#E8F0E6", text: BRAND.green, border: "#B5CCAE" },
     "Awaiting 2nd Approval": { bg: "#EEF2FF", text: "#4338CA", border: "#C7D2FE" },
     Rejected:             { bg: "#FDEAEA", text: BRAND.error,   border: "#F0BABA" },
-    "Needs Info":         { bg: "#FFF7ED", text: "#C2410C",     border: "#FED7AA" },
+    "Needs Info":         { bg: "#FFF7ED", text: "#9A3412",     border: "#FED7AA" },
     Paid:                 { bg: "#E8EDF5", text: "#3B5998",     border: "#B8C8E0" },
   };
   const c = map[status] || map.Draft;
@@ -298,7 +301,7 @@ export const StatusBadge = ({ status }) => {
       {status === "Rejected"   && <Icon name="x" size={12} />}
       {status === "Submitted"  && <Icon name="clock" size={12} />}
       {status === "Needs Info" && <span style={{ fontSize: 11 }}>💬</span>}
-      {status}
+      {status === "Rejected" ? "Declined" : status}
     </span>
   );
 };
@@ -365,7 +368,7 @@ export const S = {
   // Nav
   navItem: (active) => ({
     display: "flex", alignItems: "center", gap: 10, padding: "11px 20px", borderRadius: 6, fontSize: 14, fontWeight: active ? 600 : 400, fontFamily: BRAND.sans,
-    background: active ? "rgba(255,255,255,0.1)" : "transparent", color: active ? "#FFFFFF" : "#9B978F",
+    background: active ? "rgba(255,255,255,0.1)" : "transparent", color: active ? "#FFFFFF" : "#A8A29E",
     cursor: "pointer", border: "none", width: "100%", textAlign: "left", margin: "1px 0",
     borderLeft: active ? "3px solid " + BRAND.brick : "3px solid transparent",
   }),
@@ -374,7 +377,7 @@ export const S = {
   h1: { fontFamily: BRAND.serif, fontSize: 34, fontWeight: 600, color: BRAND.navy, margin: 0, letterSpacing: "-0.01em" },
   h2: { fontFamily: BRAND.serif, fontSize: 26, fontWeight: 600, color: BRAND.navy, margin: 0 },
   h3: { fontFamily: BRAND.sans, fontSize: 16, fontWeight: 700, color: BRAND.charcoal, margin: 0 },
-  sectionLabel: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: BRAND.textMuted, marginBottom: 12, fontFamily: BRAND.sans },
+  sectionLabel: { fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: BRAND.textMuted, marginBottom: 12, fontFamily: BRAND.sans },
 
   // Utility styles extracted from inline usage
   flexBetween: { display: "flex", justifyContent: "space-between", alignItems: "center" },
@@ -507,7 +510,7 @@ export const StatCard = ({ label, value, icon, accentColor }) => {
         <Icon name={icon} size={22} />
       </div>
       <div>
-        <div style={{ fontSize: 12, color: BRAND.textLight, fontWeight: 500, marginBottom: 2, fontFamily: BRAND.sans }}>{label}</div>
+        <div style={{ fontSize: 13, color: BRAND.textLight, fontWeight: 500, marginBottom: 2, fontFamily: BRAND.sans }}>{label}</div>
         <div style={{ fontSize: 22, fontWeight: 700, color: BRAND.navy, fontFamily: BRAND.sans }}>{formatted}</div>
       </div>
     </div>

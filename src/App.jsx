@@ -863,7 +863,7 @@ export default function App() {
                       <div style={{ fontSize: 22, marginBottom: 4 }}>{item.emoji}</div>
                       <div style={{ fontSize: 22, fontWeight: 800, color: item.color, lineHeight: 1 }}>{item.value}</div>
                       <div style={{ fontSize: 12, fontWeight: 600, color: BRAND.charcoal, marginTop: 2 }}>{item.label}</div>
-                      <div style={{ fontSize: 11, color: BRAND.textMuted, marginTop: 1 }}>{item.sub}</div>
+                      <div style={{ fontSize: 12, color: BRAND.textMuted, marginTop: 1 }}>{item.sub}</div>
                     </button>
                   ))}
                   {oldestDays > 0 && (
@@ -972,7 +972,7 @@ export default function App() {
                       <div key={s.label} style={{ textAlign: "center", padding: "12px 8px", background: "rgba(255,255,255,0.6)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.8)" }}>
                         <div style={{ fontSize: 20, marginBottom: 4 }}>{s.icon}</div>
                         <div style={{ fontSize: mob ? 18 : 22, fontWeight: 800, color: s.color }}>{s.value}</div>
-                        <div style={{ fontSize: 11, color: BRAND.textMuted, marginTop: 2, fontWeight: 600 }}>{s.label}</div>
+                        <div style={{ fontSize: 12, color: BRAND.textMuted, marginTop: 2, fontWeight: 600 }}>{s.label}</div>
                       </div>
                     ))}
                   </div>
@@ -1002,11 +1002,11 @@ export default function App() {
                             <div style={{ width: 8, height: 8, borderRadius: 4, background: ageColor, flexShrink: 0 }} />
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontWeight: 600, fontSize: 13, color: BRAND.charcoal, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.category} — {e.description}</div>
-                              <div style={{ fontSize: 11, color: BRAND.textLight, marginTop: 2 }}>{formatDate(e.date)}</div>
+                              <div style={{ fontSize: 12, color: BRAND.textLight, marginTop: 2 }}>{formatDate(e.date)}</div>
                             </div>
                             <div style={{ textAlign: "right", flexShrink: 0 }}>
                               <div style={{ fontWeight: 700, fontSize: 13, color: BRAND.navy }}>{fmt(total)}</div>
-                              <div style={{ fontSize: 11, fontWeight: 600, color: ageColor }}>{e.ageDays === 0 ? "Today" : e.ageDays + "d ago"}</div>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: ageColor }}>{e.ageDays === 0 ? "Today" : e.ageDays + "d ago"}</div>
                             </div>
                           </div>
                         );
@@ -1206,7 +1206,7 @@ export default function App() {
                     <input type="date" style={{ ...S.input, padding: "7px 10px", fontSize: 12, width: "auto" }} value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} title="From" />
                     <span style={{ fontSize: 12, color: BRAND.textLight }}>–</span>
                     <input type="date" style={{ ...S.input, padding: "7px 10px", fontSize: 12, width: "auto" }} value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} title="To" />
-                    {datePresets.map(p => <button key={p.label} onClick={p.fn} style={{ padding: "5px 10px", borderRadius: 12, border: "1px solid "+BRAND.borderLight, background: BRAND.white, color: BRAND.navy, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: BRAND.sans, whiteSpace: "nowrap" }}>{p.label}</button>)}
+                    {datePresets.map(p => <button key={p.label} onClick={p.fn} style={{ padding: "5px 10px", borderRadius: 12, border: "1px solid "+BRAND.borderLight, background: BRAND.white, color: BRAND.navy, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: BRAND.sans, whiteSpace: "nowrap" }}>{p.label}</button>)}
                     {hasActiveFilter && <button style={{ ...S.btnGhost, fontSize: 12, padding: "6px 10px", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }} onClick={clearAll}><span style={{ background: BRAND.brick, color: "#fff", borderRadius: 10, fontSize: 11, fontWeight: 700, padding: "1px 6px", minWidth: 18, textAlign: "center" }}>{activeCount}</span>Clear</button>}
                   </>
                 )}
@@ -1217,14 +1217,14 @@ export default function App() {
                 <div className="fade-in" style={{ marginTop: 8, padding: "14px 14px 10px", background: BRAND.white, border: "1px solid " + BRAND.borderLight, borderRadius: 10, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: BRAND.textLight, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Status</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: BRAND.textLight, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Status</div>
                       <select style={{ ...S.select, fontSize: 13, padding: "8px 10px" }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
                         <option value="all">All</option>
                         {Object.values(STATUSES).map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: BRAND.textLight, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Category</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: BRAND.textLight, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Category</div>
                       <select style={{ ...S.select, fontSize: 13, padding: "8px 10px" }} value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
                         <option value="all">All</option>
                         {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
@@ -1232,7 +1232,7 @@ export default function App() {
                     </div>
                     {isTreasurer && (
                       <div style={{ gridColumn: "1 / -1" }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: BRAND.textLight, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Member</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: BRAND.textLight, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Member</div>
                         <select style={{ ...S.select, fontSize: 13, padding: "8px 10px" }} value={filterMember} onChange={e => setFilterMember(e.target.value)}>
                           <option value="all">All Members</option>
                           {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
@@ -1240,11 +1240,11 @@ export default function App() {
                       </div>
                     )}
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: BRAND.textLight, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>From</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: BRAND.textLight, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>From</div>
                       <input type="date" style={{ ...S.input, fontSize: 13, padding: "8px 10px" }} value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} />
                     </div>
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: BRAND.textLight, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>To</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: BRAND.textLight, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>To</div>
                       <input type="date" style={{ ...S.input, fontSize: 13, padding: "8px 10px" }} value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} />
                     </div>
                   </div>
@@ -1458,10 +1458,10 @@ export default function App() {
                     <div role="button" tabIndex={0} onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), isPurchase ? setViewPurchase(e) : setViewEntry(e))} style={{ flex: 1, cursor: "pointer", minWidth: 0 }} onClick={() => isPurchase ? setViewPurchase(e) : setViewEntry(e)}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
                         <span style={{ fontWeight: 700, fontSize: 16, color: BRAND.navy }}>{u?.name}</span>
-                        {isPurchase && <span style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", background: "#ECFEFF", padding: "2px 8px", borderRadius: 10 }}>PURCHASE</span>}
+                        {isPurchase && <span style={{ fontSize: 12, fontWeight: 700, color: "#0E7490", background: "#ECFEFF", padding: "2px 8px", borderRadius: 10 }}>PURCHASE</span>}
                         <CategoryBadge category={e.category} />
-                        {!isPurchase && e.status === STATUSES.AWAITING_SECOND && <span style={{ fontSize: 11, color: "#4338CA", fontWeight: 600 }}>⚖️ 2nd approval</span>}
-                        {submittedAgo && <span style={{ fontSize: 11, color: BRAND.textLight }}>submitted {submittedAgo}</span>}
+                        {!isPurchase && e.status === STATUSES.AWAITING_SECOND && <span style={{ fontSize: 12, color: "#4338CA", fontWeight: 600 }}>⚖️ 2nd approval</span>}
+                        {submittedAgo && <span style={{ fontSize: 12, color: BRAND.textLight }}>submitted {submittedAgo}</span>}
                       </div>
                       <div style={{ fontSize: 14, color: BRAND.charcoal, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{isPurchase ? (e.storeName + " — " + e.description) : e.description}</div>
                       <div style={{ fontSize: 13, color: BRAND.textLight }}>{relativeDate(e.date)}{h != null ? " · " + fmtHours(h) : ""}{isPurchase && e.items?.length ? " · " + e.items.length + " item" + (e.items.length > 1 ? "s" : "") : ""}</div>
@@ -1473,7 +1473,7 @@ export default function App() {
                   </div>
                   {isRejecting ? (
                     <div className="fade-in" style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid " + BRAND.borderLight }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.charcoal, marginBottom: 6 }}>Rejection reason <span style={{ color: BRAND.error }}>*</span></div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.charcoal, marginBottom: 6 }}>Decline reason <span style={{ color: BRAND.error }}>*</span></div>
                       <textarea autoFocus style={{ ...S.textarea, minHeight: 60, marginBottom: 8 }} value={rejectNote} onChange={ev => setRejectNote(ev.target.value)} placeholder="Tell them what needs to be fixed..." />
                       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                         <button style={{ ...S.btnGhost, fontSize: 13, padding: "6px 14px" }} onClick={() => { setRejectingId(null); setRejectNote(""); }}>Cancel</button>
@@ -1496,7 +1496,7 @@ export default function App() {
                     <div style={{ display: "flex", gap: 8, marginTop: 12, paddingTop: 12, borderTop: "1px solid " + BRAND.borderLight, justifyContent: "flex-end", flexWrap: "wrap" }}>
                       <button style={{ ...S.btnGhost, fontSize: 13, padding: "6px 14px" }} onClick={() => isPurchase ? setViewPurchase(e) : setViewEntry(e)}>View Details</button>
                       {!isPurchase && <button style={{ ...S.btnGhost, fontSize: 13, padding: "6px 14px", color: "#0284c7", borderColor: "#0284c7" + "40" }} onClick={(ev) => { ev.stopPropagation(); setNeedsInfoId(e.id); setNeedsInfoNote(""); }}>💬 Needs Info</button>}
-                      <button style={{ ...S.btnDanger, fontSize: 13, padding: "6px 14px" }} onClick={(ev) => { ev.stopPropagation(); setRejectingId(e.id); setRejectNote(""); }}><Icon name="x" size={14} /> Reject</button>
+                      <button style={{ ...S.btnDanger, fontSize: 13, padding: "6px 14px" }} onClick={(ev) => { ev.stopPropagation(); setRejectingId(e.id); setRejectNote(""); }}><Icon name="x" size={14} /> Decline</button>
                       <button style={{ ...S.btnSuccess, fontSize: 13, padding: "6px 14px" }} onClick={async (ev) => {
                         ev.stopPropagation();
                         if (isPurchase) { await doPurchaseApprove(e.id); } else { await doApproveEntry(e.id, ""); pushUndo("Approved: " + (u?.name || ""), async () => { await rejectEntry(e.id, "Undone — returned for re-review"); showToast("Approval undone", "info"); }); }
@@ -1755,7 +1755,7 @@ export default function App() {
                       const u = users.find(u => u.id === e.userId);
                       return (
                         <button key={e.id} onClick={() => { dismiss(); setViewPurchase(e); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px", border: "none", borderBottom: "1px solid " + BRAND.borderLight, background: "none", cursor: "pointer", textAlign: "left", fontFamily: BRAND.sans }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", background: "#ECFEFF", padding: "2px 8px", borderRadius: 10 }}>PURCHASE</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: "#0E7490", background: "#ECFEFF", padding: "2px 8px", borderRadius: 10 }}>PURCHASE</span>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description || e.storeName}</div>
                             <div style={{ fontSize: 11, color: BRAND.textLight }}>{u?.name} · {formatDate(e.date)}</div>
@@ -1782,14 +1782,14 @@ export default function App() {
             <div role="dialog" aria-label="Navigation menu" style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 280, background: BRAND.navy, padding: "20px 16px", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
                 <span style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 18, color: "#fff" }}>Menu</span>
-                <button aria-label="Close menu" style={{ background: "none", border: "none", color: "#9B978F", cursor: "pointer", padding: 8, minWidth: 44, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setDrawerOpen(false)}><Icon name="x" size={24} /></button>
+                <button aria-label="Close menu" style={{ background: "none", border: "none", color: "#A8A29E", cursor: "pointer", padding: 8, minWidth: 44, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setDrawerOpen(false)}><Icon name="x" size={24} /></button>
               </div>
               <div style={{ padding: "12px 8px", borderRadius: 8, background: "rgba(255,255,255,0.06)", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
                 <div aria-hidden="true" style={{ width: 36, height: 36, borderRadius: 6, background: isTreasurer ? BRAND.brick : BRAND.green, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#fff" }}>{initials}</div>
-                <div><div style={{ fontSize: 14, fontWeight: 600, color: "#fff" }}>{currentUser.name}</div><div style={{ fontSize: 13, color: "#7A766E" }}>{realIsTreasurer && previewAsId ? "👁 Previewing as Member" : currentUser.role}</div></div>
+                <div><div style={{ fontSize: 14, fontWeight: 600, color: "#fff" }}>{currentUser.name}</div><div style={{ fontSize: 13, color: "#A8A29E" }}>{realIsTreasurer && previewAsId ? "👁 Previewing as Member" : currentUser.role}</div></div>
               </div>
               {navItems.map(item => (
-                <button key={item.id} aria-current={isActive(item.id) ? "page" : undefined} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 12px", borderRadius: 6, fontSize: 15, fontWeight: isActive(item.id) ? 600 : 400, background: isActive(item.id) ? "rgba(255,255,255,0.1)" : "transparent", color: isActive(item.id) ? "#fff" : "#9B978F", cursor: "pointer", border: "none", width: "100%", textAlign: "left", fontFamily: BRAND.sans, marginBottom: 2 }} onClick={() => nav(item.id)}>
+                <button key={item.id} aria-current={isActive(item.id) ? "page" : undefined} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 12px", borderRadius: 6, fontSize: 15, fontWeight: isActive(item.id) ? 600 : 400, background: isActive(item.id) ? "rgba(255,255,255,0.1)" : "transparent", color: isActive(item.id) ? "#fff" : "#A8A29E", cursor: "pointer", border: "none", width: "100%", textAlign: "left", fontFamily: BRAND.sans, marginBottom: 2 }} onClick={() => nav(item.id)}>
                   <Icon name={item.icon} size={20} /><span style={{ flex: 1 }}>{item.label}</span>
                   {item.badge > 0 && <span aria-label={item.badge + " pending"} style={{ background: BRAND.brick, color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>{item.badge}</span>}
                 </button>
@@ -1797,7 +1797,7 @@ export default function App() {
               <div style={{ flex: 1 }} />
               {realIsTreasurer && members.length > 0 && (
                 <div style={{ padding: "12px 8px", borderRadius: 8, background: "rgba(255,255,255,0.06)", marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, color: "#7A766E", marginBottom: 6, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Preview as Member</div>
+                  <div style={{ fontSize: 12, color: "#A8A29E", marginBottom: 6, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Preview as Member</div>
                   <select
                     style={{ width: "100%", background: "rgba(255,255,255,0.08)", color: "#fff", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 6, padding: "7px 10px", fontSize: 13, fontFamily: BRAND.sans, cursor: "pointer" }}
                     value={previewAsId || ""}
@@ -1808,8 +1808,8 @@ export default function App() {
                   </select>
                 </div>
               )}
-              <button style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 6, fontSize: 14, background: "transparent", color: "#9B978F", cursor: "pointer", border: "none", width: "100%", textAlign: "left", fontFamily: BRAND.sans }} onClick={() => { setDrawerOpen(false); setShowChangePass(true); }}>🔒 Change Password</button>
-              <button style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 12px", borderRadius: 6, fontSize: 15, background: "transparent", color: "#9B978F", cursor: "pointer", border: "none", width: "100%", textAlign: "left", fontFamily: BRAND.sans }} onClick={handleLogout}><Icon name="logout" size={20} /> Sign Out</button>
+              <button style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 6, fontSize: 14, background: "transparent", color: "#A8A29E", cursor: "pointer", border: "none", width: "100%", textAlign: "left", fontFamily: BRAND.sans }} onClick={() => { setDrawerOpen(false); setShowChangePass(true); }}>🔒 Change Password</button>
+              <button style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 12px", borderRadius: 6, fontSize: 15, background: "transparent", color: "#A8A29E", cursor: "pointer", border: "none", width: "100%", textAlign: "left", fontFamily: BRAND.sans }} onClick={handleLogout}><Icon name="logout" size={20} /> Sign Out</button>
             </div>
           </div>
         )}
@@ -1935,7 +1935,7 @@ export default function App() {
             <img src="/logo.png" alt="24 Mill Street logo" style={{ width: 40, height: 40, borderRadius: 6, objectFit: "cover", background: BRAND.beige }} />
             <div>
               <div style={{ fontFamily: BRAND.serif, fontWeight: 600, fontSize: 17, color: "#FFFFFF", lineHeight: 1.2 }}>24 Mill</div>
-              <div style={{ fontSize: 12, color: "#7A766E", letterSpacing: "0.02em" }}>Log Your Work</div>
+              <div style={{ fontSize: 12, color: "#A8A29E", letterSpacing: "0.02em" }}>Log Your Work</div>
             </div>
           </div>
         </div>
@@ -1952,14 +1952,14 @@ export default function App() {
             <div aria-hidden="true" style={{ width: 32, height: 32, borderRadius: 6, background: realIsTreasurer ? BRAND.brick : BRAND.green, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff" }}>{initials}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>{currentUser.name}</div>
-              <div style={{ fontSize: 12, color: "#7A766E", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{realIsTreasurer && previewAsId ? "👁 Previewing as Member" : currentUser.role}</div>
+              <div style={{ fontSize: 12, color: "#A8A29E", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{realIsTreasurer && previewAsId ? "👁 Previewing as Member" : currentUser.role}</div>
             </div>
           </div>
           {realIsTreasurer && members.length > 0 && (
             <div style={{ marginBottom: 6 }}>
-              <div style={{ fontSize: 10, color: "#6B6560", marginBottom: 4, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", paddingLeft: 4 }}>Preview as Member</div>
+              <div style={{ fontSize: 12, color: "#57534E", marginBottom: 4, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", paddingLeft: 4 }}>Preview as Member</div>
               <select
-                style={{ width: "100%", background: "rgba(255,255,255,0.08)", color: previewAsId ? "#F59E0B" : "#9B978F", border: "1px solid " + (previewAsId ? "#F59E0B" : "rgba(255,255,255,0.12)"), borderRadius: 6, padding: "7px 10px", fontSize: 12, fontFamily: BRAND.sans, cursor: "pointer" }}
+                style={{ width: "100%", background: "rgba(255,255,255,0.08)", color: previewAsId ? "#F59E0B" : "#A8A29E", border: "1px solid " + (previewAsId ? "#F59E0B" : "rgba(255,255,255,0.12)"), borderRadius: 6, padding: "7px 10px", fontSize: 12, fontFamily: BRAND.sans, cursor: "pointer" }}
                 value={previewAsId || ""}
                 onChange={e => { const v = e.target.value; setPreviewAsId(v || null); if (v) nav("dashboard"); }}
               >
@@ -1968,7 +1968,7 @@ export default function App() {
               </select>
             </div>
           )}
-          <button style={{ ...S.navItem(false), padding: "7px 12px", fontSize: 12, color: "#7A766E" }} onClick={() => setShowChangePass(true)}>🔒 Change Password</button>
+          <button style={{ ...S.navItem(false), padding: "7px 12px", fontSize: 12, color: "#A8A29E" }} onClick={() => setShowChangePass(true)}>🔒 Change Password</button>
           <button style={{ ...S.navItem(false), padding: "8px 12px", fontSize: 13 }} onClick={handleLogout}><Icon name="logout" size={16} /> Sign Out</button>
         </div>
       </aside>
@@ -2034,7 +2034,7 @@ export default function App() {
                       const u = users.find(u => u.id === e.userId);
                       return (
                         <button key={e.id} onClick={() => { dismiss(); setViewPurchase(e); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px", border: "none", borderBottom: "1px solid " + BRAND.borderLight, background: "none", cursor: "pointer", textAlign: "left", fontFamily: BRAND.sans, transition: "background 100ms" }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.bgSoft} onMouseLeave={ev => ev.currentTarget.style.background = "transparent"}>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", background: "#ECFEFF", padding: "2px 8px", borderRadius: 10 }}>PURCHASE</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: "#0E7490", background: "#ECFEFF", padding: "2px 8px", borderRadius: 10 }}>PURCHASE</span>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description || e.storeName}</div>
                             <div style={{ fontSize: 11, color: BRAND.textLight }}>{u?.name} · {formatDate(e.date)}</div>
