@@ -31,6 +31,7 @@ import { OnboardingWizard } from "./components/OnboardingWizard";
 import { ShareInviteCard } from "./components/ShareInviteCard";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { MembersPage } from "./components/MembersPage";
+import { NotificationTestPanel } from "./components/NotificationTestPanel";
 
 export default function App() {
   // Inject global CSS keyframes once
@@ -1628,6 +1629,20 @@ export default function App() {
     }
     // Legacy route: redirect "nudges" to members page
     if (page === "nudges") { nav("members"); return null; }
+    if (page === "notification-test") {
+      if (!isTreasurer || previewAsId) { nav("dashboard"); return null; }
+      return (
+        <NotificationTestPanel
+          entries={entries}
+          purchaseEntries={purchaseEntries}
+          users={users}
+          settings={settings}
+          currentUser={currentUser}
+          onSendNudge={sendNudges}
+          mob={mob}
+        />
+      );
+    }
     // Legacy route: redirect "review" to entries page
     if (page === "review") { nav("entries"); return null; }
     return null;

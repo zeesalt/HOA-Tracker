@@ -46,6 +46,7 @@ export const MoreSheet = ({ onClose, trashCount, nav }) => {
     { id: "insights",  label: "Community Insights",   emoji: "✨", desc: "Spending trends" },
     { id: "settings",  label: "Settings",             emoji: "⚙️",  desc: "HOA name, rates, invite codes" },
     { id: "trash",     label: "Trash",                emoji: "🗑",  desc: trashCount > 0 ? trashCount + " item" + (trashCount > 1 ? "s" : "") : "Empty", badge: trashCount || 0 },
+    { id: "notification-test", label: "Notification Testing", emoji: "🧪", desc: "Test digests & nudges" },
     { id: "help",      label: "Help",                 emoji: "❓", desc: "How to use the app" },
   ];
 
