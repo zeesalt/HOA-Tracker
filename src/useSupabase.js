@@ -848,7 +848,16 @@ export function useSupabase() {
       });
       if (error) {
         console.error("sendTestDigest error:", error);
-        return { error: error.message || String(error) };
+        // Try to extract the real error from the response context
+        let msg = error.message || String(error);
+        try {
+          if (error.context?.body) {
+            const text = await new Response(error.context.body).text();
+            const parsed = JSON.parse(text);
+            if (parsed.error) msg = parsed.error;
+          }
+        } catch { /* ignore parse errors */ }
+        return { error: msg };
       }
       return data || { sent: 0 };
     } catch (e) {
@@ -865,7 +874,15 @@ export function useSupabase() {
       });
       if (error) {
         console.error("sendNudgeEmail error:", error);
-        return { error: error.message || String(error) };
+        let msg = error.message || String(error);
+        try {
+          if (error.context?.body) {
+            const text = await new Response(error.context.body).text();
+            const parsed = JSON.parse(text);
+            if (parsed.error) msg = parsed.error;
+          }
+        } catch { /* ignore parse errors */ }
+        return { error: msg };
       }
       return data || { sent: 0 };
     } catch (e) {
