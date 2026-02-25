@@ -100,6 +100,7 @@ export default function App() {
     setAuthError, fetchCommunityStats, refresh,
     nudges, sendNudges, markNudgeRead, dismissNudge,
     sendTestDigest, sendNudgeEmail,
+    passwordRecovery, setPasswordRecovery,
   } = useSupabase();
 
   // ── NAV REDUCER — groups tightly-coupled navigation state ───────────────
@@ -170,6 +171,11 @@ export default function App() {
     if (typeof window !== "undefined" && window.location.search.includes("reset=1")) return "reset";
     return "login";
   }); // "login" | "register" | "forgot" | "reset"
+
+  // When Supabase detects a PASSWORD_RECOVERY event, switch to reset form
+  useEffect(() => {
+    if (passwordRecovery) setAuthMode("reset");
+  }, [passwordRecovery]);
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotSent, setForgotSent] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
@@ -315,6 +321,7 @@ export default function App() {
     setResetLoading(false);
     if (result.error) { setResetError(result.error); return; }
     setResetDone(true);
+    setPasswordRecovery(false);
     // Clean up URL
     window.history.replaceState({}, document.title, window.location.pathname);
   };
@@ -534,8 +541,8 @@ export default function App() {
   // ══════════════════════════════════════════════════════════════════════════
   // LOGIN SCREEN
   // ══════════════════════════════════════════════════════════════════════════
-  if (!currentUser) {
-    if (loading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans }}><div style={{ textAlign: "center" }}><img src="/logo.png" alt="24 Mill Street" style={{ width: 120, height: 120, objectFit: "contain", margin: "0 auto 16px", display: "block", opacity: 0.5 }} /><div style={{ fontSize: 14, color: BRAND.textMuted }}>Loading...</div></div></div>;
+  if (!currentUser || passwordRecovery) {
+    if (loading && !passwordRecovery) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans }}><div style={{ textAlign: "center" }}><img src="/logo.png" alt="24 Mill Street" style={{ width: 120, height: 120, objectFit: "contain", margin: "0 auto 16px", display: "block", opacity: 0.5 }} /><div style={{ fontSize: 14, color: BRAND.textMuted }}>Loading...</div></div></div>;
     return (
       <div style={{ minHeight: "100dvh", display: "flex", alignItems: "safe center", justifyContent: "center", background: BRAND.bgSoft, fontFamily: BRAND.sans, padding: mob ? "24px 16px" : 0, overflow: "auto", WebkitOverflowScrolling: "touch" }}>
         <div className="fade-in" style={{ textAlign: "center", maxWidth: 420, width: "100%" }}>
