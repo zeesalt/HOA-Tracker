@@ -1117,7 +1117,10 @@ export default function App() {
                     <div style={{ fontWeight: 600, fontSize: 15, color: BRAND.charcoal }}>{e.storeName}</div>
                     <div style={{ fontSize: 12, color: BRAND.textMuted }}>{formatDate(e.date)} · {e.category}</div>
                   </div>
-                  <StatusBadge status={e.status} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <StatusBadge status={e.status} />
+                    {e.status === "Submitted" && e.submittedAt && (() => { const ad = Math.floor((Date.now() - new Date(e.submittedAt).getTime()) / 86400000); const ac = ad >= 7 ? "#DC2626" : ad >= 3 ? "#D97706" : BRAND.success; return <span style={{ fontSize: 11, fontWeight: 600, color: ac }}>{ad === 0 ? "today" : ad + "d"}</span>; })()}
+                  </div>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div style={{ fontSize: 12, color: BRAND.textLight }}>{e.items?.length || 0} item{(e.items?.length || 0) !== 1 ? "s" : ""}</div>
@@ -1341,7 +1344,7 @@ export default function App() {
                   return sorted.slice((currentPage - 1) * ENTRIES_PER_PAGE, currentPage * ENTRIES_PER_PAGE);
                 })().map((e, i) => { const u = users.find(u => u.id === e.userId); const h = calcHours(e.startTime, e.endTime); const r = getUserRate(users, settings, e.userId); const total = calcLabor(h, r) + calcMaterialsTotal(e.materials); return (
                   <tr key={e.id} tabIndex={0} role="row" onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), setViewEntry(e))} onClick={() => setViewEntry(e)} style={{ cursor: "pointer", background: i % 2 === 1 ? BRAND.bgSoft : BRAND.white, transition: "background 150ms", animation: `cardSlideIn 280ms cubic-bezier(0.34,1.56,0.64,1) ${Math.min(i, 8) * 30}ms both` }} onMouseEnter={ev => ev.currentTarget.style.background = BRAND.beige + "40"} onMouseLeave={ev => ev.currentTarget.style.background = i % 2 === 1 ? BRAND.bgSoft : BRAND.white}>
-                    <td style={S.td}>{formatDate(e.date)}</td>{isTreasurer && <td style={S.td}>{u?.name}</td>}<td style={S.td}><CategoryBadge category={e.category} /></td><td style={{ ...S.td, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</td><td style={{ ...S.td, textAlign: "right" }}>{fmtHours(h)}</td><td style={{ ...S.td, textAlign: "right", fontWeight: 600 }}>{fmt(total)}</td><td style={S.td}><StatusBadge status={e.status} /></td>
+                    <td style={S.td}>{formatDate(e.date)}</td>{isTreasurer && <td style={S.td}>{u?.name}</td>}<td style={S.td}><CategoryBadge category={e.category} /></td><td style={{ ...S.td, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</td><td style={{ ...S.td, textAlign: "right" }}>{fmtHours(h)}</td><td style={{ ...S.td, textAlign: "right", fontWeight: 600 }}>{fmt(total)}</td><td style={S.td}><div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}><StatusBadge status={e.status} />{[STATUSES.SUBMITTED, STATUSES.AWAITING_SECOND].includes(e.status) && e.submittedAt && (() => { const ad = Math.floor((Date.now() - new Date(e.submittedAt).getTime()) / 86400000); const ac = ad >= 7 ? "#DC2626" : ad >= 3 ? "#D97706" : BRAND.success; return <span style={{ fontSize: 11, fontWeight: 600, color: ac }}>{ad === 0 ? "today" : ad + "d"}</span>; })()}</div></td>
                   </tr>); })}</tbody>
               </table>
               {/* Pagination controls */}

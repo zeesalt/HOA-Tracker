@@ -787,12 +787,27 @@ export function useSupabase() {
       if (error) { console.error("Send nudge error:", error); return []; }
       const mapped = (data || []).map(mapNudge);
       setNudges(prev => [...mapped, ...prev]);
+
+      // Fire-and-forget: forward nudge via email
+      try {
+        supabase.functions.invoke("send-nudge-email", {
+          body: {
+            recipientIds,
+            message,
+            senderName: currentUser.name,
+            hoaName: settings.hoaName,
+          },
+        });
+      } catch (emailErr) {
+        console.warn("Nudge email forwarding failed (non-blocking):", emailErr);
+      }
+
       return mapped;
     } catch (e) {
       console.error("Send nudge exception:", e);
       return [];
     }
-  }, [currentUser]);
+  }, [currentUser, settings.hoaName]);
 
   // Mark nudge as read (Member)
   const markNudgeRead = useCallback(async (nudgeId) => {

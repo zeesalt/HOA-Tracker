@@ -158,6 +158,15 @@ export const EntryCard = ({ entry, users, settings, currentUser, onClick, onEdit
                   💬 {entry.comments.length}
                 </span>
               )}
+              {[STATUSES.SUBMITTED, STATUSES.AWAITING_SECOND].includes(entry.status) && entry.submittedAt && (() => {
+                const ageDays = Math.floor((Date.now() - new Date(entry.submittedAt).getTime()) / 86400000);
+                const ageColor = ageDays >= 7 ? "#DC2626" : ageDays >= 3 ? "#D97706" : BRAND.success;
+                return (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 600, color: ageColor, background: ageColor + "12", padding: "2px 8px", borderRadius: 10 }}>
+                    ⏱ {ageDays === 0 ? "Today" : ageDays + "d ago"}
+                  </span>
+                );
+              })()}
             </div>
             <div style={{ fontSize: 14, fontWeight: 500, color: BRAND.charcoal, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {entry.description}
