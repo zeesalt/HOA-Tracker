@@ -452,6 +452,8 @@ const NudgePreview = ({ scenario, senderName, recipientName, mob }) => {
 export const NotificationTestPanel = ({
   entries, purchaseEntries, users, settings, currentUser,
   onSendNudge, // (recipientIds, message, template) => Promise
+  onSendNudgeEmail, // (recipientIds, message, senderName, hoaName) => Promise
+  onSendTestDigest, // (testRecipientEmail, digestType, testAsUserId) => Promise
   mob,
 }) => {
   const [activeTab, setActiveTab] = useState("digest"); // "digest" | "nudge"
@@ -459,7 +461,10 @@ export const NotificationTestPanel = ({
   const [selectedNudge, setSelectedNudge] = useState(null);
   const [targetUserId, setTargetUserId] = useState("");
   const [sendingTest, setSendingTest] = useState(false);
+  const [sendingDigest, setSendingDigest] = useState(false);
   const [testSent, setTestSent] = useState(null); // { type, timestamp }
+  const [digestSent, setDigestSent] = useState(null);
+  const [digestError, setDigestError] = useState(null);
   const [sendLog, setSendLog] = useState([]);
 
   const members = users.filter(u => u.role === ROLES.MEMBER);
@@ -473,12 +478,26 @@ export const NotificationTestPanel = ({
 
     setSendingTest(true);
     try {
+      // 1. Send in-app nudge
       await onSendNudge([targetUserId], "[TEST] " + scenario.message, scenario.id);
+
+      // 2. Also send email if edge function is available
+      if (onSendNudgeEmail) {
+        const hoaName = settings?.hoaName || "24 Mill Street";
+        await onSendNudgeEmail(
+          [targetUserId],
+          "[TEST] " + scenario.message,
+          currentUser?.name || "Treasurer",
+          hoaName,
+        );
+      }
+
       const entry = {
         type: "nudge",
         template: scenario.label,
         recipient: targetUser?.name || "Unknown",
         timestamp: new Date().toISOString(),
+        emailSent: !!onSendNudgeEmail,
       };
       setSendLog(prev => [entry, ...prev]);
       setTestSent(entry);
@@ -487,7 +506,42 @@ export const NotificationTestPanel = ({
       console.error("Test nudge error:", err);
     }
     setSendingTest(false);
-  }, [selectedNudge, targetUserId, targetUser, onSendNudge]);
+  }, [selectedNudge, targetUserId, targetUser, onSendNudge, onSendNudgeEmail, currentUser, settings]);
+
+  const handleSendTestDigest = useCallback(async () => {
+    if (!selectedDigest || !onSendTestDigest || !currentUser?.email) return;
+    const digestDef = DIGEST_TYPES.find(d => d.id === selectedDigest);
+    if (!digestDef) return;
+
+    setSendingDigest(true);
+    setDigestError(null);
+    setDigestSent(null);
+    try {
+      const digestType = digestDef.role === "Treasurer" ? "treasurer" : "member";
+      const testAsUser = digestType === "member" && targetUserId ? targetUserId : null;
+
+      const result = await onSendTestDigest(currentUser.email, digestType, testAsUser);
+
+      if (result?.error) {
+        setDigestError(result.error);
+      } else {
+        const entry = {
+          type: "digest",
+          template: digestDef.label,
+          recipient: currentUser.email,
+          timestamp: new Date().toISOString(),
+          sent: result?.sent || 0,
+        };
+        setSendLog(prev => [entry, ...prev]);
+        setDigestSent(entry);
+        setTimeout(() => setDigestSent(null), 5000);
+      }
+    } catch (err) {
+      console.error("Test digest error:", err);
+      setDigestError(String(err));
+    }
+    setSendingDigest(false);
+  }, [selectedDigest, onSendTestDigest, currentUser, targetUserId]);
 
   const tabBtn = (id, label, emoji) => (
     <button
@@ -607,10 +661,34 @@ export const NotificationTestPanel = ({
                 mob={mob}
               />
               <div style={{ marginTop: 16, padding: "12px 16px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "#1E40AF", marginBottom: 4 }}>ℹ️ Preview mode</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#1E40AF", marginBottom: 4 }}>ℹ️ Preview + Send</div>
                 <div style={{ fontSize: 12, color: "#1E40AF", opacity: 0.8, lineHeight: 1.5 }}>
-                  This preview uses live data from your database. No email is actually sent. When email integration is configured, this digest format will be delivered on the schedule shown in the footer.
+                  The preview above uses live data. Hit "Send Test Email" to deliver the actual digest (built server-side) to <strong>{currentUser?.email}</strong>. Subject line will be prefixed with [TEST].
                 </div>
+              </div>
+
+              {/* Send test digest button */}
+              <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 12 }}>
+                <button
+                  style={{
+                    ...S.btnPrimary,
+                    opacity: !onSendTestDigest || sendingDigest ? 0.5 : 1,
+                  }}
+                  disabled={!onSendTestDigest || sendingDigest}
+                  onClick={handleSendTestDigest}
+                >
+                  {sendingDigest ? "Sending..." : "📧 Send Test Email"}
+                </button>
+                {digestSent && (
+                  <span className="fade-in" style={{ fontSize: 13, color: BRAND.success, fontWeight: 600 }}>
+                    ✅ Sent to {digestSent.recipient}
+                  </span>
+                )}
+                {digestError && (
+                  <span className="fade-in" style={{ fontSize: 13, color: BRAND.error, fontWeight: 600 }}>
+                    ❌ {digestError}
+                  </span>
+                )}
               </div>
             </div>
           )}
@@ -703,9 +781,9 @@ export const NotificationTestPanel = ({
           </div>
 
           <div style={{ marginTop: 16, padding: "12px 16px", background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 8 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "#92400E", marginBottom: 4 }}>⚠️ Live send</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#92400E", marginBottom: 4 }}>⚠️ Live send (in-app + email)</div>
             <div style={{ fontSize: 12, color: "#92400E", opacity: 0.8, lineHeight: 1.5 }}>
-              Test nudges are sent to the real nudge system and will appear in the member's app with a [TEST] prefix. The member will see the banner on their next visit.
+              Test nudges are sent to the real nudge system (in-app banner) and delivered as an email to the member via Resend. Messages are prefixed with [TEST].
             </div>
           </div>
         </div>
@@ -729,15 +807,22 @@ export const NotificationTestPanel = ({
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.navy }}>
-                      {log.type === "nudge" ? "Test Nudge" : "Digest Preview"}: {log.template}
+                      {log.type === "nudge" ? "Test Nudge" : "Test Digest"}: {log.template}
                     </div>
                     <div style={{ fontSize: 11, color: BRAND.textMuted, marginTop: 2 }}>
                       To: {log.recipient} · {timeAgo(log.timestamp)}
                     </div>
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 6, background: "#E8F0E6", color: BRAND.success }}>
-                    ✓ Sent
-                  </span>
+                  <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 6, background: "#E8F0E6", color: BRAND.success }}>
+                      ✓ Sent
+                    </span>
+                    {(log.emailSent || log.type === "digest") && (
+                      <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 6, background: "#E8EDF5", color: "#3B5998" }}>
+                        📧 Email
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
               <button

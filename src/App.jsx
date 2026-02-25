@@ -99,6 +99,7 @@ export default function App() {
     saveSettings, addUser, removeUser, updateUserRate,
     setAuthError, fetchCommunityStats, refresh,
     nudges, sendNudges, markNudgeRead, dismissNudge,
+    sendTestDigest, sendNudgeEmail,
   } = useSupabase();
 
   // ── NAV REDUCER — groups tightly-coupled navigation state ───────────────
@@ -1639,6 +1640,8 @@ export default function App() {
           settings={settings}
           currentUser={currentUser}
           onSendNudge={sendNudges}
+          onSendNudgeEmail={sendNudgeEmail}
+          onSendTestDigest={sendTestDigest}
           mob={mob}
         />
       );

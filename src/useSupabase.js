@@ -834,6 +834,46 @@ export function useSupabase() {
     }
   }, []);
 
+  // ── EMAIL NOTIFICATIONS (Edge Functions) ───────────────────────────────
+
+  // Send a test digest email to a specific address via the send-digest edge function
+  const sendTestDigest = useCallback(async (testRecipientEmail, digestType, testAsUserId) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("send-digest", {
+        body: {
+          testRecipientEmail,
+          testDigestType: digestType || "treasurer",
+          testAsUserId: testAsUserId || null,
+        },
+      });
+      if (error) {
+        console.error("sendTestDigest error:", error);
+        return { error: error.message || String(error) };
+      }
+      return data || { sent: 0 };
+    } catch (e) {
+      console.error("sendTestDigest exception:", e);
+      return { error: String(e) };
+    }
+  }, []);
+
+  // Send a nudge email via the send-nudge-email edge function
+  const sendNudgeEmail = useCallback(async (recipientIds, message, senderName, hoaName) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("send-nudge-email", {
+        body: { recipientIds, message, senderName, hoaName },
+      });
+      if (error) {
+        console.error("sendNudgeEmail error:", error);
+        return { error: error.message || String(error) };
+      }
+      return data || { sent: 0 };
+    } catch (e) {
+      console.error("sendNudgeEmail exception:", e);
+      return { error: String(e) };
+    }
+  }, []);
+
   // ── REFRESH ────────────────────────────────────────────────────────────
   const refresh = useCallback(() => {
     if (session?.user?.id) loadAll(session.user.id);
@@ -853,6 +893,8 @@ export function useSupabase() {
     saveSettings, addUser, removeUser, updateUserRate,
     // Nudges
     sendNudges, markNudgeRead, dismissNudge,
+    // Email (Edge Functions)
+    sendTestDigest, sendNudgeEmail,
     // Misc
     refresh, setAuthError, fetchCommunityStats, logAuditEvent,
   };
