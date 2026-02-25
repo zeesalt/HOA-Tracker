@@ -69,6 +69,7 @@ function mapProfile(row) {
     email: row.email,
     role: row.role,
     hourlyRate: row.hourly_rate ? Number(row.hourly_rate) : null,
+    lastActiveAt: row.last_active_at || null,
   };
 }
 
@@ -121,6 +122,9 @@ export function useSupabase() {
       const { data: profile } = await supabase
         .from("profiles").select("*").eq("id", userId).single();
       if (profile) setCurrentUser(mapProfile(profile));
+
+      // Update last-active timestamp (fire-and-forget)
+      supabase.from("profiles").update({ last_active_at: new Date().toISOString() }).eq("id", userId).then(() => {});
 
       // Load all profiles (for member names in entries)
       const { data: allProfiles } = await supabase.from("profiles").select("*");

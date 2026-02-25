@@ -30,6 +30,7 @@ import { NudgeComposer, MemberNudgeBanners, SentNudgesLog } from "./components/N
 import { OnboardingWizard } from "./components/OnboardingWizard";
 import { ShareInviteCard } from "./components/ShareInviteCard";
 import { InstallPrompt } from "./components/InstallPrompt";
+import { MembersPage } from "./components/MembersPage";
 
 export default function App() {
   // Inject global CSS keyframes once
@@ -198,6 +199,7 @@ export default function App() {
   const [selectedIds, setSelectedIds] = useState(new Set()); // bulk selection in review queue
   const [showHelp, setShowHelp] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const payTabState = useState("run"); // "run" | "reports" — sub-tab for Payments page
   const [nudgeModal, setNudgeModal] = useState(null); // { recipients?: string[], template?: string } | null
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -631,24 +633,18 @@ export default function App() {
   const trashCount = entries.filter(e => e.status === STATUSES.TRASH).length;
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: "home" },
-    { id: "entries", label: isTreasurer ? "All Entries" : "My Entries", icon: "file" },
+    { id: "entries", label: isTreasurer ? "Entries" : "My Entries", icon: "file", badge: isTreasurer ? pendingCount : 0 },
     ...(!isTreasurer ? [{ id: "insights", label: "Community Insights", icon: "insights" }] : []),
     ...(!isTreasurer ? [{ id: "help", label: "Help", icon: "help" }] : []),
-    ...(isTreasurer ? [{ id: "review", label: "Review Queue", icon: "inbox", badge: pendingCount }] : []),
-    ...(isTreasurer ? [{ id: "command", label: "Command Center", icon: "barChart" }] : []),
-    ...(isTreasurer ? [{ id: "nudges", label: "Nudge Members", icon: "bell" }] : []),
-    ...(isTreasurer ? [{ id: "payment", label: "Payment Run", icon: "dollar" }] : []),
-    ...(isTreasurer ? [{ id: "reports", label: "Reports", icon: "chart" }] : []),
-    ...(isTreasurer ? [{ id: "insights", label: "Community Insights", icon: "insights" }] : []),
-    ...(isTreasurer ? [{ id: "trash", label: "Trash", icon: "trash", badge: trashCount || 0 }] : []),
+    ...(isTreasurer ? [{ id: "payments", label: "Payments", icon: "dollar" }] : []),
+    ...(isTreasurer ? [{ id: "members", label: "Members", icon: "users" }] : []),
     ...(isTreasurer ? [{ id: "settings", label: "Settings", icon: "settings" }] : []),
-    ...(isTreasurer ? [{ id: "help", label: "Help", icon: "help" }] : []),
   ];
   const bottomTabs = isTreasurer ? [
     { id: "dashboard", label: "Home", icon: "home", iconFilled: "homeFilled", color: "#2E7D32", tint: "#2E7D3218" },
-    { id: "entries", label: "Entries", icon: "clipboard", iconFilled: "clipboardFilled", color: "#1565C0", tint: "#1565C018" },
-    { id: "review", label: "Review", icon: "shieldCheck", iconFilled: "shieldCheckFilled", color: BRAND.brick, tint: BRAND.brick + "18", badge: pendingCount },
-    { id: "__more__", label: "More", icon: "settings", iconFilled: "settings", color: BRAND.navy, tint: BRAND.navy + "18", badge: trashCount || 0 },
+    { id: "entries", label: "Entries", icon: "clipboard", iconFilled: "clipboardFilled", color: "#1565C0", tint: "#1565C018", badge: pendingCount },
+    { id: "payments", label: "Payments", icon: "dollar", iconFilled: "dollar", color: BRAND.brick, tint: BRAND.brick + "18" },
+    { id: "__more__", label: "More", icon: "settings", iconFilled: "settings", color: BRAND.navy, tint: BRAND.navy + "18" },
   ] : [
     { id: "dashboard", label: "Home", icon: "home", iconFilled: "homeFilled", color: "#2E7D32", tint: "#2E7D3218" },
     { id: "entries", label: "Entries", icon: "clipboard", iconFilled: "clipboardFilled", color: "#1565C0", tint: "#1565C018" },
@@ -787,7 +783,7 @@ export default function App() {
           {isTreasurer && pendingCount > 0 && (
             <div style={{ ...S.card, background: "#FFF8F0", borderColor: "#F0D4A8", borderLeft: "4px solid " + BRAND.warning, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}><Icon name="alert" size={20} /><span style={{ fontWeight: 600 }}>{pendingCount === 1 ? "1 entry" : pendingCount + " entries"} awaiting your review</span></div>
-              <button style={S.btnPrimary} onClick={() => setPage("review")}>Review Now</button>
+              <button style={S.btnPrimary} onClick={() => nav("entries")}>Review Now</button>
             </div>
           )}
           {/* Annual Budget Progress Bar */}
@@ -847,8 +843,8 @@ export default function App() {
                 {/* Action strip */}
                 <div style={{ display: "flex", gap: 10, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}>
                   {[
-                    { label: "Pending Review", value: pendingCount, sub: pendingCount > 0 ? fmt(entries.filter(e=>e.status===STATUSES.SUBMITTED).reduce((s,e)=>{const h=calcHours(e.startTime,e.endTime);const r=getRate(e.userId);return s+calcLabor(h,r)+calcMaterialsTotal(e.materials);},0)) : "All clear", color: pendingCount > 0 ? BRAND.warning : BRAND.success, page: "review", emoji: "🕐" },
-                    { label: "Awaiting Payment", value: unpaidApproved.length, sub: unpaidApproved.length > 0 ? fmt(unpaidTotal) + " owed" : "All paid", color: unpaidApproved.length > 0 ? "#1565C0" : BRAND.success, page: "payment", emoji: "💳" },
+                    { label: "Pending Review", value: pendingCount, sub: pendingCount > 0 ? fmt(entries.filter(e=>e.status===STATUSES.SUBMITTED).reduce((s,e)=>{const h=calcHours(e.startTime,e.endTime);const r=getRate(e.userId);return s+calcLabor(h,r)+calcMaterialsTotal(e.materials);},0)) : "All clear", color: pendingCount > 0 ? BRAND.warning : BRAND.success, page: "entries", emoji: "🕐" },
+                    { label: "Awaiting Payment", value: unpaidApproved.length, sub: unpaidApproved.length > 0 ? fmt(unpaidTotal) + " owed" : "All paid", color: unpaidApproved.length > 0 ? "#1565C0" : BRAND.success, page: "payments", emoji: "💳" },
                     { label: "Needs Info", value: needsInfoCount, sub: needsInfoCount > 0 ? "Awaiting member reply" : "None", color: needsInfoCount > 0 ? "#C2410C" : BRAND.success, page: "entries", emoji: "💬" },
                   ].map(item => (
                     <button key={item.label} onClick={() => nav(item.page)} style={{ flex: "0 0 auto", minWidth: 140, padding: "14px 16px", borderRadius: 12, border: "1px solid " + item.color + "30", background: item.color + "08", cursor: "pointer", fontFamily: BRAND.sans, textAlign: "left", transition: "all 200ms" }}
@@ -861,7 +857,7 @@ export default function App() {
                     </button>
                   ))}
                   {oldestDays > 0 && (
-                    <button onClick={() => nav("review")} style={{ flex: "0 0 auto", minWidth: 140, padding: "14px 16px", borderRadius: 12, border: "1px solid " + (oldestDays >= 7 ? BRAND.error : BRAND.warning) + "40", background: (oldestDays >= 7 ? BRAND.error : BRAND.warning) + "08", cursor: "pointer", fontFamily: BRAND.sans, textAlign: "left" }}>
+                    <button onClick={() => nav("entries")} style={{ flex: "0 0 auto", minWidth: 140, padding: "14px 16px", borderRadius: 12, border: "1px solid " + (oldestDays >= 7 ? BRAND.error : BRAND.warning) + "40", background: (oldestDays >= 7 ? BRAND.error : BRAND.warning) + "08", cursor: "pointer", fontFamily: BRAND.sans, textAlign: "left" }}>
                       <div style={{ fontSize: 22, marginBottom: 4 }}>⏳</div>
                       <div style={{ fontSize: 22, fontWeight: 800, color: oldestDays >= 7 ? BRAND.error : BRAND.warning, lineHeight: 1 }}>{oldestDays}d</div>
                       <div style={{ fontSize: 12, fontWeight: 600, color: BRAND.charcoal, marginTop: 2 }}>Oldest Pending</div>
@@ -1564,8 +1560,39 @@ export default function App() {
         </div>
       );
     }
-    if (page === "payment") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <PaymentRunPage entries={entries} purchaseEntries={purchaseEntries} users={users} settings={settings} onMarkPaid={async (ids, paymentDetails) => { let count = 0; for (const id of ids) { const updated = await markPaid(id, paymentDetails); if (updated) count++; } if (count > 0) showToast(count + " entr" + (count === 1 ? "y" : "ies") + " marked as paid", "success"); }} onMarkPurchasePaid={doPurchaseMarkPaid} mob={mob} />; }
+    if (page === "payment" || page === "payments") {
+      if (!isTreasurer || previewAsId) { nav("dashboard"); return null; }
+      // Consolidated Payments page with sub-tabs
+      const [payTab, setPayTab] = payTabState;
+      return (
+        <div className="fade-in">
+          <h2 style={{ ...S.h2, marginBottom: 4 }}>Payments</h2>
+          <p style={{ margin: "0 0 16px", fontSize: 14, color: BRAND.textMuted }}>Process payments and generate reports.</p>
+          <div style={{ display: "flex", gap: 0, marginBottom: 20, borderBottom: "2px solid " + BRAND.borderLight }}>
+            {[
+              { id: "run", label: "Payment Run", icon: "💳" },
+              { id: "reports", label: "Reports", icon: "📊" },
+            ].map(t => (
+              <button key={t.id} onClick={() => setPayTab(t.id)} style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "10px 20px", border: "none", cursor: "pointer",
+                fontFamily: BRAND.sans, fontSize: 14, fontWeight: payTab === t.id ? 700 : 500,
+                color: payTab === t.id ? BRAND.navy : BRAND.textMuted,
+                background: "none",
+                borderBottom: payTab === t.id ? "2px solid " + BRAND.navy : "2px solid transparent",
+                marginBottom: -2, transition: "all 200ms",
+              }}>
+                <span>{t.icon}</span> {t.label}
+              </button>
+            ))}
+          </div>
+          {payTab === "run" && <PaymentRunPage entries={entries} purchaseEntries={purchaseEntries} users={users} settings={settings} onMarkPaid={async (ids, paymentDetails) => { let count = 0; for (const id of ids) { const updated = await markPaid(id, paymentDetails); if (updated) count++; } if (count > 0) showToast(count + " entr" + (count === 1 ? "y" : "ies") + " marked as paid", "success"); }} onMarkPurchasePaid={doPurchaseMarkPaid} mob={mob} />}
+          {payTab === "reports" && <ReportsPage entries={entries} purchaseEntries={purchaseEntries} users={users} settings={settings} currentUser={currentUser} mob={mob} />}
+        </div>
+      );
+    }
     if (page === "help") return <HelpPage currentUser={currentUser} settings={settings} mob={mob} onNav={nav} />;
+    // Legacy route: redirect "reports" to payments page
     if (page === "reports") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <ReportsPage entries={entries} purchaseEntries={purchaseEntries} users={users} settings={settings} currentUser={currentUser} mob={mob} />; }
     if (page === "settings") { if (!isTreasurer || previewAsId) { nav("dashboard"); return null; } return <SettingsPage settings={settings} users={users} currentUser={currentUser} allEntries={entries} allPurchases={purchaseEntries} onSaveSettings={saveSettings} onAddUser={addUser} onRemoveUser={removeUser} onUpdateRate={updateUserRate} />; }
     if (page === "insights") return (
@@ -1575,46 +1602,31 @@ export default function App() {
         <CommunityInsights fetchStats={fetchCommunityStats} settings={settings} mob={mob} cachedStats={cachedInsightsStats} onStatsCached={setCachedInsightsStats} entries={entries} users={users} />
       </div>
     );
-    if (page === "command") {
+    // Legacy route: redirect "command" to dashboard
+    if (page === "command") { nav("dashboard"); return null; }
+    if (page === "members") {
       if (!isTreasurer || previewAsId) { nav("dashboard"); return null; }
       return (
-        <CommandCenter
+        <MembersPage
+          users={users}
+          currentUser={currentUser}
           entries={entries}
           purchaseEntries={purchaseEntries}
-          users={users}
           settings={settings}
-          currentUser={currentUser}
+          nudges={nudges}
+          onSendNudges={sendNudges}
+          onAddUser={addUser}
+          onRemoveUser={removeUser}
+          onUpdateRate={updateUserRate}
           mob={mob}
-          onViewEntry={(e) => setViewEntry(e)}
-          onViewPurchase={(e) => setViewPurchase(e)}
-          onNav={nav}
-          onSendNudge={(template, recipientIds) => setNudgeModal({ recipients: recipientIds, template })}
+          showToast={showToast}
         />
       );
     }
-    if (page === "nudges") {
-      if (!isTreasurer || previewAsId) { nav("dashboard"); return null; }
-      return (
-        <div className="fade-in">
-          <h2 style={{ ...S.h2, marginBottom: 8 }}>Nudge Members</h2>
-          <p style={{ margin: "0 0 24px", fontSize: 14, color: BRAND.textMuted }}>Send in-app messages to members about their entries.</p>
-          <div style={{ ...S.card, marginBottom: 20 }}>
-            <NudgeComposer
-              users={users}
-              currentUser={currentUser}
-              onSend={async (recipientIds, message, template) => {
-                const sent = await sendNudges(recipientIds, message, template);
-                if (sent.length > 0) showToast("Nudge sent to " + sent.length + " member" + (sent.length !== 1 ? "s" : ""), "success");
-              }}
-            />
-          </div>
-          <div style={{ ...S.card }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: BRAND.navy, marginBottom: 12 }}>Sent Nudges</div>
-            <SentNudgesLog nudges={nudges} users={users} mob={mob} />
-          </div>
-        </div>
-      );
-    }
+    // Legacy route: redirect "nudges" to members page
+    if (page === "nudges") { nav("members"); return null; }
+    // Legacy route: redirect "review" to entries page
+    if (page === "review") { nav("entries"); return null; }
     return null;
   };
 

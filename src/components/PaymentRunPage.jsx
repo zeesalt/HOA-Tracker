@@ -12,6 +12,55 @@ import {
   ImageUploader, MaterialsEditor,
 } from "../shared";
 
+// Copy-ready payment summary for pasting into Venmo/Zelle/etc
+const CopyPaymentSummary = ({ user, entries: ents, total, getItemTotal }) => {
+  const [copied, setCopied] = useState(false);
+
+  const buildSummary = () => {
+    const name = user?.name || "Unknown";
+    const totalStr = "$" + (Number(total) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // Group by category
+    const byCat = {};
+    ents.forEach(e => {
+      const cat = e.category || (e._type === "purchase" ? "Purchase" : "Work");
+      byCat[cat] = (byCat[cat] || 0) + 1;
+    });
+    const catStr = Object.entries(byCat).map(([cat, count]) => cat + (count > 1 ? " x" + count : "")).join(", ");
+    return `${name}: ${totalStr} for ${ents.length} ${ents.length === 1 ? "entry" : "entries"} (${catStr})`;
+  };
+
+  const handleCopy = async () => {
+    const text = buildSummary();
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      title="Copy payment summary for Venmo/Zelle"
+      style={{
+        padding: "10px 14px", background: copied ? "#065F46" : BRAND.bgSoft,
+        color: copied ? "#fff" : BRAND.textMuted,
+        border: "1px solid " + (copied ? "#065F46" : BRAND.border),
+        borderRadius: 8, fontSize: 12, fontWeight: 600,
+        cursor: "pointer", fontFamily: "'Inter', sans-serif",
+        whiteSpace: "nowrap", transition: "all 200ms",
+        display: "inline-flex", alignItems: "center", gap: 6,
+      }}
+    >
+      {copied ? "✓ Copied!" : "📋 Copy Summary"}
+    </button>
+  );
+};
+
 export const PaymentRunPage = ({ entries, purchaseEntries, users, settings, onMarkPaid, onMarkPurchasePaid, mob }) => {
   const approvedWork = entries.filter(e => e.status === STATUSES.APPROVED).map(e => ({ ...e, _type: "work" }));
   const approvedPurch = (purchaseEntries || []).filter(e => e.status === "Approved").map(e => ({ ...e, _type: "purchase" }));
@@ -158,6 +207,7 @@ export const PaymentRunPage = ({ entries, purchaseEntries, users, settings, onMa
                   <input style={{ width: "100%", padding: "8px 12px", border: "1px solid #E0E0E0", borderRadius: 6, fontSize: 13, fontFamily: "'Inter', sans-serif", boxSizing: "border-box" }}
                     value={getRef(uid)} onChange={e => setPayRefs(p => ({ ...p, [uid]: e.target.value }))} placeholder="Check #, transaction ID..." />
                 </div>
+                <CopyPaymentSummary user={user} entries={ents} total={total} getItemTotal={getItemTotal} />
                 <button
                   style={{ padding: "10px 22px", background: isPaying ? "#6B6560" : "#3B5998", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: isPaying ? "not-allowed" : "pointer", fontFamily: "'Inter', sans-serif", whiteSpace: "nowrap", transition: "all 200ms" }}
                   onClick={() => handlePay(uid, ents, total)}

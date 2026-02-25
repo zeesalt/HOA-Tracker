@@ -42,12 +42,9 @@ export const MoreSheet = ({ onClose, trashCount, nav }) => {
   };
 
   const items = [
-    { id: "command",   label: "Command Center",      emoji: "🎯", desc: "Workflow health & metrics" },
-    { id: "nudges",    label: "Nudge Members",        emoji: "🔔", desc: "Send reminders to members" },
-    { id: "payment",   label: "Payment Run",          emoji: "💳", desc: "Batch pay approved entries" },
-    { id: "reports",   label: "Reports",              emoji: "📊", desc: "PDF/CSV export" },
+    { id: "members",   label: "Members",              emoji: "👥", desc: "Directory & nudge members" },
     { id: "insights",  label: "Community Insights",   emoji: "✨", desc: "Spending trends" },
-    { id: "settings",  label: "Settings",             emoji: "⚙️",  desc: "HOA name, rates, members" },
+    { id: "settings",  label: "Settings",             emoji: "⚙️",  desc: "HOA name, rates, invite codes" },
     { id: "trash",     label: "Trash",                emoji: "🗑",  desc: trashCount > 0 ? trashCount + " item" + (trashCount > 1 ? "s" : "") : "Empty", badge: trashCount || 0 },
     { id: "help",      label: "Help",                 emoji: "❓", desc: "How to use the app" },
   ];
