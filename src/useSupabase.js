@@ -83,6 +83,7 @@ function mapSettings(row) {
     annualBudget: Number(row.annual_budget) || 0,
     dualApprovalThreshold: Number(row.dual_approval_threshold) || 0,
     mileageRate: row.mileage_rate != null ? Number(row.mileage_rate) : 0.725,
+    branding: row.branding || null,
   };
 }
 
@@ -92,7 +93,7 @@ export function useSupabase() {
   const [users, setUsers] = useState([]);
   const [entries, setEntries] = useState([]);
   const [purchaseEntries, setPurchaseEntries] = useState([]);
-  const [settings, setSettings] = useState({ hoaName: "24 Mill Street", defaultHourlyRate: 40, currency: "USD", inviteCode: "", inviteExpiresAt: null, mileageRate: 0.725 });
+  const [settings, setSettings] = useState({ hoaName: "24 Mill Street", defaultHourlyRate: 40, currency: "USD", inviteCode: "", inviteExpiresAt: null, mileageRate: 0.725, branding: null });
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState("");
   const [passwordRecovery, setPasswordRecovery] = useState(false);
@@ -659,6 +660,66 @@ export function useSupabase() {
 
   // ── SETTINGS ───────────────────────────────────────────────────────────
   const saveSettings = useCallback(async (newSettings) => {
+    // ── Handle logo upload to Supabase Storage ────────────────────────
+    let branding = newSettings.branding ? { ...newSettings.branding } : null;
+    if (branding) {
+      // Clean up the preview key (only used for local UI state)
+      delete branding.logoPreview;
+
+      // If logoUrl is a data URL, upload it to Storage and replace with public URL
+      if (branding.logoUrl && branding.logoUrl.startsWith("data:")) {
+        try {
+          // Convert data URL to Blob
+          const res = await fetch(branding.logoUrl);
+          const blob = await res.blob();
+          const ext = blob.type === "image/svg+xml" ? "svg"
+                    : blob.type === "image/png" ? "png"
+                    : blob.type === "image/webp" ? "webp"
+                    : "jpg";
+          const filePath = `hoa-logo-${Date.now()}.${ext}`;
+
+          // Delete previous logo if it was stored in our bucket
+          const prevUrl = settings?.branding?.logoUrl || "";
+          if (prevUrl.includes("/storage/v1/object/public/logos/")) {
+            const prevPath = prevUrl.split("/logos/").pop();
+            if (prevPath) {
+              await supabase.storage.from("logos").remove([prevPath]);
+            }
+          }
+
+          // Upload new logo
+          const { error: upErr } = await supabase.storage
+            .from("logos")
+            .upload(filePath, blob, { contentType: blob.type, upsert: true });
+          if (upErr) {
+            console.error("Logo upload error:", upErr);
+            // Fall back to storing the data URL in JSONB (works but not ideal)
+          } else {
+            // Get public URL
+            const { data: urlData } = supabase.storage
+              .from("logos")
+              .getPublicUrl(filePath);
+            branding.logoUrl = urlData.publicUrl;
+          }
+        } catch (err) {
+          console.error("Logo upload exception:", err);
+          // Keep the data URL as fallback — it'll still render
+        }
+      }
+
+      // If logo was removed (empty string), clean up old file
+      if (branding.logoUrl === "" || branding.logoUrl === null) {
+        const prevUrl = settings?.branding?.logoUrl || "";
+        if (prevUrl.includes("/storage/v1/object/public/logos/")) {
+          const prevPath = prevUrl.split("/logos/").pop();
+          if (prevPath) {
+            await supabase.storage.from("logos").remove([prevPath]).catch(() => {});
+          }
+        }
+        branding.logoUrl = null;
+      }
+    }
+
     const { error } = await supabase.from("settings").update({
       hoa_name: newSettings.hoaName,
       default_hourly_rate: newSettings.defaultHourlyRate,
@@ -668,11 +729,12 @@ export function useSupabase() {
       annual_budget: newSettings.annualBudget || 0,
       dual_approval_threshold: newSettings.dualApprovalThreshold || 0,
       mileage_rate: newSettings.mileageRate != null ? newSettings.mileageRate : 0.725,
+      branding: branding,
     }).eq("id", 1);
     if (error) { console.error("Settings error:", error); return false; }
-    setSettings(newSettings);
+    setSettings({ ...newSettings, branding });
     return true;
-  }, []);
+  }, [settings?.branding?.logoUrl]);
 
   // ── USER MANAGEMENT (Treasurer only) ───────────────────────────────────
   const addUser = useCallback(async (name, email, role, password) => {
